@@ -57,59 +57,115 @@ hooks:
 """,
     ".train/templates/plan.md": """# Summary
 
+<!-- For a semi-technical layperson: What does this scope of work accomplish? 2-4 sentences, not in the weeds. -->
+
 # Problem
+
+<!-- Optional -->
 
 # Goals
 
+<!-- Bullets -->
+
 # Non-goals
+
+<!-- Bullets -->
+
+# End state
+
+<!-- A checklist of user stories representing the ideal end state. -->
 
 # Context
 
+<!-- Optional -->
+
 # Proposed approach
 
-# Risks
+<!-- This section could be huge. As big as it needs to. Hundreds of lines. The goal is to exhaustively specify the plan. Everything we intend to do. Files, tests, connections, etc. -->
 
-# Chunking strategy
+# Key artifacts
+
+<!-- Optional. If relevant, any ENVs, processes, etc that may need to be documented or acted on when the work is complete. -->
 
 # Acceptance criteria
 
+<!-- Specific tests, e2es, QA assertions, file existences, documentation, etc, that attest to the successful completion of the work -->
+
 # Notes
+
+<!-- Optional -->
 """,
     ".train/templates/chunk.md": """# Summary
 
+<!-- For a semi-technical layperson: what this chunk ships and why it matters. -->
+
 # Scope
 
+<!-- Concrete bullets of what is in this chunk. -->
+
 # Out of scope
+
+<!-- Concrete bullets of what is explicitly not included. -->
 
 # Dependencies
 
+<!-- IDs, systems, or decisions that must exist first. -->
+
 # Expected files/systems involved
+
+<!-- List likely files, directories, services, and tables touched. -->
 
 # Completion criteria
 
+<!-- Checklist that can be verified by tests/review. -->
+
 # Notes
+
+<!-- Optional -->
 """,
     ".train/templates/task.md": """# Context
 
+<!-- What this task is doing and where it fits in the chunk. -->
+
 # Scope
+
+<!-- Tight, concrete bullets. Keep this task small and finishable. -->
 
 # Out of scope
 
+<!-- Explicitly exclude adjacent work. -->
+
 # Files to inspect
+
+<!-- Start here. Include exact paths when known. -->
 
 # Implementation notes
 
+<!-- Constraints, gotchas, and edge cases to handle. -->
+
 # Acceptance criteria
 
+<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+
 # Handoff notes
+
+<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
 """,
     ".train/templates/run.md": """# Execution summary
 
+<!-- Short narrative of what was attempted and result. -->
+
 # Inputs
+
+<!-- Task ID, model/executor, important context passed in. -->
 
 # Output
 
+<!-- Key output, files changed, and notable terminal/log details. -->
+
 # Follow-up
+
+<!-- Blockers, refactors, or for-later tasks discovered during execution. -->
 """,
     ".train/hooks/post-task.md": """---
 id: HOOK-post-task
