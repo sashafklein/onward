@@ -7,7 +7,7 @@ description: Implement run lifecycle management and file-backed orchestration at
 priority: high
 model: gpt-5
 created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T04:54:47Z
+updated_at: 2026-03-19T05:43:06Z
 ---
 
 # Summary
@@ -69,9 +69,9 @@ Current progress (2026-03-19):
 3. Added immutable run snapshots/logs under `.train/runs/` with terminal status (`completed`/`failed`).
 4. Implemented chunk sequential execution with dependency-aware readiness checks.
 5. Updated `train progress` to include active run rows from runtime state.
+6. Implemented runtime hook execution for `pre_task_shell`, `post_task_shell`, `pre_task_markdown`, `post_task_markdown`, and `post_chunk_markdown` with explicit failure handling.
 
 Remaining pickup:
 
-1. Hook execution (`pre_task_shell`, markdown hooks, `post_chunk_markdown`).
-2. Executor packet enrichment (chunk/plan summaries and constraints).
-3. `train show TASK-###` latest run pointers and richer run/recent integration.
+1. Executor packet enrichment (chunk/plan summaries and constraints).
+2. `train show TASK-###` latest run pointers and richer run/recent integration.

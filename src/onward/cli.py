@@ -19,6 +19,7 @@ DEFAULT_DIRECTORIES = [
     ".onward/hooks",
     ".onward/sync",
     ".onward/runs",
+    ".onward/reviews",
 ]
 
 DEFAULT_FILES = {
@@ -59,6 +60,10 @@ models:
   split_default:
   # Default model for review-oriented hooks/workflows.
   review_default: codex-latest
+
+review:
+  # If true, plan reviews spawn two independent reviewers (review_default + default).
+  double_review: true
 
 work:
   # If true, chunk execution runs tasks sequentially unless explicitly overridden.
@@ -233,6 +238,40 @@ Constraints:
 - Each task must include one or more acceptance checks.
 - Do not include markdown fences or any non-JSON text.
 """,
+    ".onward/prompts/review-plan.md": """You are an adversarial plan reviewer. Your job is to find gaps, risks, and issues that the plan author missed. Be thorough and direct.
+
+Review the plan for:
+- **Gaps in requirements:** Are there missing edge cases, undefined behaviors, or unstated assumptions?
+- **Security implications:** Does the plan introduce attack surface, handle sensitive data, or need auth/authz considerations?
+- **Deployment and operational risks:** Are there migration concerns, rollback strategies, monitoring needs, or ENV/config changes not addressed?
+- **Scope concerns:** Is the plan trying to do too much? Too little? Are boundaries clear?
+- **Feasibility:** Are there technical risks, unproven approaches, or dependency concerns?
+- **Testing strategy:** Is the testing plan adequate? Are there gaps in coverage?
+
+Rate each finding by severity:
+- **Critical:** Must be addressed before work begins. Security holes, data loss risks, fundamental design flaws.
+- **Important:** Should be addressed. Missing requirements, deployment gaps, significant edge cases.
+- **Minor:** Nice to fix. Code quality, documentation, minor edge cases.
+- **Nitpick:** Optional. Style preferences, suggestions, alternative approaches.
+
+Output your review in this exact markdown format:
+
+## Review: {plan title}
+
+### Overall Assessment: {Approved | Revision Needed | Blocked}
+
+### Findings
+
+| # | Severity | Category | Finding | Recommendation |
+|---|----------|----------|---------|----------------|
+| 1 | Critical | ... | ... | ... |
+
+If there are no findings at a given severity, omit those rows. If the plan is genuinely solid, say so — but that should be rare.
+
+### Notes
+
+Any broader observations about the approach, architecture, or patterns that don't fit neatly into the findings table.
+""",
     ".onward/hooks/post-task.md": """---
 id: HOOK-post-task
 type: hook
@@ -303,6 +342,7 @@ completed: []
 GITIGNORE_LINES = [
     ".onward/plans/.archive/",
     ".onward/runs/",
+    ".onward/reviews/",
     ".onward/ongoing.json",
     ".dogfood/",
 ]
@@ -1333,6 +1373,141 @@ def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, st
     return True, ""
 
 
+def _execute_plan_review(
+    root: Path,
+    plan: Artifact,
+    model: str,
+    label: str,
+    prompt: str,
+) -> tuple[bool, Path]:
+    config = _load_config(root)
+    ralph = config.get("ralph", {})
+    if not isinstance(ralph, dict):
+        ralph = {}
+    command = _clean_string(ralph.get("command")) or "ralph"
+    command_args = ralph.get("args", [])
+    if not isinstance(command_args, list):
+        command_args = []
+    cmd = [command, *[str(item) for item in command_args]]
+
+    plan_id = str(plan.metadata.get("id", ""))
+    timestamp = _run_timestamp()
+
+    review_dir = root / ".onward/reviews"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    review_path = review_dir / f"{plan_id}-{timestamp}-{label}.md"
+
+    prompt_context = "\n".join([
+        prompt.strip(),
+        "",
+        "---",
+        "",
+        "Plan metadata:",
+        _dump_simple_yaml(plan.metadata).rstrip(),
+        "",
+        "Plan body:",
+        plan.body.strip(),
+    ])
+
+    payload = {
+        "type": "review",
+        "model": model,
+        "plan_id": plan_id,
+        "prompt": prompt_context,
+        "plan_metadata": plan.metadata,
+        "plan_body": plan.body,
+    }
+
+    env_override = str(os.environ.get("TRAIN_REVIEW_RESPONSE", "")).strip()
+    if env_override:
+        review_path.write_text(env_override, encoding="utf-8")
+        return True, review_path
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=root,
+            input=json.dumps(payload, indent=2),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        print(f"Error: executor command not found: {command}")
+        return False, review_path
+    except Exception as exc:  # noqa: BLE001
+        print(f"Error: {exc}")
+        return False, review_path
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        print(f"Error: review failed for {label} ({model}): {stderr or f'exit code {result.returncode}'}")
+        return False, review_path
+
+    output = (result.stdout or "").strip()
+    if not output:
+        output = f"## Review: {plan.metadata.get('title', plan_id)}\n\n### Overall Assessment: No output from reviewer\n"
+
+    review_path.write_text(output + "\n", encoding="utf-8")
+    return True, review_path
+
+
+def cmd_review_plan(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    _require_workspace(root)
+    plan = _must_find_by_id(root, args.plan_id)
+    plan_type = str(plan.metadata.get("type", ""))
+    if plan_type != "plan":
+        raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
+
+    config = _load_config(root)
+    default_model = _config_model(config, "default", "opus-latest")
+    review_model = _config_model(config, "review_default", default_model)
+
+    review_cfg = config.get("review", {})
+    if not isinstance(review_cfg, dict):
+        review_cfg = {}
+    double = review_cfg.get("double_review", True)
+    if isinstance(double, str):
+        double = double.strip().lower() in {"1", "true", "yes", "y"}
+
+    models: list[tuple[str, str]] = []
+    models.append((_model_alias(review_model), "reviewer-1"))
+    if double:
+        models.append((_model_alias(default_model), "reviewer-2"))
+
+    prompt_path = root / ".onward/prompts/review-plan.md"
+    if prompt_path.exists():
+        prompt = prompt_path.read_text(encoding="utf-8")
+    else:
+        prompt = "Review this plan for gaps, security issues, missing requirements, and deployment risks."
+
+    plan_id = str(plan.metadata.get("id", ""))
+    review_paths: list[Path] = []
+
+    for model, label in models:
+        print(f"Running review: {label} (model={model})...")
+        ok, review_path = _execute_plan_review(root, plan, model, label, prompt)
+        if ok:
+            review_paths.append(review_path)
+            print(f"  -> {review_path.relative_to(root)}")
+        else:
+            print(f"  -> Review {label} failed.")
+
+    if not review_paths:
+        print(f"\nNo reviews completed for {plan_id}.")
+        return 1
+
+    print()
+    print(f"Review complete for {plan_id}. {len(review_paths)} review(s) written:")
+    for rp in review_paths:
+        print(f"  {rp.relative_to(root)}")
+    print()
+    print("Recommendation: read through the review(s) and judiciously incorporate")
+    print("findings into the plan before splitting or starting work.")
+    return 0
+
+
 def cmd_work(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     artifact = _must_find_by_id(root, args.id)
@@ -2311,6 +2486,11 @@ def build_parser() -> argparse.ArgumentParser:
     split_parser.add_argument("--dry-run", action="store_true", help="Print planned artifacts without writing files")
     split_parser.add_argument("--model", default="", help="Override split model")
     split_parser.set_defaults(func=cmd_split)
+
+    review_plan_parser = subparsers.add_parser("review-plan", help="Run adversarial review(s) of a plan")
+    review_plan_parser.add_argument("plan_id", help="Plan ID (PLAN-###)")
+    review_plan_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    review_plan_parser.set_defaults(func=cmd_review_plan)
 
     work_parser = subparsers.add_parser("work", help="Execute a task or sequentially execute a chunk")
     work_parser.add_argument("id", help="Artifact ID (TASK-### or CHUNK-###)")

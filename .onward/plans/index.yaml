@@ -1,4 +1,4 @@
-generated_at: "2026-03-19T05:12:38Z"
+generated_at: "2026-03-19T05:53:53Z"
 plans:
   -
     id: "PLAN-001"
@@ -25,6 +25,11 @@ plans:
     title: "Sync modes, reliability hardening, and release readiness"
     status: "open"
     path: ".onward/plans/PLAN-005-sync-and-hardening/plan.md"
+  -
+    id: "PLAN-006"
+    title: "review-plan CLI command"
+    status: "completed"
+    path: ".onward/plans/PLAN-006-review-plan-cli-command/plan.md"
 chunks: []
 tasks: []
 runs: []
