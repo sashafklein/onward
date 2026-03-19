@@ -150,3 +150,13 @@ If the issue mentions invalid JSON in `.train/ongoing.json`, replace it with val
 - Treat `.train/plans/` as source of truth.
 - Treat `.train/plans/index.yaml` and `recent.yaml` as derived files.
 - Keep frontmatter simple; complex YAML nesting is intentionally unsupported right now.
+
+## 8. Upcoming workflow features (documented)
+
+The product spec includes planned additions for:
+
+- execution-time follow-up capture (workers adding blocker/refactor/for-later tasks)
+- `human: true|false` task metadata for explicit human-required work
+- optional `project` metadata for cross-plan filtering
+- blocking/human-focused list filters (for example `train list --blocking --human`)
+- `train report` for a unified colorized ASCII status dashboard

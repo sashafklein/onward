@@ -22,7 +22,8 @@ There is no durable runtime state to coordinate, monitor, and recover work execu
 
 - Implement `train work TASK-###` with run records and hook execution.
 - Implement sequential `train work CHUNK-###` with dependency ordering.
-- Persist runtime state under `.trains/` for parent-agent visibility.
+- Persist runtime state under `.train/` for parent-agent visibility.
+- Ensure workers can capture discovered follow-up tasks during execution.
 
 # Non-goals
 
@@ -35,7 +36,7 @@ v1 should stay simple: file-backed coordinator, synchronous executor invocation,
 
 # Proposed approach
 
-Create a run manager that writes `.trains/.ongoing.json`, emits immutable run snapshots, and streams logs while invoking the executor bridge.
+Create a run manager that writes `.train/ongoing.json`, emits immutable run snapshots, and streams logs while invoking the executor bridge.
 
 # Risks
 
@@ -50,11 +51,12 @@ Create a run manager that writes `.trains/.ongoing.json`, emits immutable run sn
 
 # Acceptance criteria
 
-- `train work TASK-###` creates run metadata, streams output to `.trains/.runs/`, and updates task status on completion.
+- `train work TASK-###` creates run metadata, streams output to `.train/runs/`, and updates task status on completion.
 - `train work CHUNK-###` executes open tasks sequentially and respects dependency fields.
-- `.trains/.ongoing.json` always reflects active runs and is valid JSON.
+- `.train/ongoing.json` always reflects active runs and is valid JSON.
 - Failed runs preserve logs and terminal metadata (`failed` with reason).
 - `train progress` surfaces active run state from runtime files.
+- Default worker guidance/hook path captures blocker/refactor/follow-up tasks with `blocked_by`, `human`, and `project` fields when available.
 
 # Notes
 

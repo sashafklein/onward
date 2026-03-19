@@ -22,6 +22,7 @@ Artifacts exist, but there is no reliable way to see what is active, finished, o
 
 - Implement `start`, `complete`, `cancel`, and `archive`.
 - Provide `progress`, `recent`, and `next` views.
+- Add blocking-aware and human-aware filtering in list/report views.
 - Regenerate derived indexes from artifact files.
 
 # Non-goals
@@ -55,6 +56,8 @@ Use a small status transition engine with common timestamp/update behavior share
 - `train progress` shows all `in_progress` artifacts and active runs.
 - `train recent` shows recently completed artifacts in reverse chronological order.
 - `train next` picks open tasks with no unmet dependencies before higher-level work.
+- `train list --blocking --human` surfaces human tasks currently blocking execution.
+- `train report` prints a consolidated colorized summary of active, blocked, next, and recent work.
 
 # Notes
 

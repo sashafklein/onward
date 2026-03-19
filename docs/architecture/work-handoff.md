@@ -76,3 +76,18 @@ Parent agent operations should be file-based and cheap:
 - `train show TASK-###`: include latest run pointers.
 
 This keeps orchestration transparent and scriptable for OpenClaw-style overseers.
+
+## Feedback loop policy
+
+Workers should capture newly discovered work while executing a task, not defer it to memory.
+
+Recommended default guidance:
+
+- when a blocker/refactor/follow-up is discovered, create a new task artifact immediately
+- default placement is the current chunk unless reassignment is clearly better
+- include frontmatter metadata when known:
+  - `blocked_by`
+  - `human`
+  - `project`
+
+This keeps momentum high and prevents discovered work from being lost between agent runs.

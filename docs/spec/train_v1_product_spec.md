@@ -41,6 +41,7 @@ Train should be strongest at:
 - keeping task metadata visible in markdown frontmatter
 - handing bounded task execution off to Ralph
 - recording execution progress and outcomes
+- capturing newly discovered follow-up work while execution is happening
 
 ---
 
@@ -142,6 +143,7 @@ A task should be:
 - executable by one human or one AI worker loop
 - accompanied by acceptance criteria
 - associated with a preferred model and execution instructions
+- explicit about whether human action is required
 
 Tasks are generally created close to build time.
 
@@ -188,6 +190,8 @@ block_reason: Waiting on API decision
 ```
 
 This keeps status simple while preserving useful dependency information.
+
+Tasks may also carry a `human: true|false` boolean so human-only blocking work can be surfaced directly.
 
 ---
 
@@ -287,6 +291,7 @@ status: open
 created_at: 2026-03-18T12:00:00Z
 updated_at: 2026-03-18T12:00:00Z
 tags: [onboarding, architecture]
+project: onboarding
 ---
 ```
 
@@ -331,13 +336,16 @@ id: TASK-001
 type: task
 plan: PLAN-001
 chunk: CHUNK-001
+project: onboarding
 title: Add onboarding_session table
 status: open
 description: Add DB schema and migration for onboarding sessions
+human: false
 model: gpt-5-mini
 executor: ralph
 depends_on: []
 blocked_by: []
+block_reason: null
 files:
   - packages/db/schema.ts
   - packages/db/migrations/
@@ -350,6 +358,12 @@ created_at: 2026-03-18T12:00:00Z
 updated_at: 2026-03-18T12:00:00Z
 ---
 ```
+
+### Notes on task metadata
+
+- `blocked_by` is a first-class frontmatter field and should always be present (empty list when unblocked).
+- `human: true` marks tasks that require a person rather than an agent worker.
+- `project` is optional metadata for cross-plan grouping and filtering.
 
 ## 9.5 Hook fields
 
@@ -642,6 +656,9 @@ These commands:
 
 ```bash
 train list
+train list --project onboarding
+train list --blocking
+train list --blocking --human
 train show PLAN-001
 train show CHUNK-001
 train show TASK-001
@@ -669,6 +686,14 @@ Shows best next open work, likely prioritizing:
 - open tasks with no unmet dependencies
 - tasks within chunks already in progress
 - otherwise next open chunks/plans lacking tasks
+
+### `train list --blocking --human`
+Shows open tasks where:
+
+- `human: true`
+- at least one other open artifact is blocked by them (via `blocked_by` or unmet dependencies)
+
+This supports fast triage of the smallest human actions needed to unblock agent execution.
 
 ---
 
@@ -762,6 +787,44 @@ Train should:
 - optionally trigger post-chunk hook
 
 This command is allowed to perform queue management and execution coordination because it is explicitly the orchestration boundary.
+
+### 14.6.1 Feedback loop: adding discovered follow-up work
+
+During `train work`, workers should be guided to capture newly discovered work explicitly:
+
+- blocker tasks
+- refactor tasks
+- cleanup tasks
+- deferred enhancement tasks
+
+Recommended behavior:
+
+- create these as new tasks under the current chunk by default
+- allow a worker to attach them to another chunk/plan when more appropriate
+- include concise rationale in task body
+- mark as `human: true` when human intervention is required
+
+This can be implemented through default worker guidance and/or a post-task markdown hook.
+
+---
+
+## 14.7 Reporting
+
+```bash
+train report
+train report --project onboarding
+```
+
+`train report` should produce a consolidated, colorized terminal report with readable ASCII tables that includes:
+
+- in-progress plans/chunks/tasks
+- next suggested work
+- open blockers
+- open human-blocking tasks
+- recently completed work
+- grouped view of open plans with nested chunks/tasks
+
+`--project` narrows report output to artifacts tagged with the selected project.
 
 ---
 
@@ -999,6 +1062,8 @@ Train v1 should not attempt to solve all of the following:
 - progress
 - recent
 - next
+- report
+- blocking filters (`--blocking`, `--human`, `--project`)
 
 ## Priority 3: state transitions
 
@@ -1070,6 +1135,14 @@ Recommended:
 
 - start with synchronous invocation or simple polling
 - do not build a sophisticated event bus in v1
+
+### 22.5 Where should discovered follow-up tasks go by default?
+
+Recommended v1 answer:
+
+- same chunk by default
+- allow explicit reassignment to another chunk/plan
+- always include `blocked_by`, `human`, and `project` metadata when known
 
 ---
 

@@ -61,3 +61,12 @@ One-command test runner (falls back to dogfood e2e if `pytest` is unavailable):
 - Dogfood workflow: [docs/dogfood/README.md](/Users/sasha/code/train/docs/dogfood/README.md)
 - Work handoff design: [docs/architecture/work-handoff.md](/Users/sasha/code/train/docs/architecture/work-handoff.md)
 - Product spec: [docs/spec/train_v1_product_spec.md](/Users/sasha/code/train/docs/spec/train_v1_product_spec.md)
+
+## Documented Next Features
+
+The spec now explicitly captures upcoming requirements for:
+
+- feedback-loop task capture during execution (blockers/refactors/for-later)
+- task metadata: `blocked_by`, `human`, optional `project`
+- focused blocking views (for example `train list --blocking --human`)
+- rich terminal overview via `train report`
