@@ -32,12 +32,13 @@ from onward.artifacts import (
 from onward.config import (
     _config_model,
     _load_config,
-    _load_prompt,
     _load_template,
     _model_alias,
 )
 from onward.execution import (
+    _collect_run_records,
     _execute_plan_review,
+    _latest_run_for,
     _load_ongoing,
     _ordered_ready_chunk_tasks,
     _run_chunk_post_markdown_hook,
@@ -328,6 +329,20 @@ def cmd_show(args: argparse.Namespace) -> int:
     print(_dump_simple_yaml(artifact.metadata).rstrip())
     print("---")
     print(artifact.body.rstrip())
+
+    artifact_id = str(artifact.metadata.get("id", ""))
+    if str(artifact.metadata.get("type", "")) == "task":
+        run = _latest_run_for(root, artifact_id)
+        if run:
+            print()
+            print("Latest run:")
+            print(f"  id: {run.get('id')}")
+            print(f"  status: {run.get('status')}")
+            print(f"  started_at: {run.get('started_at')}")
+            print(f"  finished_at: {run.get('finished_at')}")
+            print(f"  log: {run.get('log_path')}")
+            if run.get("error"):
+                print(f"  error: {run.get('error')}")
     return 0
 
 
@@ -519,18 +534,6 @@ def cmd_split(args: argparse.Namespace) -> int:
     task_default_model = _config_model(config, "task_default", "sonnet-latest")
 
     prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
-    prompt = _load_prompt(root, prompt_name)
-    prompt_context = "\n".join(
-        [
-            prompt.strip(),
-            "",
-            "Source artifact metadata (YAML-like):",
-            _dump_simple_yaml(artifact.metadata).rstrip(),
-            "",
-            "Source artifact body:",
-            artifact.body.strip(),
-        ]
-    )
     raw = _run_split_model(artifact, prompt_name, split_model, task_default_model)
 
     if artifact_type == "plan":
@@ -547,7 +550,6 @@ def cmd_split(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(f"Split dry-run for {args.id} using model={split_model}")
         print(f"Prompt: .onward/prompts/{prompt_name}")
-        print(f"Prompt context bytes: {len(prompt_context.encode('utf-8'))}")
         for artifact_id, path, _content in writes:
             print(f"PLAN: create {artifact_id}\t{path.relative_to(root)}")
         return 0
@@ -612,29 +614,47 @@ def cmd_progress(args: argparse.Namespace) -> int:
 
 def cmd_recent(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    completed: list[tuple[str, str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str, str, str]] = []
 
     for artifact in _collect_artifacts(root):
         status = str(artifact.metadata.get("status", ""))
         if status != "completed":
             continue
-        completed.append(
+        rows.append(
             (
                 str(artifact.metadata.get("updated_at", "")),
                 str(artifact.metadata.get("id", "")),
                 str(artifact.metadata.get("type", "")),
+                "completed",
                 str(artifact.metadata.get("title", "")),
                 str(artifact.file_path.relative_to(root)),
             )
         )
 
-    if not completed:
+    for rec in _collect_run_records(root):
+        finished = str(rec.get("finished_at") or rec.get("started_at", ""))
+        status = str(rec.get("status", ""))
+        if status not in {"completed", "failed"}:
+            continue
+        target = str(rec.get("target", ""))
+        rows.append(
+            (
+                finished,
+                str(rec.get("id", "")),
+                "run",
+                status,
+                target,
+                str(rec.get("log_path", "")),
+            )
+        )
+
+    if not rows:
         print("No recently completed artifacts")
         return 0
 
-    completed.sort(reverse=True)
-    for updated_at, artifact_id, artifact_type, title, path in completed[: args.limit]:
-        print(f"{updated_at}\t{artifact_id}\t{artifact_type}\tcompleted\t{title}\t{path}")
+    rows.sort(reverse=True)
+    for timestamp, item_id, item_type, status, title_or_target, path in rows[: args.limit]:
+        print(f"{timestamp}\t{item_id}\t{item_type}\t{status}\t{title_or_target}\t{path}")
     return 0
 
 

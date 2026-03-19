@@ -1,13 +1,13 @@
 ---
-id: PLAN-004
-type: plan
-title: Execution runtime, task handoff, and parent-agent oversight
-status: in_progress
-description: Implement run lifecycle management and file-backed orchestration at `train work`
-priority: high
-model: gpt-5
-created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T05:43:06Z
+id: "PLAN-004"
+type: "plan"
+title: "Execution runtime, task handoff, and parent-agent oversight"
+status: "completed"
+description: "Implement run lifecycle management and file-backed orchestration at `train work`"
+priority: "high"
+model: "gpt-5"
+created_at: "2026-03-19T00:00:00Z"
+updated_at: "2026-03-19T23:51:54Z"
 ---
 
 # Summary
@@ -71,7 +71,9 @@ Current progress (2026-03-19):
 5. Updated `train progress` to include active run rows from runtime state.
 6. Implemented runtime hook execution for `pre_task_shell`, `post_task_shell`, `pre_task_markdown`, `post_task_markdown`, and `post_chunk_markdown` with explicit failure handling.
 
-Remaining pickup:
+7. Executor packet now includes full chunk and plan context (metadata + body) for richer worker guidance.
+8. `onward show TASK-###` displays latest run info (id, status, timestamps, log path, error).
+9. `onward recent` now includes terminal run records (completed/failed) alongside artifact completions.
+10. Index generation (`index.yaml`) now includes run summary rows.
 
-1. Executor packet enrichment (chunk/plan summaries and constraints).
-2. `train show TASK-###` latest run pointers and richer run/recent integration.
+All acceptance criteria met.

@@ -245,7 +245,7 @@ def _select_next_artifact(artifacts: list[Artifact], project: str | None = None)
     return None
 
 
-def _regenerate_indexes(root: Path) -> None:
+def _regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = None) -> None:
     index_path = root / ".onward/plans/index.yaml"
     recent_path = root / ".onward/plans/recent.yaml"
 
@@ -278,12 +278,36 @@ def _regenerate_indexes(root: Path) -> None:
     chunks.sort(key=key_fn)
     tasks.sort(key=key_fn)
 
+    runs_index: list[dict[str, Any]] = []
+    if run_records is None:
+        run_dir = root / ".onward/runs"
+        if run_dir.exists():
+            for path in sorted(run_dir.glob("RUN-*.json")):
+                try:
+                    rec = _parse_simple_yaml(path.read_text(encoding="utf-8"))
+                    runs_index.append({
+                        "id": rec.get("id"),
+                        "target": rec.get("target"),
+                        "status": rec.get("status"),
+                        "started_at": rec.get("started_at"),
+                    })
+                except Exception:  # noqa: BLE001
+                    continue
+    else:
+        for rec in run_records:
+            runs_index.append({
+                "id": rec.get("id"),
+                "target": rec.get("target"),
+                "status": rec.get("status"),
+                "started_at": rec.get("started_at"),
+            })
+
     index_payload = {
         "generated_at": _now_iso(),
         "plans": plans,
         "chunks": chunks,
         "tasks": tasks,
-        "runs": [],
+        "runs": runs_index,
     }
     index_path.write_text(_dump_simple_yaml(index_payload), encoding="utf-8")
 

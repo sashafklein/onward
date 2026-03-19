@@ -9,6 +9,7 @@ from typing import Any
 from onward.artifacts import (
     Artifact,
     _collect_artifacts,
+    _find_by_id,
     _must_find_by_id,
     _read_notes,
     _update_artifact_status,
@@ -19,6 +20,7 @@ from onward.util import (
     _clean_string,
     _dump_simple_yaml,
     _now_iso,
+    _parse_simple_yaml,
     _run_timestamp,
 )
 
@@ -218,6 +220,18 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     _write_ongoing(root, ongoing)
 
     notes = _read_notes(root, task_id)
+    chunk_context: dict[str, Any] | None = None
+    plan_context: dict[str, Any] | None = None
+    chunk_id = _clean_string(task.metadata.get("chunk"))
+    plan_id = _clean_string(task.metadata.get("plan"))
+    if chunk_id:
+        chunk_art = _find_by_id(root, chunk_id)
+        if chunk_art:
+            chunk_context = {"metadata": chunk_art.metadata, "body": chunk_art.body}
+    if plan_id:
+        plan_art = _find_by_id(root, plan_id)
+        if plan_art:
+            plan_context = {"metadata": plan_art.metadata, "body": plan_art.body}
     payload: dict[str, Any] = {
         "type": "task",
         "run_id": run_id,
@@ -228,6 +242,8 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
             f"To add a note to this task, run: onward note {task_id} \"your note\". "
             f"To read existing notes: onward note {task_id}"
         ),
+        "chunk": chunk_context,
+        "plan": plan_context,
     }
     log_sections: list[str] = [f"$ {' '.join(cmd)}"]
     error = ""
@@ -393,6 +409,38 @@ def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, st
         stderr = (result.stderr or "").strip()
         return False, stderr or f"exit code {result.returncode}"
     return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Run queries
+# ---------------------------------------------------------------------------
+
+
+def _latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
+    run_dir = root / ".onward/runs"
+    if not run_dir.exists():
+        return None
+    pattern = f"RUN-*-{target_id}.json"
+    matches = sorted(run_dir.glob(pattern), reverse=True)
+    if not matches:
+        return None
+    try:
+        return _parse_simple_yaml(matches[0].read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _collect_run_records(root: Path) -> list[dict[str, Any]]:
+    run_dir = root / ".onward/runs"
+    if not run_dir.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(run_dir.glob("RUN-*.json")):
+        try:
+            records.append(_parse_simple_yaml(path.read_text(encoding="utf-8")))
+        except Exception:  # noqa: BLE001
+            continue
+    return records
 
 
 # ---------------------------------------------------------------------------

@@ -2,12 +2,12 @@
 id: "PLAN-003"
 type: "plan"
 title: "Decomposition engine for plan and chunk splitting"
-status: "in_progress"
+status: "completed"
 description: "Turn high-level scope into executable artifacts with bounded AI assistance"
 priority: "medium"
 model: "gpt-5"
 created_at: "2026-03-19T00:00:00Z"
-updated_at: "2026-03-19T04:35:34Z"
+updated_at: "2026-03-19T23:54:28Z"
 ---
 
 # Summary
@@ -113,7 +113,21 @@ Current pickup point:
 ### Exit criteria for PLAN-003
 
 1. `split` command exists in `train --help` and routes correctly by ID type.
-2. Prompts are file-backed and loaded from `.train/prompts/`.
+2. Prompts are file-backed and loaded from `.onward/prompts/`.
 3. Generated artifacts are validated and atomic on write.
 4. `--dry-run` is fully non-mutating.
 5. Automated tests cover success path and parse/validation failures.
+
+### Implementation status: COMPLETE
+
+All five phases implemented:
+- CLI surface routes `PLAN-*` to chunk split, `CHUNK-*` to task split, rejects tasks
+- Prompts at `.onward/prompts/split-plan.md` and `split-chunk.md`
+- Heuristic splitter extracts from Chunking strategy / Goals / Scope / Completion criteria
+- `TRAIN_SPLIT_RESPONSE` env override for model-backed testing
+- Normalization validates required fields with item-level diagnostics
+- Atomic writes via `_assert_writes_safe` collision detection
+- `--dry-run` is non-mutating
+- 9 tests: dry-run, chunk-to-tasks, plan-to-chunks, invalid JSON, missing fields,
+  non-splittable type, collision detection, deterministic IDs
+- Removed dead `prompt_context` code from `cmd_split`

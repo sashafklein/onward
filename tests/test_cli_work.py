@@ -137,6 +137,90 @@ def test_work_task_fails_when_post_task_shell_hook_fails(tmp_path: Path, capsys)
     assert 'status: "open"' in task_raw
 
 
+def test_show_task_includes_latest_run_info(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["work", "--root", str(tmp_path), "TASK-001"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["show", "--root", str(tmp_path), "TASK-001"]) == 0
+    out = capsys.readouterr().out
+    assert "Latest run:" in out
+    assert "RUN-" in out
+    assert "status: completed" in out
+    assert "log:" in out
+
+
+def test_show_task_without_runs_omits_run_section(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["show", "--root", str(tmp_path), "TASK-001"]) == 0
+    out = capsys.readouterr().out
+    assert "Latest run:" not in out
+
+
+def test_recent_includes_run_records(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["work", "--root", str(tmp_path), "TASK-001"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["recent", "--root", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "RUN-" in out
+    assert "\trun\t" in out
+
+
+def test_executor_payload_includes_chunk_and_plan_context(tmp_path: Path, capsys, monkeypatch):
+    """Verify the executor receives chunk and plan context in its stdin payload."""
+    import json
+    from unittest.mock import patch
+
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    captured_payloads: list[dict] = []
+    original_run = __import__("subprocess").run
+
+    def capture_run(*args, **kwargs):
+        if kwargs.get("input"):
+            try:
+                captured_payloads.append(json.loads(kwargs["input"]))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return original_run(*args, **kwargs)
+
+    with patch("subprocess.run", side_effect=capture_run):
+        cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+
+    task_payloads = [p for p in captured_payloads if p.get("type") == "task"]
+    assert task_payloads, "expected at least one task payload to be sent to executor"
+    payload = task_payloads[0]
+    assert payload.get("chunk") is not None
+    assert payload["chunk"]["metadata"]["id"] == "CHUNK-001"
+    assert payload.get("plan") is not None
+    assert payload["plan"]["metadata"]["id"] == "PLAN-001"
+
+
 def test_work_chunk_fails_when_post_chunk_markdown_hook_missing(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _set_executor(tmp_path, "true")

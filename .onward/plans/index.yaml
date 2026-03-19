@@ -1,4 +1,4 @@
-generated_at: "2026-03-19T21:36:56Z"
+generated_at: "2026-03-19T23:54:28Z"
 plans:
   -
     id: "PLAN-001"
@@ -13,12 +13,12 @@ plans:
   -
     id: "PLAN-003"
     title: "Decomposition engine for plan and chunk splitting"
-    status: "in_progress"
+    status: "completed"
     path: ".onward/plans/PLAN-003-decomposition/plan.md"
   -
     id: "PLAN-004"
     title: "Execution runtime, task handoff, and parent-agent oversight"
-    status: "in_progress"
+    status: "completed"
     path: ".onward/plans/PLAN-004-execution-runtime/plan.md"
   -
     id: "PLAN-005"
