@@ -14,6 +14,7 @@ Right now this repo supports:
 - state transitions (`train start|complete|cancel`)
 - active/completed views (`train progress`, `train recent`)
 - next-item suggestion (`train next`)
+- consolidated status dashboard (`train report`)
 - plan archival (`train archive PLAN-###`)
 
 Trains stores tracked planning state in `.train/plans/` and runtime state in `.train/`.
@@ -54,6 +55,8 @@ PYTHONPATH=src python3 -m trains.cli new chunk PLAN-001 "First Chunk"
 PYTHONPATH=src python3 -m trains.cli new task CHUNK-001 "First Task"
 PYTHONPATH=src python3 -m trains.cli list
 PYTHONPATH=src python3 -m trains.cli show TASK-001
+PYTHONPATH=src python3 -m trains.cli list --blocking --human
+PYTHONPATH=src python3 -m trains.cli report --no-color
 ```
 
 ## 4. Dogfood workflow

@@ -521,6 +521,83 @@ def _as_str_list(value: Any) -> list[str]:
     return [raw]
 
 
+def _artifact_project(artifact: Artifact) -> str:
+    return str(artifact.metadata.get("project", "")).strip()
+
+
+def _is_human_task(artifact: Artifact) -> bool:
+    if str(artifact.metadata.get("type", "")) != "task":
+        return False
+    value = artifact.metadata.get("human", False)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _blocking_ids(artifacts: list[Artifact]) -> set[str]:
+    blockers: set[str] = set()
+    for artifact in artifacts:
+        status = str(artifact.metadata.get("status", ""))
+        if status not in {"open", "in_progress"}:
+            continue
+        blockers.update(_as_str_list(artifact.metadata.get("depends_on")))
+        blockers.update(_as_str_list(artifact.metadata.get("blocked_by")))
+    return {item for item in blockers if item}
+
+
+def _select_next_artifact(artifacts: list[Artifact], project: str | None = None) -> Artifact | None:
+    status_by_id = {
+        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
+        for a in artifacts
+        if a.metadata.get("id")
+    }
+
+    ready_tasks: list[tuple[tuple[int, int, str], Artifact]] = []
+    open_chunks: list[Artifact] = []
+    open_plans: list[Artifact] = []
+
+    for artifact in artifacts:
+        artifact_type = str(artifact.metadata.get("type", ""))
+        status = str(artifact.metadata.get("status", ""))
+
+        if project and _artifact_project(artifact) != project:
+            continue
+
+        if artifact_type == "task" and status == "open":
+            depends_on = _as_str_list(artifact.metadata.get("depends_on"))
+            blocked_by = _as_str_list(artifact.metadata.get("blocked_by"))
+            if blocked_by:
+                continue
+            unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
+            if unmet:
+                continue
+
+            chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
+            plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
+            rank = (
+                0 if chunk_status == "in_progress" else 1,
+                0 if plan_status == "in_progress" else 1,
+                str(artifact.metadata.get("id", "")),
+            )
+            ready_tasks.append((rank, artifact))
+
+        elif artifact_type == "chunk" and status == "open":
+            open_chunks.append(artifact)
+        elif artifact_type == "plan" and status == "open":
+            open_plans.append(artifact)
+
+    if ready_tasks:
+        ready_tasks.sort(key=lambda item: item[0])
+        return ready_tasks[0][1]
+    if open_chunks:
+        open_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
+        return open_chunks[0]
+    if open_plans:
+        open_plans.sort(key=lambda a: str(a.metadata.get("id", "")))
+        return open_plans[0]
+    return None
+
+
 def _regenerate_indexes(root: Path) -> None:
     index_path = root / ".train/plans/index.yaml"
     recent_path = root / ".train/plans/recent.yaml"
@@ -664,6 +741,7 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     metadata = {
         "id": plan_id,
         "type": "plan",
+        "project": args.project or "",
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -695,6 +773,7 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
         "id": chunk_id,
         "type": "chunk",
         "plan": plan_id,
+        "project": args.project or "",
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -733,9 +812,11 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         "type": "task",
         "plan": plan_id,
         "chunk": chunk_id,
+        "project": args.project or "",
         "title": args.title,
         "status": "open",
         "description": args.description or "",
+        "human": bool(args.human),
         "model": args.model,
         "executor": "ralph",
         "depends_on": [],
@@ -758,18 +839,31 @@ def cmd_new_task(args: argparse.Namespace) -> int:
 def cmd_list(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     artifact_type = args.type
+    project_filter = (args.project or "").strip()
+    blockers_only = bool(args.blocking)
+    human_only = bool(args.human)
+    artifacts = _collect_artifacts(root)
+    blocker_ids = _blocking_ids(artifacts) if blockers_only else set()
 
     rows: list[dict[str, str]] = []
-    for artifact in _collect_artifacts(root):
+    for artifact in artifacts:
         m = artifact.metadata
         row_type = str(m.get("type", ""))
         if artifact_type != "all" and row_type != artifact_type:
+            continue
+        if project_filter and _artifact_project(artifact) != project_filter:
+            continue
+        if blockers_only and str(m.get("id", "")) not in blocker_ids:
+            continue
+        if human_only and not _is_human_task(artifact):
             continue
         rows.append(
             {
                 "id": str(m.get("id", "")),
                 "type": row_type,
                 "status": str(m.get("status", "")),
+                "project": _artifact_project(artifact),
+                "human": "true" if _is_human_task(artifact) else "false",
                 "title": str(m.get("title", "")),
                 "path": str(artifact.file_path.relative_to(root)),
             }
@@ -782,7 +876,9 @@ def cmd_list(args: argparse.Namespace) -> int:
         return 0
 
     for row in rows:
-        print(f"{row['id']}\t{row['type']}\t{row['status']}\t{row['title']}\t{row['path']}")
+        print(
+            f"{row['id']}\t{row['type']}\t{row['status']}\tproject={row['project'] or '-'}\thuman={row['human']}\t{row['title']}\t{row['path']}"
+        )
 
     return 0
 
@@ -911,68 +1007,218 @@ def cmd_recent(args: argparse.Namespace) -> int:
 def cmd_next(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     artifacts = _collect_artifacts(root)
-    status_by_id = {
-        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
-        for a in artifacts
-        if a.metadata.get("id")
-    }
-
-    ready_tasks: list[tuple[tuple[int, int, str], Artifact]] = []
-    open_chunks: list[Artifact] = []
-    open_plans: list[Artifact] = []
-
-    for artifact in artifacts:
-        artifact_type = str(artifact.metadata.get("type", ""))
-        status = str(artifact.metadata.get("status", ""))
-
-        if artifact_type == "task" and status == "open":
-            depends_on = _as_str_list(artifact.metadata.get("depends_on"))
-            blocked_by = _as_str_list(artifact.metadata.get("blocked_by"))
-            if blocked_by:
-                continue
-            unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
-            if unmet:
-                continue
-
-            chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
-            plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
-            rank = (
-                0 if chunk_status == "in_progress" else 1,
-                0 if plan_status == "in_progress" else 1,
-                str(artifact.metadata.get("id", "")),
-            )
-            ready_tasks.append((rank, artifact))
-
-        elif artifact_type == "chunk" and status == "open":
-            open_chunks.append(artifact)
-        elif artifact_type == "plan" and status == "open":
-            open_plans.append(artifact)
-
-    if ready_tasks:
-        ready_tasks.sort(key=lambda item: item[0])
-        chosen = ready_tasks[0][1]
+    chosen = _select_next_artifact(artifacts, project=(args.project or "").strip() or None)
+    if chosen:
         print(
-            f"{chosen.metadata.get('id')}\ttask\topen\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
-        )
-        return 0
-
-    if open_chunks:
-        open_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
-        chosen = open_chunks[0]
-        print(
-            f"{chosen.metadata.get('id')}\tchunk\topen\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
-        )
-        return 0
-
-    if open_plans:
-        open_plans.sort(key=lambda a: str(a.metadata.get("id", "")))
-        chosen = open_plans[0]
-        print(
-            f"{chosen.metadata.get('id')}\tplan\topen\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
+            f"{chosen.metadata.get('id')}\t{chosen.metadata.get('type')}\t{chosen.metadata.get('status')}\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
         )
         return 0
 
     print("No next artifact found")
+    return 0
+
+
+def _colorize(text: str, color: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    colors = {
+        "red": "\033[31m",
+        "green": "\033[32m",
+        "yellow": "\033[33m",
+        "blue": "\033[34m",
+        "magenta": "\033[35m",
+        "cyan": "\033[36m",
+        "bold": "\033[1m",
+    }
+    reset = "\033[0m"
+    return f"{colors.get(color, '')}{text}{reset}" if color in colors else text
+
+
+def _status_color(status: str) -> str:
+    return {
+        "open": "yellow",
+        "in_progress": "blue",
+        "completed": "green",
+        "canceled": "magenta",
+    }.get(status, "cyan")
+
+
+def _report_rows(artifacts: list[Artifact], root: Path, status: str | None = None, project: str | None = None) -> list[str]:
+    rows: list[str] = []
+    for artifact in artifacts:
+        if status and str(artifact.metadata.get("status", "")) != status:
+            continue
+        if project and _artifact_project(artifact) != project:
+            continue
+        rows.append(
+            "\t".join(
+                [
+                    str(artifact.metadata.get("id", "")),
+                    str(artifact.metadata.get("type", "")),
+                    str(artifact.metadata.get("status", "")),
+                    str(artifact.metadata.get("title", "")),
+                    str(artifact.file_path.relative_to(root)),
+                ]
+            )
+        )
+    return sorted(rows)
+
+
+def _render_open_tree_lines(
+    artifacts: list[Artifact],
+    root: Path,
+    project: str | None = None,
+    color_enabled: bool = False,
+) -> list[str]:
+    plans = [
+        a
+        for a in artifacts
+        if str(a.metadata.get("type", "")) == "plan"
+        and str(a.metadata.get("status", "")) == "open"
+        and (not project or _artifact_project(a) == project)
+    ]
+    plans.sort(key=lambda a: str(a.metadata.get("id", "")))
+    if not plans:
+        return []
+
+    chunks = [a for a in artifacts if str(a.metadata.get("type", "")) == "chunk"]
+    tasks = [a for a in artifacts if str(a.metadata.get("type", "")) == "task"]
+    lines: list[str] = []
+    for plan in plans:
+        lines.append(f"{plan.metadata.get('id')} {plan.metadata.get('title')}")
+        plan_chunks = [c for c in chunks if str(c.metadata.get("plan", "")) == str(plan.metadata.get("id", ""))]
+        plan_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
+        for chunk in plan_chunks:
+            status = str(chunk.metadata.get("status", ""))
+            status_text = _colorize(status, _status_color(status), color_enabled)
+            lines.append(f"  |- {chunk.metadata.get('id')} [{status_text}] {chunk.metadata.get('title')}")
+            chunk_tasks = [t for t in tasks if str(t.metadata.get('chunk', '')) == str(chunk.metadata.get("id", ""))]
+            chunk_tasks.sort(key=lambda a: str(a.metadata.get("id", "")))
+            for task in chunk_tasks:
+                t_status = str(task.metadata.get("status", ""))
+                t_status_text = _colorize(t_status, _status_color(t_status), color_enabled)
+                marker = "H" if _is_human_task(task) else "A"
+                lines.append(f"  |  |- {task.metadata.get('id')} [{t_status_text}] ({marker}) {task.metadata.get('title')}")
+    return lines
+
+
+def cmd_tree(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifacts = _collect_artifacts(root)
+    project = (args.project or "").strip() or None
+    lines = _render_open_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
+    if not lines:
+        print("No open plan tree found")
+        return 0
+    for line in lines:
+        print(line)
+    return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    color_enabled = not args.no_color
+    project = (args.project or "").strip() or None
+    artifacts = _collect_artifacts(root)
+    blockers = _blocking_ids(artifacts)
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
+
+    print(_colorize("== Trains Report ==", "bold", color_enabled))
+    if project:
+        print(f"project: {project}")
+    print()
+
+    print(_colorize("[In Progress]", "cyan", color_enabled))
+    in_progress = _report_rows(artifacts, root, status="in_progress", project=project)
+    if in_progress:
+        for row in in_progress:
+            parts = row.split("\t")
+            parts[2] = _colorize(parts[2], _status_color(parts[2]), color_enabled)
+            print("\t".join(parts))
+    else:
+        print("none")
+    print()
+
+    print(_colorize("[Next]", "cyan", color_enabled))
+    nxt = _select_next_artifact(artifacts, project=project)
+    if nxt:
+        status = str(nxt.metadata.get("status", ""))
+        print(
+            "\t".join(
+                [
+                    str(nxt.metadata.get("id", "")),
+                    str(nxt.metadata.get("type", "")),
+                    _colorize(status, _status_color(status), color_enabled),
+                    str(nxt.metadata.get("title", "")),
+                    str(nxt.file_path.relative_to(root)),
+                ]
+            )
+        )
+    else:
+        print("none")
+    print()
+
+    print(_colorize("[Blocking Human Tasks]", "cyan", color_enabled))
+    human_blockers: list[str] = []
+    for blocker_id in sorted(blockers):
+        artifact = by_id.get(blocker_id)
+        if not artifact:
+            continue
+        if project and _artifact_project(artifact) != project:
+            continue
+        if not _is_human_task(artifact):
+            continue
+        human_blockers.append(
+            "\t".join(
+                [
+                    blocker_id,
+                    "task",
+                    str(artifact.metadata.get("status", "")),
+                    str(artifact.metadata.get("title", "")),
+                    str(artifact.file_path.relative_to(root)),
+                ]
+            )
+        )
+    if human_blockers:
+        for row in human_blockers:
+            print(row)
+    else:
+        print("none")
+    print()
+
+    print(_colorize("[Recent Completed]", "cyan", color_enabled))
+    completed = [
+        a
+        for a in artifacts
+        if str(a.metadata.get("status", "")) == "completed"
+        and (not project or _artifact_project(a) == project)
+    ]
+    completed.sort(key=lambda a: str(a.metadata.get("updated_at", "")), reverse=True)
+    if completed:
+        for artifact in completed[: args.limit]:
+            status = str(artifact.metadata.get("status", ""))
+            print(
+                "\t".join(
+                    [
+                        str(artifact.metadata.get("updated_at", "")),
+                        str(artifact.metadata.get("id", "")),
+                        str(artifact.metadata.get("type", "")),
+                        _colorize(status, _status_color(status), color_enabled),
+                        str(artifact.metadata.get("title", "")),
+                    ]
+                )
+            )
+    else:
+        print("none")
+    print()
+
+    print(_colorize("[Open Plan Tree]", "cyan", color_enabled))
+    tree_lines = _render_open_tree_lines(artifacts, root, project=project, color_enabled=color_enabled)
+    if not tree_lines:
+        print("none")
+        return 0
+    for line in tree_lines:
+        print(line)
     return 0
 
 
@@ -998,6 +1244,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--description", default="", help="Plan description")
     plan_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
     plan_parser.add_argument("--model", default="gpt-5", help="Default model")
+    plan_parser.add_argument("--project", default="", help="Optional project key")
     plan_parser.set_defaults(func=cmd_new_plan)
 
     chunk_parser = new_subparsers.add_parser("chunk", help="Create a chunk")
@@ -1006,6 +1253,7 @@ def build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("--description", default="", help="Chunk description")
     chunk_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
     chunk_parser.add_argument("--model", default="gpt-5", help="Default model")
+    chunk_parser.add_argument("--project", default="", help="Optional project key")
     chunk_parser.set_defaults(func=cmd_new_chunk)
 
     task_parser = new_subparsers.add_parser("task", help="Create a task")
@@ -1013,6 +1261,8 @@ def build_parser() -> argparse.ArgumentParser:
     task_parser.add_argument("title", help="Task title")
     task_parser.add_argument("--description", default="", help="Task description")
     task_parser.add_argument("--model", default="gpt-5-mini", help="Model")
+    task_parser.add_argument("--project", default="", help="Optional project key")
+    task_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
     task_parser.set_defaults(func=cmd_new_task)
 
     list_parser = subparsers.add_parser("list", help="List artifacts")
@@ -1023,6 +1273,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["all", "plan", "chunk", "task"],
         help="Filter by artifact type",
     )
+    list_parser.add_argument("--project", default="", help="Filter by project key")
+    list_parser.add_argument("--blocking", action="store_true", help="Only artifacts currently blocking others")
+    list_parser.add_argument("--human", action="store_true", help="Only human tasks")
     list_parser.set_defaults(func=cmd_list)
 
     show_parser = subparsers.add_parser("show", help="Show one artifact")
@@ -1061,7 +1314,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     next_parser = subparsers.add_parser("next", help="Suggest next open artifact")
     next_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    next_parser.add_argument("--project", default="", help="Filter by project key")
     next_parser.set_defaults(func=cmd_next)
+
+    tree_parser = subparsers.add_parser("tree", help="Show open plan/chunk/task tree")
+    tree_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    tree_parser.add_argument("--project", default="", help="Filter by project key")
+    tree_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
+    tree_parser.set_defaults(func=cmd_tree)
+
+    report_parser = subparsers.add_parser("report", help="Show consolidated colored status report")
+    report_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    report_parser.add_argument("--project", default="", help="Filter by project key")
+    report_parser.add_argument("--limit", type=int, default=10, help="Max recent items to show")
+    report_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
+    report_parser.set_defaults(func=cmd_report)
 
     return parser
 

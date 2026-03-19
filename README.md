@@ -2,7 +2,7 @@
 
 Trains is a git-native CLI for planning and driving AI-enabled development work with markdown-first artifacts.
 
-Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list`, `show`, `start`, `complete`, `cancel`, `progress`, `recent`, `next`, `archive`) + dogfood workspace tooling + automated tests.
+Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list`, `show`, `start`, `complete`, `cancel`, `progress`, `recent`, `next`, `report`, `archive`) + dogfood workspace tooling + automated tests.
 
 ## Quickstart
 
@@ -61,6 +61,16 @@ One-command test runner (falls back to dogfood e2e if `pytest` is unavailable):
 - Dogfood workflow: [docs/dogfood/README.md](/Users/sasha/code/train/docs/dogfood/README.md)
 - Work handoff design: [docs/architecture/work-handoff.md](/Users/sasha/code/train/docs/architecture/work-handoff.md)
 - Product spec: [docs/spec/train_v1_product_spec.md](/Users/sasha/code/train/docs/spec/train_v1_product_spec.md)
+
+## Useful Commands
+
+```bash
+train list --project alpha
+train list --blocking --human
+train next --project alpha
+train tree --project alpha
+train report --project alpha
+```
 
 ## Documented Next Features
 

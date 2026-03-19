@@ -164,3 +164,78 @@ def test_next_skips_task_with_unmet_dependencies(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert code == 0
     assert out.startswith("TASK-001\ttask\topen\t")
+
+
+def test_list_filters_project_human_and_blocking(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Proj", "--project", "alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Chunk", "--project", "alpha"]) == 0
+    assert (
+        cli.main(
+            [
+                "new",
+                "--root",
+                str(tmp_path),
+                "task",
+                "CHUNK-001",
+                "Human blocker",
+                "--project",
+                "alpha",
+                "--human",
+            ]
+        )
+        == 0
+    )
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Blocked task", "--project", "alpha"]) == 0
+    capsys.readouterr()
+
+    blocked_task_path = tmp_path / ".train/plans/PLAN-001-proj/tasks/TASK-002-blocked-task.md"
+    raw = blocked_task_path.read_text(encoding="utf-8")
+    raw = raw.replace("blocked_by: []", "blocked_by:\n  - TASK-001")
+    blocked_task_path.write_text(raw, encoding="utf-8")
+
+    project_code = cli.main(["list", "--root", str(tmp_path), "--project", "alpha"])
+    project_out = capsys.readouterr().out
+    assert project_code == 0
+    assert "project=alpha" in project_out
+
+    human_blocking_code = cli.main(["list", "--root", str(tmp_path), "--blocking", "--human"])
+    human_blocking_out = capsys.readouterr().out
+    assert human_blocking_code == 0
+    assert "TASK-001" in human_blocking_out
+    assert "human=true" in human_blocking_out
+    assert "TASK-002" not in human_blocking_out
+
+
+def test_report_contains_expected_sections(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Report Plan", "--project", "alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build", "--project", "alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Human blocker", "--project", "alpha", "--human"]) == 0
+    assert cli.main(["start", "--root", str(tmp_path), "CHUNK-001"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["report", "--root", str(tmp_path), "--project", "alpha", "--no-color"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "== Trains Report ==" in out
+    assert "[In Progress]" in out
+    assert "[Next]" in out
+    assert "[Blocking Human Tasks]" in out
+    assert "[Recent Completed]" in out
+    assert "[Open Plan Tree]" in out
+
+
+def test_tree_outputs_open_hierarchy(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Tree Plan", "--project", "alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Tree Chunk", "--project", "alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Human task", "--project", "alpha", "--human"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["tree", "--root", str(tmp_path), "--project", "alpha", "--no-color"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "PLAN-001 Tree Plan" in out
+    assert "CHUNK-001 [open] Tree Chunk" in out
+    assert "TASK-001 [open] (H) Human task" in out
