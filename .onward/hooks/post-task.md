@@ -2,7 +2,7 @@
 id: HOOK-post-task
 type: hook
 trigger: task.completed
-model: gpt-5
+model: opus-latest
 executor: ralph
 scope: repo
 ---

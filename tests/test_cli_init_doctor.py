@@ -28,7 +28,7 @@ def test_init_creates_expected_layout(tmp_path: Path, capsys):
     assert "# Onward workspace config." in config
     assert "# Schema version for future migrations." in config
     assert "# Executor command to run for `onward work` task execution." in config
-    assert "# Default model used by `onward split` decomposition." in config
+    assert "# Default model used by `onward split` decomposition (blank = use default)." in config
 
 
 def test_doctor_passes_after_init(tmp_path: Path, capsys):

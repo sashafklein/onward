@@ -1,14 +1,12 @@
 version: 1
 
-paths:
-  plans_dir: .train/plans
-  runtime_dir: .train
+path: .onward
 
 sync:
   mode: local
-  branch: train
+  branch: onward
   repo: null
-  worktree_path: .train/sync
+  worktree_path: .onward/sync
 
 ralph:
   command: ralph
@@ -16,10 +14,10 @@ ralph:
   enabled: true
 
 models:
-  default: gpt-5
-  task_default: gpt-5-mini
-  split_default: gpt-5
-  review_default: gpt-5
+  default: opus-latest
+  task_default: sonnet-latest
+  split_default:
+  review_default: codex-latest
 
 work:
   sequential_by_default: true
@@ -31,5 +29,5 @@ hooks:
   pre_task_shell: []
   post_task_shell: []
   pre_task_markdown: null
-  post_task_markdown: .train/hooks/post-task.md
-  post_chunk_markdown: .train/hooks/post-chunk.md
+  post_task_markdown: .onward/hooks/post-task.md
+  post_chunk_markdown: .onward/hooks/post-chunk.md

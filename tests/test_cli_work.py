@@ -10,7 +10,17 @@ def _init_workspace(root: Path) -> None:
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    raw = raw.replace("  command: ralph", f"  command: {command}")
+    raw = raw.replace("  command: ralph", f'  command: "{command}"')
+    config_path.write_text(raw, encoding="utf-8")
+
+
+def _set_hook_value(root: Path, key: str, replacement: str) -> None:
+    config_path = root / ".onward.config.yaml"
+    raw = config_path.read_text(encoding="utf-8")
+    raw = raw.replace(f"  {key}: []", replacement)
+    raw = raw.replace(f"  {key}: null", replacement)
+    raw = raw.replace(f"  {key}: .onward/hooks/post-task.md", replacement)
+    raw = raw.replace(f"  {key}: .onward/hooks/post-chunk.md", replacement)
     config_path.write_text(raw, encoding="utf-8")
 
 
@@ -89,3 +99,57 @@ def test_work_chunk_executes_ready_tasks_in_dependency_order(tmp_path: Path, cap
     task_two_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-002-two.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in task_one_raw
     assert 'status: "completed"' in task_two_raw
+
+
+def test_work_task_runs_pre_and_post_shell_hooks(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    _set_hook_value(tmp_path, "pre_task_shell", '  pre_task_shell:\n    - "echo pre > .onward/pre-hook.txt"')
+    _set_hook_value(tmp_path, "post_task_shell", '  post_task_shell:\n    - "echo post > .onward/post-hook.txt"')
+    _set_hook_value(tmp_path, "post_task_markdown", "  post_task_markdown: null")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+    assert code == 0
+    assert (tmp_path / ".onward/pre-hook.txt").exists()
+    assert (tmp_path / ".onward/post-hook.txt").exists()
+
+
+def test_work_task_fails_when_post_task_shell_hook_fails(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    _set_hook_value(tmp_path, "post_task_shell", '  post_task_shell:\n    - "exit 7"')
+    _set_hook_value(tmp_path, "post_task_markdown", "  post_task_markdown: null")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "failed" in out
+    task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
+
+
+def test_work_chunk_fails_when_post_chunk_markdown_hook_missing(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    _set_hook_value(tmp_path, "post_task_markdown", "  post_task_markdown: null")
+    _set_hook_value(tmp_path, "post_chunk_markdown", "  post_chunk_markdown: .onward/hooks/missing.md")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "CHUNK-001"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "post hook failed" in out
+    chunk_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
+    assert 'status: "in_progress"' in chunk_raw

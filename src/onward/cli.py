@@ -28,11 +28,8 @@ DEFAULT_FILES = {
 # Schema version for future migrations.
 version: 1
 
-paths:
-  # Canonical directory for plan/chunk/task artifacts and derived indexes.
-  plans_dir: .onward/plans
-  # Runtime state root for ongoing runs, logs, and ephemeral execution files.
-  runtime_dir: .onward
+# Root directory for all Onward artifacts (plans, templates, hooks, runs, etc).
+path: .onward
 
 sync:
   # Sync mode: local (disabled), branch (same repo branch), repo (separate repo).
@@ -54,13 +51,14 @@ ralph:
 
 models:
   # Fallback model for generic operations when no more specific model is set.
-  default: gpt-5
+  # Supports aliases: opus-latest, sonnet-latest, codex-latest, haiku-latest.
+  default: opus-latest
   # Default model for newly created tasks.
-  task_default: gpt-5-mini
-  # Default model used by `onward split` decomposition.
-  split_default: gpt-5
+  task_default: sonnet-latest
+  # Default model used by `onward split` decomposition (blank = use default).
+  split_default:
   # Default model for review-oriented hooks/workflows.
-  review_default: gpt-5
+  review_default: codex-latest
 
 work:
   # If true, chunk execution runs tasks sequentially unless explicitly overridden.
@@ -239,7 +237,7 @@ Constraints:
 id: HOOK-post-task
 type: hook
 trigger: task.completed
-model: gpt-5
+model: opus-latest
 executor: ralph
 scope: repo
 ---
@@ -264,7 +262,7 @@ Summarize what changed and propose next tasks.
 id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
-model: gpt-5
+model: opus-latest
 executor: ralph
 scope: repo
 ---
@@ -726,7 +724,9 @@ def _parse_split_payload(raw: str, key: str) -> list[dict[str, Any]]:
 
 
 def _clean_string(value: Any) -> str:
-    return str(value or "").strip()
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _normalize_priority(value: Any) -> str:
@@ -951,19 +951,131 @@ def _assert_writes_safe(root: Path, writes: list[tuple[str, Path, str]]) -> None
             raise ValueError(f"split write collision: target already exists {path.relative_to(root)}")
 
 
+MODEL_FAMILIES: dict[str, str] = {
+    "opus": "claude-opus-4-6",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4",
+    "codex": "codex-5-3",
+    "gpt5": "gpt-5",
+}
+
+
 def _model_alias(model: str) -> str:
     normalized = model.strip().lower().replace("_", "-")
-    aliases = {
-        "opus": "claude-opus-4-1",
-        "sonnet": "claude-sonnet-4",
-        "haiku": "claude-haiku-4",
-        "gpt5": "gpt-5",
-    }
-    return aliases.get(normalized, model.strip())
+    if normalized.endswith("-latest"):
+        family = normalized[: -len("-latest")]
+        if family in MODEL_FAMILIES:
+            return MODEL_FAMILIES[family]
+    if normalized in MODEL_FAMILIES:
+        return MODEL_FAMILIES[normalized]
+    return model.strip()
 
 
 def _run_timestamp() -> str:
     return _now_iso().replace(":", "-")
+
+
+def _hook_commands(config: dict[str, Any], key: str) -> list[str]:
+    hooks = config.get("hooks", {})
+    if not isinstance(hooks, dict):
+        return []
+    value = hooks.get(key)
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    scalar = str(value or "").strip()
+    return [scalar] if scalar else []
+
+
+def _hook_markdown_path(config: dict[str, Any], key: str) -> str:
+    hooks = config.get("hooks", {})
+    if not isinstance(hooks, dict):
+        return ""
+    value = hooks.get(key)
+    return str(value or "").strip()
+
+
+def _run_shell_hooks(root: Path, commands: list[str], phase: str) -> tuple[bool, str]:
+    if not commands:
+        return True, f"[{phase}]\n(no hooks)"
+
+    lines = [f"[{phase}]"]
+    for i, command in enumerate(commands, start=1):
+        lines.append(f"$ {command}")
+        try:
+            result = subprocess.run(
+                command,
+                cwd=root,
+                shell=True,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"[error] {exc}")
+            return False, "\n".join(lines)
+        if result.stdout:
+            lines.append("[stdout]")
+            lines.append(result.stdout.rstrip())
+        if result.stderr:
+            lines.append("[stderr]")
+            lines.append(result.stderr.rstrip())
+        if result.returncode != 0:
+            lines.append(f"[error] exit code {result.returncode}")
+            return False, "\n".join(lines)
+    return True, "\n".join(lines)
+
+
+def _run_markdown_hook(
+    root: Path,
+    cmd: list[str],
+    hook_rel_path: str,
+    phase: str,
+    model: str,
+    task: Artifact,
+    run_id: str,
+) -> tuple[bool, str]:
+    if not hook_rel_path:
+        return True, f"[{phase}]\n(no hook)"
+
+    hook_path = root / hook_rel_path
+    if not hook_path.exists():
+        return False, f"[{phase}]\n[error] hook file not found: {hook_rel_path}"
+
+    payload = {
+        "type": "hook",
+        "phase": phase,
+        "run_id": run_id,
+        "model": model,
+        "hook_path": hook_rel_path,
+        "hook_body": hook_path.read_text(encoding="utf-8"),
+        "task": task.metadata,
+        "task_body": task.body,
+    }
+
+    lines = [f"[{phase}]", f"$ {' '.join(cmd)}"]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=root,
+            input=json.dumps(payload, indent=2),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"[error] {exc}")
+        return False, "\n".join(lines)
+
+    if result.stdout:
+        lines.append("[stdout]")
+        lines.append(result.stdout.rstrip())
+    if result.stderr:
+        lines.append("[stderr]")
+        lines.append(result.stderr.rstrip())
+    if result.returncode != 0:
+        lines.append(f"[error] exit code {result.returncode}")
+        return False, "\n".join(lines)
+    return True, "\n".join(lines)
 
 
 def _load_ongoing(root: Path) -> dict[str, Any]:
@@ -999,7 +1111,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
 
-    default_model = _config_model(config, "default", "gpt-5")
+    default_model = _config_model(config, "default", "opus-latest")
     task_model = _clean_string(task.metadata.get("model")) or default_model
     model = _model_alias(task_model)
 
@@ -1043,47 +1155,67 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     _write_ongoing(root, ongoing)
 
     payload = {
+        "type": "task",
+        "run_id": run_id,
         "task": task.metadata,
         "body": task.body,
     }
-    stdout = ""
-    stderr = ""
+    log_sections: list[str] = [f"$ {' '.join(cmd)}"]
     error = ""
     ok = False
-    try:
-        result = subprocess.run(
-            cmd,
-            input=json.dumps(payload, indent=2),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
-        ok = result.returncode == 0
-        if not ok:
-            error = f"executor exited with code {result.returncode}"
-    except FileNotFoundError:
-        error = f"executor command not found: {command}"
-    except Exception as exc:  # noqa: BLE001
-        error = str(exc)
+    pre_shell = _hook_commands(config, "pre_task_shell")
+    post_shell = _hook_commands(config, "post_task_shell")
+    pre_md = _hook_markdown_path(config, "pre_task_markdown")
+    post_md = _hook_markdown_path(config, "post_task_markdown")
 
-    log_lines = []
-    log_lines.append(f"$ {' '.join(cmd)}")
-    log_lines.append("")
-    if stdout:
-        log_lines.append("[stdout]")
-        log_lines.append(stdout.rstrip())
-    if stderr:
-        if stdout:
-            log_lines.append("")
-        log_lines.append("[stderr]")
-        log_lines.append(stderr.rstrip())
+    pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell")
+    log_sections.append(pre_shell_log)
+    if not pre_shell_ok:
+        error = "pre_task_shell hook failed"
+    else:
+        pre_md_ok, pre_md_log = _run_markdown_hook(root, cmd, pre_md, "pre_task_markdown", model, task, run_id)
+        log_sections.append(pre_md_log)
+        if not pre_md_ok:
+            error = "pre_task_markdown hook failed"
+
+    if not error:
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=root,
+                input=json.dumps(payload, indent=2),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if result.stdout:
+                log_sections.append("[task stdout]\n" + result.stdout.rstrip())
+            if result.stderr:
+                log_sections.append("[task stderr]\n" + result.stderr.rstrip())
+            ok = result.returncode == 0
+            if not ok:
+                error = f"executor exited with code {result.returncode}"
+        except FileNotFoundError:
+            error = f"executor command not found: {command}"
+        except Exception as exc:  # noqa: BLE001
+            error = str(exc)
+
+    if ok and not error:
+        post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell")
+        log_sections.append(post_shell_log)
+        if not post_shell_ok:
+            ok = False
+            error = "post_task_shell hook failed"
+    if ok and not error:
+        post_md_ok, post_md_log = _run_markdown_hook(root, cmd, post_md, "post_task_markdown", model, task, run_id)
+        log_sections.append(post_md_log)
+        if not post_md_ok:
+            ok = False
+            error = "post_task_markdown hook failed"
+
     if error:
-        if stdout or stderr:
-            log_lines.append("")
-        log_lines.append(f"[error] {error}")
-    run_log.write_text("\n".join(log_lines).rstrip() + "\n", encoding="utf-8")
+        log_sections.append(f"[error] {error}")
+    run_log.write_text("\n\n".join(section.rstrip() for section in log_sections if section).rstrip() + "\n", encoding="utf-8")
 
     finished_at = _now_iso()
     run_record["status"] = "completed" if ok else "failed"
@@ -1154,6 +1286,53 @@ def _ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact
     return ready, not blocked_exists
 
 
+def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str]:
+    config = _load_config(root)
+    hook_rel_path = _hook_markdown_path(config, "post_chunk_markdown")
+    if not hook_rel_path:
+        return True, "(no hook)"
+
+    hook_path = root / hook_rel_path
+    if not hook_path.exists():
+        return False, f"hook file not found: {hook_rel_path}"
+
+    ralph = config.get("ralph", {})
+    if not isinstance(ralph, dict):
+        ralph = {}
+    command = _clean_string(ralph.get("command")) or "ralph"
+    command_args = ralph.get("args", [])
+    if not isinstance(command_args, list):
+        command_args = []
+    cmd = [command, *[str(item) for item in command_args]]
+    model = _model_alias(_config_model(config, "review_default", _config_model(config, "default", "opus-latest")))
+    payload = {
+        "type": "hook",
+        "phase": "post_chunk_markdown",
+        "model": model,
+        "hook_path": hook_rel_path,
+        "hook_body": hook_path.read_text(encoding="utf-8"),
+        "chunk": chunk.metadata,
+        "chunk_body": chunk.body,
+    }
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=root,
+            input=json.dumps(payload, indent=2),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False, f"executor command not found: {command}"
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        return False, stderr or f"exit code {result.returncode}"
+    return True, ""
+
+
 def cmd_work(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     artifact = _must_find_by_id(root, args.id)
@@ -1188,6 +1367,10 @@ def cmd_work(args: argparse.Namespace) -> int:
             return 1
 
     refreshed_chunk = _must_find_by_id(root, chunk_id)
+    hook_ok, hook_error = _run_chunk_post_markdown_hook(root, refreshed_chunk)
+    if not hook_ok:
+        print(f"Chunk {chunk_id} post hook failed: {hook_error}")
+        return 1
     if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
         _update_artifact_status(root, refreshed_chunk, "completed")
     print(f"Chunk {chunk_id} completed")
@@ -1202,8 +1385,9 @@ def cmd_split(args: argparse.Namespace) -> int:
         raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
 
     config = _load_config(root)
-    split_model = _clean_string(args.model) or _config_model(config, "split_default", "gpt-5")
-    task_default_model = _config_model(config, "task_default", "gpt-5-mini")
+    default_model = _config_model(config, "default", "opus-latest")
+    split_model = _clean_string(args.model) or _config_model(config, "split_default", "") or default_model
+    task_default_model = _config_model(config, "task_default", "sonnet-latest")
 
     prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
     prompt = _load_prompt(root, prompt_name)
@@ -1222,7 +1406,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
     if artifact_type == "plan":
         parsed = _parse_split_payload(raw, "chunks")
-        normalized = _normalize_chunk_candidates(parsed, _config_model(config, "default", "gpt-5"))
+        normalized = _normalize_chunk_candidates(parsed, default_model)
         writes = _prepare_chunk_writes(root, artifact, normalized)
     else:
         parsed = _parse_split_payload(raw, "tasks")
@@ -2061,7 +2245,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("title", help="Plan title")
     plan_parser.add_argument("--description", default="", help="Plan description")
     plan_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
-    plan_parser.add_argument("--model", default="gpt-5", help="Default model")
+    plan_parser.add_argument("--model", default="opus-latest", help="Default model")
     plan_parser.add_argument("--project", default="", help="Optional project key")
     plan_parser.set_defaults(func=cmd_new_plan)
 
@@ -2070,7 +2254,7 @@ def build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("title", help="Chunk title")
     chunk_parser.add_argument("--description", default="", help="Chunk description")
     chunk_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
-    chunk_parser.add_argument("--model", default="gpt-5", help="Default model")
+    chunk_parser.add_argument("--model", default="opus-latest", help="Default model")
     chunk_parser.add_argument("--project", default="", help="Optional project key")
     chunk_parser.set_defaults(func=cmd_new_chunk)
 
@@ -2078,7 +2262,7 @@ def build_parser() -> argparse.ArgumentParser:
     task_parser.add_argument("chunk_id", help="Owning chunk ID (e.g., CHUNK-001)")
     task_parser.add_argument("title", help="Task title")
     task_parser.add_argument("--description", default="", help="Task description")
-    task_parser.add_argument("--model", default="gpt-5-mini", help="Model")
+    task_parser.add_argument("--model", default="sonnet-latest", help="Model")
     task_parser.add_argument("--project", default="", help="Optional project key")
     task_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
     task_parser.set_defaults(func=cmd_new_task)

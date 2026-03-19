@@ -2,7 +2,7 @@
 id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
-model: gpt-5
+model: opus-latest
 executor: ralph
 scope: repo
 ---
