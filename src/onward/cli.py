@@ -20,6 +20,7 @@ DEFAULT_DIRECTORIES = [
     ".onward/sync",
     ".onward/runs",
     ".onward/reviews",
+    ".onward/notes",
 ]
 
 DEFAULT_FILES = {
@@ -1194,11 +1195,18 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     ongoing["active_runs"] = active_runs
     _write_ongoing(root, ongoing)
 
-    payload = {
+    task_id = str(task.metadata.get("id", ""))
+    notes = _read_notes(root, task_id)
+    payload: dict[str, Any] = {
         "type": "task",
         "run_id": run_id,
         "task": task.metadata,
         "body": task.body,
+        "notes": notes if notes.strip() else None,
+        "notes_hint": (
+            f"To add a note to this task, run: onward note {task_id} \"your note\". "
+            f"To read existing notes: onward note {task_id}"
+        ),
     }
     log_sections: list[str] = [f"$ {' '.join(cmd)}"]
     error = ""
@@ -1452,6 +1460,27 @@ def _execute_plan_review(
     return True, review_path
 
 
+def cmd_note(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+    artifact_id = str(artifact.metadata.get("id", ""))
+
+    message = getattr(args, "message", None)
+    if message:
+        path = _append_note(root, artifact, message)
+        print(f"Note added to {artifact_id} at {path.relative_to(root)}")
+        return 0
+
+    notes = _read_notes(root, artifact_id)
+    if not notes.strip():
+        print(f"No notes for {artifact_id}.")
+        return 0
+
+    print(f"Notes for {artifact_id}:\n")
+    print(notes.rstrip())
+    return 0
+
+
 def cmd_review_plan(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     _require_workspace(root)
@@ -1630,6 +1659,40 @@ def _find_plan_dir(root: Path, plan_id: str) -> Path:
     if not matches:
         raise ValueError(f"plan not found: {plan_id}")
     return matches[0]
+
+
+def _notes_path(root: Path, artifact_id: str) -> Path:
+    return root / ".onward/notes" / f"{artifact_id}.md"
+
+
+def _read_notes(root: Path, artifact_id: str) -> str:
+    path = _notes_path(root, artifact_id)
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def _append_note(root: Path, artifact: Artifact, message: str) -> Path:
+    artifact_id = str(artifact.metadata.get("id", ""))
+    path = _notes_path(root, artifact_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    timestamp = _now_iso()
+    entry = f"## {timestamp}\n\n{message.strip()}\n\n"
+
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        path.write_text(existing + entry, encoding="utf-8")
+    else:
+        path.write_text(entry, encoding="utf-8")
+
+    if not artifact.metadata.get("has_notes"):
+        artifact.metadata["has_notes"] = True
+        artifact.metadata["updated_at"] = _now_iso()
+        _write_artifact(artifact)
+        _regenerate_indexes(root)
+
+    return path
 
 
 def _validate_artifact(artifact: Artifact) -> list[str]:
@@ -2069,7 +2132,15 @@ def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     _write_artifact(artifact)
 
     _regenerate_indexes(root)
-    print(f"{artifact.metadata.get('id')} status: {current} -> {artifact.metadata.get('status')}")
+    artifact_id = str(artifact.metadata.get("id", ""))
+    print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
+
+    if action in {"complete", "cancel"}:
+        notes = _read_notes(root, artifact_id)
+        if notes.strip():
+            print(f"\nRelated notes for {artifact_id}:\n")
+            print(notes.rstrip())
+
     return 0
 
 
@@ -2459,6 +2530,12 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser.add_argument("id", help="Artifact ID (PLAN-###, CHUNK-###, TASK-###)")
     show_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     show_parser.set_defaults(func=cmd_show)
+
+    note_parser = subparsers.add_parser("note", help="Add or view notes on an artifact")
+    note_parser.add_argument("id", help="Artifact ID (PLAN-###, CHUNK-###, TASK-###)")
+    note_parser.add_argument("message", nargs="?", default=None, help="Note text (omit to view existing notes)")
+    note_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    note_parser.set_defaults(func=cmd_note)
 
     start_parser = subparsers.add_parser("start", help="Move artifact to in_progress")
     start_parser.add_argument("id", help="Artifact ID")

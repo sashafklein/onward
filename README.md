@@ -108,6 +108,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward progress`             | What's currently in flight        |
 | `onward recent`               | What just got done                |
 | `onward show TASK-001`        | Full detail on one artifact       |
+| `onward note TASK-001`        | View notes on an artifact         |
 
 ### Moving Work Forward
 
@@ -119,6 +120,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward work TASK-001`     | Execute task                              |
 | `onward work CHUNK-001`    | Execute all tasks in a chunk sequentially |
 | `onward archive PLAN-001`  | Archive a completed plan                  |
+| `onward note ID "message"` | Add a note to any artifact                |
 
 ### Filtering
 
@@ -141,6 +143,35 @@ This spawns independent model-backed reviewers that scrutinize the plan for gaps
 By default, **two reviewers** run using different models (`review_default` and `default` from config) so the reviews cross-validate each other. Set `review.double_review: false` in `.onward.config.yaml` to use a single reviewer.
 
 Review artifacts are written to `.onward/reviews/` (gitignored — they're working documents, not permanent artifacts). The command announces the file paths and recommends you read through the findings and incorporate them into the plan before proceeding.
+
+### Notes (Artifact Scratch Pad)
+
+Any artifact — plan, chunk, or task — can have timestamped notes attached to it:
+
+```bash
+# Add a note
+onward note TASK-001 "todo: check edge case for empty input"
+onward note PLAN-002 "revisit auth approach after spike"
+
+# View notes
+onward note TASK-001
+```
+
+Notes are stored in `.onward/notes/{ID}.md`, one file per artifact, with timestamped entries appended as you go. When a note is added, the artifact's frontmatter gains `has_notes: true` so it's visible in metadata.
+
+When you **complete** or **cancel** an artifact, its notes are printed inline:
+
+```
+TASK-001 status: in_progress -> completed
+
+Related notes for TASK-001:
+
+## 2026-03-19T12:00:00Z
+
+todo: check edge case for empty input
+```
+
+This ensures that scratch-pad thoughts, TODOs, and observations surface at exactly the moment they matter — when work is being closed out. During `onward work`, notes are also included in the executor payload so the agent has full context.
 
 ---
 
@@ -200,6 +231,7 @@ When you run `onward init`, your project gets:
   templates/                     ← markdown templates for new artifacts
   hooks/                         ← pre/post execution hooks
   prompts/                       ← prompts for split decomposition and reviews
+  notes/                         ← per-artifact scratch pad notes
   runs/                          ← execution records (gitignored)
   reviews/                       ← plan review artifacts (gitignored)
   sync/                          ← sync workspace state

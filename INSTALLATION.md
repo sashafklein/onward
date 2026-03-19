@@ -158,6 +158,10 @@ onward split PLAN-XXX
 onward split CHUNK-XXX
 onward review-plan PLAN-XXX
 
+# Notes (scratch pad)
+onward note <ID> "message"
+onward note <ID>
+
 # Move work forward
 onward start <ID>
 onward complete <ID>
@@ -210,7 +214,7 @@ MANDATORY BEHAVIORS:
 - NEVER maintain planning state in chat, scratch files, or memory alone
 
 KEY COMMANDS: onward report, onward next, onward new, onward start, onward complete,
-onward list, onward tree, onward show, onward split, onward review-plan
+onward list, onward tree, onward show, onward split, onward review-plan, onward note
 ```
 
 ---
@@ -224,7 +228,7 @@ ONWARD QUICK-REF:
   report   → see everything          next     → what to do now
   new plan → start initiative         new chunk/task → decompose
   split    → AI-decompose             review-plan → adversarial review
-  start    → begin work
+  note     → scratch pad               start    → begin work
   complete → finish work              cancel   → abandon work
   list     → filter artifacts         tree     → hierarchy view
   show     → inspect one artifact     progress → what's in flight
