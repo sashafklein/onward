@@ -57,6 +57,7 @@ One-command test runner (falls back to dogfood e2e if `pytest` is unavailable):
 
 ## Documentation
 
+- Installation + agent setup: [INSTALLATION.md](/Users/sasha/code/train/INSTALLATION.md)
 - New contributor walkthrough: [docs/NOOB_GUIDE.md](/Users/sasha/code/train/docs/NOOB_GUIDE.md)
 - Dogfood workflow: [docs/dogfood/README.md](/Users/sasha/code/train/docs/dogfood/README.md)
 - Work handoff design: [docs/architecture/work-handoff.md](/Users/sasha/code/train/docs/architecture/work-handoff.md)

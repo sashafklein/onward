@@ -812,7 +812,11 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     target.write_text(_format_artifact(metadata, body), encoding="utf-8")
 
     _regenerate_indexes(root)
-    print(f"Created {plan_id} at {target.relative_to(root)}")
+    target_rel = str(target.relative_to(root))
+    print(f"Created {plan_id} at {target_rel}")
+    print(
+        f"Plan created at {target_rel}. It is currently an empty template. Inspect it for guidance on how to fill it out."
+    )
     return 0
 
 

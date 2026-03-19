@@ -1,13 +1,13 @@
 ---
-id: PLAN-002
-type: plan
-title: Visibility surfaces and artifact state transitions
-status: open
-description: Implement momentum-oriented views and deterministic status mutation
-priority: high
-model: gpt-5
-created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T00:00:00Z
+id: "PLAN-002"
+type: "plan"
+title: "Visibility surfaces and artifact state transitions"
+status: "completed"
+description: "Implement momentum-oriented views and deterministic status mutation"
+priority: "high"
+model: "gpt-5"
+created_at: "2026-03-19T00:00:00Z"
+updated_at: "2026-03-19T04:26:14Z"
 ---
 
 # Summary
@@ -61,4 +61,4 @@ Use a small status transition engine with common timestamp/update behavior share
 
 # Notes
 
-This plan should land before decomposition and work execution.
+Completed for current v1 scope. `tree` and `report` are implemented; remaining polish can happen opportunistically.

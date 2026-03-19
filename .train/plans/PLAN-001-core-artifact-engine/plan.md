@@ -1,13 +1,13 @@
 ---
-id: PLAN-001
-type: plan
-title: Core artifact engine and CLI foundations
-status: open
-description: Build deterministic file-based artifact creation, lookup, and validation
-priority: high
-model: gpt-5
-created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T00:00:00Z
+id: "PLAN-001"
+type: "plan"
+title: "Core artifact engine and CLI foundations"
+status: "completed"
+description: "Build deterministic file-based artifact creation, lookup, and validation"
+priority: "high"
+model: "gpt-5"
+created_at: "2026-03-19T00:00:00Z"
+updated_at: "2026-03-19T04:26:14Z"
 ---
 
 # Summary
@@ -58,4 +58,4 @@ Create a storage layer around `.train/plans/` that handles ID generation, file n
 
 # Notes
 
-This plan is the dependency base for all remaining plans.
+Completed. Baseline artifact lifecycle is in place and stable enough for downstream work.

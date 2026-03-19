@@ -1,13 +1,13 @@
 ---
-id: PLAN-003
-type: plan
-title: Decomposition engine for plan and chunk splitting
-status: open
-description: Turn high-level scope into executable artifacts with bounded AI assistance
-priority: medium
-model: gpt-5
-created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T00:00:00Z
+id: "PLAN-003"
+type: "plan"
+title: "Decomposition engine for plan and chunk splitting"
+status: "in_progress"
+description: "Turn high-level scope into executable artifacts with bounded AI assistance"
+priority: "medium"
+model: "gpt-5"
+created_at: "2026-03-19T00:00:00Z"
+updated_at: "2026-03-19T04:26:15Z"
 ---
 
 # Summary
@@ -58,4 +58,8 @@ Define a split prompt contract plus output parser that validates and normalizes 
 
 # Notes
 
-Keep split prompts local and versioned under `.train/prompts/` when introduced.
+Current pickup point:
+
+1. Add `train split PLAN-###` and `train split CHUNK-###` commands.
+2. Introduce prompt assets under `.train/prompts/` with deterministic parse format.
+3. Implement `--dry-run` and validation errors that do not write partial artifacts.
