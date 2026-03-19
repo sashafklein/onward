@@ -156,6 +156,7 @@ onward new chunk PLAN-XXX "<title>"
 onward new task CHUNK-XXX "<title>"
 onward split PLAN-XXX
 onward split CHUNK-XXX
+onward review-plan PLAN-XXX
 
 # Move work forward
 onward start <ID>
@@ -209,7 +210,7 @@ MANDATORY BEHAVIORS:
 - NEVER maintain planning state in chat, scratch files, or memory alone
 
 KEY COMMANDS: onward report, onward next, onward new, onward start, onward complete,
-onward list, onward tree, onward show, onward split
+onward list, onward tree, onward show, onward split, onward review-plan
 ```
 
 ---
@@ -222,7 +223,8 @@ If you need a minimal, dense reference to paste anywhere:
 ONWARD QUICK-REF:
   report   → see everything          next     → what to do now
   new plan → start initiative         new chunk/task → decompose
-  split    → AI-decompose             start    → begin work
+  split    → AI-decompose             review-plan → adversarial review
+  start    → begin work
   complete → finish work              cancel   → abandon work
   list     → filter artifacts         tree     → hierarchy view
   show     → inspect one artifact     progress → what's in flight
@@ -332,6 +334,9 @@ models:
   task_default: sonnet-latest    # default for new tasks
   split_default:                 # blank = use default
   review_default: codex-latest   # review hooks/workflows
+
+review:
+  double_review: true            # two independent reviewers (review_default + default)
 
 work:
   sequential_by_default: true

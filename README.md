@@ -95,6 +95,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward new task CHUNK-001 "Title"`     | Add a task to a chunk           |
 | `onward split PLAN-001`                 | AI-decompose a plan into chunks |
 | `onward split CHUNK-001`                | AI-decompose a chunk into tasks |
+| `onward review-plan PLAN-001`           | Run adversarial review(s) of a plan |
 
 ### Seeing What's Happening
 
@@ -126,6 +127,20 @@ onward list --project alpha --blocking    # what's blocking progress
 onward list --project alpha --human       # what needs a human
 onward list --blocking --human            # human actions blocking agents
 ```
+
+### Reviewing Plans
+
+Before splitting or starting work on a plan, run an adversarial review:
+
+```bash
+onward review-plan PLAN-001
+```
+
+This spawns independent model-backed reviewers that scrutinize the plan for gaps, security issues, missing requirements, and deployment risks. Each reviewer produces a structured markdown report with severity-rated findings.
+
+By default, **two reviewers** run using different models (`review_default` and `default` from config) so the reviews cross-validate each other. Set `review.double_review: false` in `.onward.config.yaml` to use a single reviewer.
+
+Review artifacts are written to `.onward/reviews/` (gitignored — they're working documents, not permanent artifacts). The command announces the file paths and recommends you read through the findings and incorporate them into the plan before proceeding.
 
 ---
 
@@ -184,8 +199,9 @@ When you run `onward init`, your project gets:
     .archive/                    ← archived plans (gitignored)
   templates/                     ← markdown templates for new artifacts
   hooks/                         ← pre/post execution hooks
-  prompts/                       ← prompts for split decomposition
+  prompts/                       ← prompts for split decomposition and reviews
   runs/                          ← execution records (gitignored)
+  reviews/                       ← plan review artifacts (gitignored)
   sync/                          ← sync workspace state
 ```
 
