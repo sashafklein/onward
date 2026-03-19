@@ -1,0 +1,1121 @@
+# Train v1 Product Spec
+
+> Implementation note (March 19, 2026): active scaffold uses `.train.config.yaml` and `.train/plans/`.
+
+## 1. Summary
+
+**Train** is a git-native planning and execution tool for AI-assisted software development.
+
+It is built around a simple idea:
+
+- plans, chunks, and tasks should live in the repo as markdown
+- state should be human-readable and editable
+- the CLI should help organize, inspect, and advance work
+- model orchestration should stay minimal until explicit execution time
+- `train work` is the boundary where Train hands execution to Ralph
+
+Train is **not** meant to be a generic project management platform. It is an opinionated personal workflow tool optimized for one developer running AI-heavy implementation loops inside code repositories.
+
+The core value is **maintaining forward momentum** while keeping planning artifacts transparent, structured, and easy to sync across environments.
+
+---
+
+## 2. Product framing
+
+Train is best thought of as:
+
+> a repo-native momentum engine for AI-assisted coding
+
+Not:
+
+- a generic PM tool
+- a ticketing system for large teams
+- a web app
+- a database-backed planner
+- a full agent framework
+
+Train should be strongest at:
+
+- creating and organizing plan/chunk/task artifacts
+- showing what exists, what is active, and what just finished
+- keeping task metadata visible in markdown frontmatter
+- handing bounded task execution off to Ralph
+- recording execution progress and outcomes
+
+---
+
+## 3. Core principles
+
+### 3.1 Markdown-native
+All core planning artifacts are markdown files with frontmatter.
+
+### 3.2 Git-native
+The source of truth lives in the filesystem and can be committed, diffed, branched, synced, and reviewed.
+
+### 3.3 Opinionated
+Train uses a fixed hierarchy:
+
+- plan
+- chunk
+- task
+
+These terms and meanings are built in. v1 does **not** attempt to support custom artifact taxonomies.
+
+### 3.4 Lightweight until execution
+Train should focus on organization, status, and visibility first. It should not eagerly orchestrate models during basic artifact creation.
+
+### 3.5 Explicit execution boundary
+`train work` is where Train begins orchestrating actual AI execution via Ralph.
+
+### 3.6 Local-first, sync-capable
+Train should work entirely locally, but also support syncing planning artifacts to either:
+
+- a branch in the current repo
+- a separate repo dedicated to shared plan state
+
+### 3.7 Archive by removal from git
+Archived plans move into `.train/plans/.archive/`, which is gitignored so they naturally disappear from versioned state.
+
+---
+
+## 4. Scope of v1
+
+Train v1 includes:
+
+- repo-local plan storage
+- markdown templates for plan/chunk/task/hook/run
+- frontmatter-based metadata
+- commands for creating, listing, showing, starting, completing, canceling, splitting, and working
+- derived views like `progress`, `recent`, and `next`
+- local mode and shared sync mode
+- optional separate sync repo support
+- plan archiving into `.train/plans/.archive/`
+- Ralph integration at `train work`
+- shell hooks and markdown agent hooks
+
+Train v1 does **not** include:
+
+- a web UI
+- a database
+- arbitrary workflow taxonomies
+- multi-user locking
+- elaborate scheduler logic
+- generic executor abstraction beyond what is needed to call Ralph cleanly
+- background daemon infrastructure
+
+---
+
+## 5. Information model
+
+Train has five core artifact types:
+
+## 5.1 Plan
+A high-level initiative.
+
+A plan should define:
+
+- what is being built or changed
+- why it matters
+- scope and non-goals
+- architecture or approach
+- sequencing thoughts
+- decomposition into chunks
+
+## 5.2 Chunk
+A bounded implementation unit within a plan.
+
+A chunk should generally map to:
+
+- one coherent deliverable
+- one manageable PR series
+- one execution stream that may contain multiple tasks
+
+Chunks exist primarily to keep plans executable and to bound implementation size.
+
+## 5.3 Task
+The smallest self-contained execution unit.
+
+A task should be:
+
+- understandable on its own
+- scoped tightly
+- executable by one human or one AI worker loop
+- accompanied by acceptance criteria
+- associated with a preferred model and execution instructions
+
+Tasks are generally created close to build time.
+
+## 5.4 Hook
+A reusable execution-time instruction or command triggered before or after work.
+
+Hooks can be:
+
+- shell hooks
+- markdown agent hooks
+
+Markdown hooks are especially important for review, follow-up planning, cleanup, and synthesis.
+
+## 5.5 Run
+A record of an execution attempt.
+
+Runs capture:
+
+- what was worked on
+- when it started and ended
+- what model/executor was used
+- status/outcome
+- notes or summary
+
+---
+
+## 6. State model
+
+Use a uniform minimal state model across plans, chunks, and tasks:
+
+- `open`
+- `in_progress`
+- `completed`
+- `canceled`
+
+No dedicated `blocked` state in v1.
+
+Blocking should instead be represented with optional metadata fields such as:
+
+```yaml
+blocked_by:
+  - TASK-003
+block_reason: Waiting on API decision
+```
+
+This keeps status simple while preserving useful dependency information.
+
+---
+
+## 7. Repo layout
+
+Train uses one config file and one directory at repo root:
+
+```txt
+.train.config.yaml
+.train/
+```
+
+## 7.1 `.train/`
+Tooling configuration and templates.
+
+Suggested layout:
+
+```txt
+.train/
+  plans/
+    index.yaml
+    recent.yaml
+    PLAN-001-unified-onboarding-rewrite/
+      plan.md
+      research.md
+      chunks/
+        CHUNK-001-backend-foundation.md
+        CHUNK-002-frontend-flow.md
+      tasks/
+        TASK-001-schema.md
+        TASK-002-endpoints.md
+      runs/
+        RUN-2026-03-18T12-00-00Z-TASK-001.md
+  plans/.archive/
+  templates/
+    plan.md
+    chunk.md
+    task.md
+    run.md
+  hooks/
+    post-task.md
+    post-chunk.md
+    review-task.md
+  sync/
+    .gitkeep
+```
+`.train/plans/.archive/` must be gitignored.
+
+---
+
+## 8. Archiving behavior
+
+When a plan is archived:
+
+- its full plan directory is moved into `.train/plans/.archive/`
+- archived artifacts disappear from active git-tracked planning state
+- active indexes exclude archived items
+
+This is intentionally destructive from the perspective of the active planning workspace, but history still exists locally unless manually deleted.
+
+### 8.1 Git behavior
+Add at least:
+
+```txt
+.train/plans/.archive/
+```
+
+to `.gitignore`.
+
+### 8.2 Command
+```bash
+train archive PLAN-001
+```
+
+This should:
+
+- validate the plan exists
+- move the plan folder into `.train/plans/.archive/`
+- regenerate indexes
+- remove it from active views
+
+---
+
+## 9. Frontmatter schema
+
+Train should keep schema simple and explicit.
+
+## 9.1 Common fields
+Shared across plan/chunk/task:
+
+```yaml
+---
+id: PLAN-001
+type: plan
+title: Unified onboarding rewrite
+status: open
+created_at: 2026-03-18T12:00:00Z
+updated_at: 2026-03-18T12:00:00Z
+tags: [onboarding, architecture]
+---
+```
+
+## 9.2 Plan fields
+
+```yaml
+---
+id: PLAN-001
+type: plan
+title: Unified onboarding rewrite
+status: open
+description: Consolidate onboarding flows into one unified architecture
+priority: high
+model: gpt-5
+created_at: 2026-03-18T12:00:00Z
+updated_at: 2026-03-18T12:00:00Z
+---
+```
+
+## 9.3 Chunk fields
+
+```yaml
+---
+id: CHUNK-001
+type: chunk
+plan: PLAN-001
+title: Backend foundation
+status: open
+description: Add schema and APIs needed for unified onboarding
+priority: high
+model: gpt-5
+created_at: 2026-03-18T12:00:00Z
+updated_at: 2026-03-18T12:00:00Z
+---
+```
+
+## 9.4 Task fields
+
+```yaml
+---
+id: TASK-001
+type: task
+plan: PLAN-001
+chunk: CHUNK-001
+title: Add onboarding_session table
+status: open
+description: Add DB schema and migration for onboarding sessions
+model: gpt-5-mini
+executor: ralph
+depends_on: []
+blocked_by: []
+files:
+  - packages/db/schema.ts
+  - packages/db/migrations/
+acceptance:
+  - onboarding_session table exists
+  - migration applies cleanly
+  - type generation succeeds
+  - relevant tests pass
+created_at: 2026-03-18T12:00:00Z
+updated_at: 2026-03-18T12:00:00Z
+---
+```
+
+## 9.5 Hook fields
+
+```yaml
+---
+id: HOOK-post-task
+type: hook
+trigger: task.completed
+model: gpt-5
+executor: ralph
+scope: repo
+created_at: 2026-03-18T12:00:00Z
+updated_at: 2026-03-18T12:00:00Z
+---
+```
+
+## 9.6 Run fields
+
+```yaml
+---
+id: RUN-2026-03-18T12-00-00Z-TASK-001
+type: run
+target: TASK-001
+plan: PLAN-001
+chunk: CHUNK-001
+status: in_progress
+executor: ralph
+model: gpt-5-mini
+started_at: 2026-03-18T12:00:00Z
+ended_at: null
+---
+```
+
+---
+
+## 10. Markdown body templates
+
+## 10.1 Plan body
+
+```md
+# Summary
+
+# Problem
+
+# Goals
+
+# Non-goals
+
+# Context
+
+# Proposed approach
+
+# Risks
+
+# Chunking strategy
+
+# Notes
+```
+
+## 10.2 Chunk body
+
+```md
+# Summary
+
+# Scope
+
+# Out of scope
+
+# Dependencies
+
+# Expected files/systems involved
+
+# Completion criteria
+
+# Notes
+```
+
+## 10.3 Task body
+
+```md
+# Context
+
+# Scope
+
+# Out of scope
+
+# Files to inspect
+
+# Implementation notes
+
+# Acceptance criteria
+
+# Handoff notes
+```
+
+## 10.4 Hook body
+
+Markdown hook bodies are direct instructions to the executing agent.
+
+Example sections:
+
+```md
+# Purpose
+
+# Inputs
+
+# Instructions
+
+# Required output
+```
+
+---
+
+## 11. Config
+
+Primary config lives at:
+
+```txt
+.train.config.yaml
+```
+
+This file defines:
+
+- paths
+- sync mode
+- Ralph integration defaults
+- default models
+- hooks
+- worktree behavior
+
+Example:
+
+```yaml
+version: 1
+
+paths:
+  plans_dir: .train/plans
+
+sync:
+  mode: local
+  branch: train
+  repo: null
+  worktree_path: .train/sync
+
+ralph:
+  command: ralph
+  enabled: true
+  default_executor: ralph
+
+models:
+  default: gpt-5
+  task_default: gpt-5-mini
+  split_default: gpt-5
+  review_default: gpt-5
+
+work:
+  sequential_by_default: true
+  create_worktree: true
+  base_branch: main
+
+hooks:
+  pre_task_shell: []
+  post_task_shell: []
+  pre_task_markdown: null
+  post_task_markdown: .train/hooks/post-task.md
+  post_chunk_markdown: .train/hooks/post-chunk.md
+```
+
+---
+
+## 12. Sync modes
+
+Train supports two modes.
+
+## 12.1 Local mode
+All planning artifacts stay in the current repo and current branch. No syncing required.
+
+## 12.2 Shared sync mode
+Planning artifacts are synchronized to a shared location.
+
+This shared location can be either:
+
+- a branch in the same repo
+- a separate repo dedicated to plan state
+
+### 12.2.1 Same-repo branch mode
+Example:
+
+- code work on normal branches
+- planning artifacts sync to branch `train`
+
+### 12.2.2 Separate sync repo mode
+This is explicitly supported for workflows where an overseer agent, such as OpenClaw, manages task state outside the main project repo.
+
+In this mode:
+
+- source repo contains `.train/plans/`
+- Train syncs `.train/plans/` to another repo
+- another agent can update shared task state there
+- the project repo can later pull/sync those changes back
+
+This allows one big shared task list across environments.
+
+### 12.2.3 Sync expectations
+Sync is best-effort and file-based. v1 does not attempt sophisticated merge conflict resolution.
+
+Train should expose commands such as:
+
+```bash
+train sync push
+train sync pull
+train sync status
+```
+
+---
+
+## 13. CLI philosophy
+
+Train should be strongest at:
+
+- creating artifacts
+- showing current state
+- splitting larger artifacts into smaller ones
+- handing execution to Ralph when explicitly asked
+
+Train should **not** automatically kick off models for simple creation commands unless explicitly requested.
+
+This means the clean boundary is:
+
+```bash
+train new plan "Unified onboarding rewrite" --description "..."
+```
+
+creates a plan artifact only.
+
+Then separate commands can be used to populate or decompose it.
+
+This keeps creation deterministic and keeps orchestration from leaking into basic organization commands.
+
+---
+
+## 14. CLI commands
+
+## 14.1 Initialization
+
+```bash
+train init
+train doctor
+train sync status
+```
+
+### `train init`
+Creates:
+
+- `.train/`
+- `.train/plans/`
+- templates
+- default hooks
+- `.gitignore` update for `.train/plans/.archive/`
+
+### `train doctor`
+Validates:
+
+- required directories exist
+- config is parseable
+- frontmatter is valid
+- references are valid
+- indexes can be regenerated
+
+---
+
+## 14.2 Creation
+
+```bash
+train new plan "Unified onboarding rewrite" --description "Consolidate onboarding flows"
+train new chunk PLAN-001 "Backend foundation" --description "Schema + API work"
+train new task CHUNK-001 "Add onboarding_session table" --description "DB schema and migration"
+```
+
+These commands:
+
+- create files from templates
+- assign IDs
+- populate frontmatter
+- do not invoke models by default
+
+---
+
+## 14.3 Viewing and navigation
+
+```bash
+train list
+train show PLAN-001
+train show CHUNK-001
+train show TASK-001
+train tree PLAN-001
+train progress
+train recent
+train next
+```
+
+### `train progress`
+Shows everything currently in progress, including:
+
+- plans in progress
+- chunks in progress
+- tasks in progress
+- active runs
+- assigned models/executors if available
+
+### `train recent`
+Shows recently completed items in reverse chronological order.
+
+### `train next`
+Shows best next open work, likely prioritizing:
+
+- open tasks with no unmet dependencies
+- tasks within chunks already in progress
+- otherwise next open chunks/plans lacking tasks
+
+---
+
+## 14.4 State changes
+
+```bash
+train start TASK-001
+train complete TASK-001
+train cancel TASK-001
+train start CHUNK-001
+train complete CHUNK-001
+train archive PLAN-001
+```
+
+These commands should:
+
+- update frontmatter status
+- update timestamps
+- regenerate indexes
+- create run records when appropriate
+
+---
+
+## 14.5 Splitting / decomposition
+
+```bash
+train split PLAN-001
+train split CHUNK-001
+```
+
+Train should determine artifact type from ID or file lookup.
+
+### `train split PLAN-001`
+Default meaning:
+
+- read the plan doc
+- generate one or more chunk docs
+- use configured default split model
+- write proposed chunk artifacts to disk
+
+### `train split CHUNK-001`
+Default meaning:
+
+- read the chunk doc
+- generate one or more task docs
+- use configured default split model
+- create task files with acceptance criteria and model defaults
+
+This is where some automation is desirable.
+
+Unlike `new`, `split` is allowed to invoke a model by default because decomposition is inherently generative.
+
+---
+
+## 14.6 Execution
+
+```bash
+train work TASK-001
+train work CHUNK-001
+```
+
+This is the main execution boundary.
+
+### `train work TASK-001`
+Train should:
+
+- resolve the task file
+- inspect frontmatter
+- choose the specified model or configured default
+- create a run record
+- execute any pre-task shell hooks
+- optionally execute a pre-task markdown hook via Ralph
+- enqueue the task to Ralph
+- monitor or poll status as needed
+- on completion, execute post-task hooks
+- update task status and run record
+- surface result to the user
+
+### `train work CHUNK-001`
+Train should:
+
+- gather tasks in the chunk
+- order them, respecting dependencies where possible
+- process open tasks sequentially by default
+- optionally create or use a worktree
+- invoke Ralph task by task
+- run hooks between tasks
+- stop on failure or blocking condition unless configured otherwise
+- update chunk status as it progresses
+- mark chunk completed when all tasks complete
+- optionally trigger post-chunk hook
+
+This command is allowed to perform queue management and execution coordination because it is explicitly the orchestration boundary.
+
+---
+
+## 15. Ralph integration
+
+v1 should couple to Ralph directly rather than abstracting over many executors.
+
+That is the simplest and most useful boundary.
+
+## 15.1 Integration stance
+Train does not need a generic executor plugin system in v1.
+
+It only needs enough structure to:
+
+- build an execution payload from a task
+- call `ralph`
+- track the resulting run
+- apply hooks and status transitions
+
+## 15.2 Ralph command integration
+Config should allow specifying:
+
+- command name/path
+- default args
+- model mapping behavior
+
+Example:
+
+```yaml
+ralph:
+  command: ralph
+  args: []
+```
+
+## 15.3 Task handoff packet
+Train should construct a clear payload for Ralph from:
+
+- task frontmatter
+- task body
+- linked plan/chunk context as needed
+- hook-generated instructions if applicable
+- model and executor metadata
+
+Train may initially hand Ralph a synthesized prompt or temp file.
+
+## 15.4 Status tracking
+Train should track:
+
+- queued
+- running
+- completed
+- failed
+
+at the **run level**, even if artifact-level status remains the simpler four-state model.
+
+This keeps execution detail out of the main artifact state model.
+
+---
+
+## 16. Hook model
+
+Train supports two hook types.
+
+## 16.1 Shell hooks
+Configured in YAML and executed directly.
+
+Useful for:
+
+- tests
+- lint
+- formatting
+- worktree setup
+- git commands
+
+## 16.2 Markdown hooks
+Markdown documents with frontmatter specifying trigger and model.
+
+Useful for:
+
+- review summaries
+- proposing follow-up tasks
+- synthesizing implementation notes
+- cleanup instructions
+- chunk retrospectives
+
+### 16.2.1 Example triggers
+
+- `task.pre`
+- `task.completed`
+- `chunk.completed`
+
+### 16.2.2 Example locations
+
+Repo-level:
+
+```txt
+.train/hooks/post-task.md
+```
+
+Plan-level override:
+
+```txt
+.train/plans/PLAN-001-foo/hooks/post-task.md
+```
+
+### 16.2.3 Hook precedence
+For v1:
+
+1. plan-level hook if present
+2. repo-level hook if present
+3. no hook
+
+---
+
+## 17. Worktrees
+
+Train should support worktree-based execution during `train work`, especially for chunk execution.
+
+Expected flow:
+
+- create or reuse a worktree
+- run tasks sequentially in that worktree
+- keep changes isolated from main working tree
+
+This should be configurable and enabled by default if feasible.
+
+Example config:
+
+```yaml
+work:
+  create_worktree: true
+  worktree_root: .worktrees
+  base_branch: main
+```
+
+---
+
+## 18. Derived indexes
+
+Train may maintain derived files such as:
+
+- `.train/plans/index.yaml`
+- `.train/plans/recent.yaml`
+
+These are not the canonical source of truth.
+
+The canonical source is the artifact files themselves.
+
+Indexes exist to make listing and display fast and simple.
+
+### `index.yaml`
+May contain summaries of active plans/chunks/tasks.
+
+### `recent.yaml`
+May contain recently completed artifacts and runs.
+
+These should be regenerable from disk.
+
+---
+
+## 19. UX examples
+
+## 19.1 Create a plan manually
+
+```bash
+train new plan "Unified onboarding rewrite" --description "Consolidate onboarding flows into one architecture"
+```
+
+Then edit the generated `plan.md`.
+
+## 19.2 Split into chunks
+
+```bash
+train split PLAN-001
+```
+
+Train uses the configured split model to propose chunk files.
+
+## 19.3 Split a chunk into tasks
+
+```bash
+train split CHUNK-001
+```
+
+Train generates task files with frontmatter, acceptance criteria, and model defaults.
+
+## 19.4 Execute a task
+
+```bash
+train work TASK-001
+```
+
+Train calls Ralph, tracks the run, and updates progress.
+
+## 19.5 Execute a whole chunk
+
+```bash
+train work CHUNK-001
+```
+
+Train works through chunk tasks sequentially in a worktree, reporting status through `progress` and `recent`.
+
+---
+
+## 20. Non-goals
+
+Train v1 should not attempt to solve all of the following:
+
+- arbitrary collaboration semantics
+- perfect merge conflict handling
+- full DAG scheduling
+- distributed job queueing
+- multiple executor frameworks
+- branch-aware code-state reconciliation between plan state and source state
+- complex permissions
+- web dashboards
+
+---
+
+## 21. MVP implementation priorities
+
+## Priority 1: file structure and schema
+
+- init
+- templates
+- frontmatter parsing
+- ID generation
+- creation commands
+
+## Priority 2: visibility
+
+- list
+- show
+- tree
+- progress
+- recent
+- next
+
+## Priority 3: state transitions
+
+- start
+- complete
+- cancel
+- archive
+- sync indexes
+
+## Priority 4: split
+
+- split plan -> chunks
+- split chunk -> tasks
+
+## Priority 5: work / Ralph integration
+
+- work task
+- work chunk sequentially
+- run records
+- hook handling
+- worktree support
+
+## Priority 6: sync
+
+- local mode
+- same-repo branch sync
+- separate repo sync
+
+---
+
+## 22. Open implementation questions for Codex
+
+These do not block v1, but Codex should make pragmatic choices.
+
+### 22.1 ID format
+Suggested:
+
+- `PLAN-001`
+- `CHUNK-001`
+- `TASK-001`
+- `RUN-<timestamp>-TASK-001`
+
+Need decision on whether chunk/task IDs are global or scoped per plan.
+
+Recommended v1 answer: **global IDs**, simpler lookup.
+
+### 22.2 File naming
+Recommended:
+
+- IDs plus slugged title
+
+Example:
+
+- `PLAN-001-unified-onboarding-rewrite`
+- `CHUNK-001-backend-foundation.md`
+- `TASK-001-add-onboarding-session-table.md`
+
+### 22.3 How much linked context to send to Ralph
+Recommended:
+
+- task body always
+- task frontmatter always
+- chunk summary if present
+- plan summary if present
+- not entire repository plan tree by default
+
+### 22.4 How to monitor Ralph runs
+Recommended:
+
+- start with synchronous invocation or simple polling
+- do not build a sophisticated event bus in v1
+
+---
+
+## 23. Final design stance
+
+Train should feel like this:
+
+- easy to inspect
+- easy to edit
+- pleasant to use from CLI
+- strongly oriented toward forward motion
+- opinionated enough to stay simple
+- tightly integrated with Ralph at execution time
+
+The center of gravity should remain:
+
+- plans/chunks/tasks as markdown
+- `split` for decomposition
+- `progress` and `recent` for visibility
+- `work` for execution
+
+That is the heart of the tool.
+
+---
+
+## 24. Suggested first implementation milestone
+
+The first milestone should be:
+
+- `train init`
+- `train new plan|chunk|task`
+- `train list`
+- `train show`
+- `train progress`
+- `train recent`
+- `train start|complete|cancel`
+- `train archive`
+- `train split PLAN`
+- `train split CHUNK`
+- `train work TASK`
+
+Then second milestone:
+
+- `train work CHUNK`
+- worktree support
+- markdown hooks
+- sync push/pull/status
+
+That would already be a very strong v1.

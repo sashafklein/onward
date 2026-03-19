@@ -1,0 +1,35 @@
+version: 1
+
+paths:
+  plans_dir: .train/plans
+  runtime_dir: .train
+
+sync:
+  mode: local
+  branch: train
+  repo: null
+  worktree_path: .train/sync
+
+ralph:
+  command: ralph
+  args: []
+  enabled: true
+
+models:
+  default: gpt-5
+  task_default: gpt-5-mini
+  split_default: gpt-5
+  review_default: gpt-5
+
+work:
+  sequential_by_default: true
+  create_worktree: true
+  worktree_root: .worktrees
+  base_branch: main
+
+hooks:
+  pre_task_shell: []
+  post_task_shell: []
+  pre_task_markdown: null
+  post_task_markdown: .train/hooks/post-task.md
+  post_chunk_markdown: .train/hooks/post-chunk.md

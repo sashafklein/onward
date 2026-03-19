@@ -1,0 +1,30 @@
+generated_at: "2026-03-19T02:50:27Z"
+plans:
+  -
+    id: "PLAN-001"
+    title: "Core artifact engine and CLI foundations"
+    status: "open"
+    path: ".train/plans/PLAN-001-core-artifact-engine/plan.md"
+  -
+    id: "PLAN-002"
+    title: "Visibility surfaces and artifact state transitions"
+    status: "open"
+    path: ".train/plans/PLAN-002-visibility-and-state/plan.md"
+  -
+    id: "PLAN-003"
+    title: "Decomposition engine for plan and chunk splitting"
+    status: "open"
+    path: ".train/plans/PLAN-003-decomposition/plan.md"
+  -
+    id: "PLAN-004"
+    title: "Execution runtime, task handoff, and parent-agent oversight"
+    status: "open"
+    path: ".train/plans/PLAN-004-execution-runtime/plan.md"
+  -
+    id: "PLAN-005"
+    title: "Sync modes, reliability hardening, and release readiness"
+    status: "open"
+    path: ".train/plans/PLAN-005-sync-and-hardening/plan.md"
+chunks:
+tasks:
+runs:
