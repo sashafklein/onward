@@ -2,12 +2,12 @@
 id: PLAN-004
 type: plan
 title: Execution runtime, task handoff, and parent-agent oversight
-status: open
+status: in_progress
 description: Implement run lifecycle management and file-backed orchestration at `train work`
 priority: high
 model: gpt-5
 created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T00:00:00Z
+updated_at: 2026-03-19T04:54:47Z
 ---
 
 # Summary
@@ -61,3 +61,17 @@ Create a run manager that writes `.train/ongoing.json`, emits immutable run snap
 # Notes
 
 See `docs/architecture/work-handoff.md` for handoff design decisions.
+
+Current progress (2026-03-19):
+
+1. Added `train work TASK-###` and `train work CHUNK-###` command surface.
+2. Implemented task run lifecycle with `.train/ongoing.json` active run tracking.
+3. Added immutable run snapshots/logs under `.train/runs/` with terminal status (`completed`/`failed`).
+4. Implemented chunk sequential execution with dependency-aware readiness checks.
+5. Updated `train progress` to include active run rows from runtime state.
+
+Remaining pickup:
+
+1. Hook execution (`pre_task_shell`, markdown hooks, `post_chunk_markdown`).
+2. Executor packet enrichment (chunk/plan summaries and constraints).
+3. `train show TASK-###` latest run pointers and richer run/recent integration.

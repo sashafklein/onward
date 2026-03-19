@@ -4,11 +4,29 @@ Trains is a git-native CLI for planning and driving AI-enabled development work 
 
 Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list`, `show`, `start`, `complete`, `cancel`, `progress`, `recent`, `next`, `report`, `archive`) + dogfood workspace tooling + automated tests.
 
+## Install (CLI from anywhere)
+
+```bash
+python3.11 -m pip install -e .
+```
+
+Then use `trains` from any shell location:
+
+```bash
+trains --help
+```
+
+If your current directory is not a Trains workspace, non-`init` commands fail with guidance to run:
+
+```bash
+trains init
+```
+
 ## Quickstart
 
 ```bash
-PYTHONPATH=src python3 -m trains.cli init
-PYTHONPATH=src python3 -m trains.cli doctor
+trains init
+trains doctor
 ```
 
 ## Repository Layout
@@ -66,11 +84,11 @@ One-command test runner (falls back to dogfood e2e if `pytest` is unavailable):
 ## Useful Commands
 
 ```bash
-train list --project alpha
-train list --blocking --human
-train next --project alpha
-train tree --project alpha
-train report --project alpha
+trains list --project alpha
+trains list --blocking --human
+trains next --project alpha
+trains tree --project alpha
+trains report --project alpha
 ```
 
 ## Documented Next Features

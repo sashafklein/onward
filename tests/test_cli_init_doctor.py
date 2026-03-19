@@ -14,6 +14,8 @@ def test_init_creates_expected_layout(tmp_path: Path, capsys):
     assert (tmp_path / ".train/plans/index.yaml").exists()
     assert (tmp_path / ".train/plans/recent.yaml").exists()
     assert (tmp_path / ".train/templates/plan.md").exists()
+    assert (tmp_path / ".train/prompts/split-plan.md").exists()
+    assert (tmp_path / ".train/prompts/split-chunk.md").exists()
     assert (tmp_path / ".train/ongoing.json").exists()
 
     gitignore = (tmp_path / ".gitignore").read_text(encoding="utf-8")
@@ -21,6 +23,12 @@ def test_init_creates_expected_layout(tmp_path: Path, capsys):
     assert ".train/runs/" in gitignore
     assert ".train/ongoing.json" in gitignore
     assert ".dogfood/" in gitignore
+
+    config = (tmp_path / ".train.config.yaml").read_text(encoding="utf-8")
+    assert "# Trains workspace config." in config
+    assert "# Schema version for future migrations." in config
+    assert "# Executor command to run for `trains work` task execution." in config
+    assert "# Default model used by `trains split` decomposition." in config
 
 
 def test_doctor_passes_after_init(tmp_path: Path, capsys):

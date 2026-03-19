@@ -5,21 +5,27 @@ This document covers two things:
 1. Installing Trains locally.
 2. Setting up an agent (for example OpenClaw) so all work is tracked through Trains artifacts.
 
-## 1. Install Trains (local repo usage)
+## 1. Install Trains (CLI usage from anywhere)
 
 From repo root:
 
 ```bash
-PYTHONPATH=src python3 -m trains.cli init
-PYTHONPATH=src python3 -m trains.cli doctor
+python3.11 -m pip install -e .
+trains --help
 ```
 
 Optional test tooling:
 
 ```bash
-python3 -m pip install -e '.[dev]'
-PYTHONPATH=src python3 -m pytest
+python3.11 -m pip install -e '.[dev]'
+pytest
 ```
+
+Behavior note:
+
+- `trains init` works in any directory and bootstraps a workspace there.
+- All other commands require a valid Trains workspace root and will exit if missing.
+- The error message explicitly recommends `trains init`.
 
 If `pytest` is unavailable, run fallback checks:
 
@@ -34,13 +40,13 @@ If `pytest` is unavailable, run fallback checks:
 ./scripts/dogfood/e2e.sh
 ```
 
-This creates `.dogfood/consumer-app` and wires a local `train` command in that venv.
+This creates `.dogfood/consumer-app` and wires a local `trains` command in that venv.
 
 ## 3. Agent operating policy (important)
 
 To keep planning state reliable, the agent should follow these rules:
 
-1. Every substantial workstream starts with `train new plan`.
+1. Every substantial workstream starts with `trains new plan`.
 2. Work is decomposed into chunk/task artifacts before implementation.
 3. Any discovered blocker/refactor/follow-up is immediately captured as a new task.
 4. Use metadata consistently:
@@ -54,34 +60,34 @@ To keep planning state reliable, the agent should follow these rules:
 Use this loop for OpenClaw-like supervisors:
 
 ```bash
-train report --project <key>
-train next --project <key>
+trains report --project <key>
+trains next --project <key>
 # dispatch selected work
-train report --project <key>
+trains report --project <key>
 ```
 
 Use focused filters for unblock triage:
 
 ```bash
-train list --project <key> --blocking --human
+trains list --project <key> --blocking --human
 ```
 
 ## 5. Suggested system prompt additions for your agent
 
 Add guidance like:
 
-- "When user describes a new initiative, create a plan via `train new plan` and then fill the generated template file."
+- "When user describes a new initiative, create a plan via `trains new plan` and then fill the generated template file."
 - "Do not keep planning state only in chat. Persist it in `.train/plans/...` artifacts."
 - "If you discover follow-up work during execution, create a task artifact immediately with `blocked_by`, `human`, and `project` fields when known."
-- "At the end of each execution loop, update artifact status and run `train report`."
+- "At the end of each execution loop, update artifact status and run `trains report`."
 
 ## 6. First commands for a new project
 
 ```bash
-train new plan "<title>" --project <key>
-train show PLAN-001
+trains new plan "<title>" --project <key>
+trains show PLAN-001
 # fill plan template sections
-train new chunk PLAN-001 "<chunk title>" --project <key>
-train new task CHUNK-001 "<task title>" --project <key>
-train report --project <key>
+trains new chunk PLAN-001 "<chunk title>" --project <key>
+trains new task CHUNK-001 "<task title>" --project <key>
+trains report --project <key>
 ```

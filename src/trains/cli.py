@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,46 +15,73 @@ DEFAULT_DIRECTORIES = [
     ".train/plans",
     ".train/plans/.archive",
     ".train/templates",
+    ".train/prompts",
     ".train/hooks",
     ".train/sync",
     ".train/runs",
 ]
 
 DEFAULT_FILES = {
-    ".train.config.yaml": """version: 1
+    ".train.config.yaml": """# Trains workspace config.
+# This file is read by the CLI at runtime. Keep it in repo root.
+
+# Schema version for future migrations.
+version: 1
 
 paths:
+  # Canonical directory for plan/chunk/task artifacts and derived indexes.
   plans_dir: .train/plans
+  # Runtime state root for ongoing runs, logs, and ephemeral execution files.
   runtime_dir: .train
 
 sync:
+  # Sync mode: local (disabled), branch (same repo branch), repo (separate repo).
   mode: local
+  # Branch name used when sync mode is "branch".
   branch: train
+  # Optional separate git repository URL/path used when mode is "repo".
   repo: null
+  # Local worktree path used for sync staging operations.
   worktree_path: .train/sync
 
 ralph:
+  # Executor command to run for `trains work` task execution.
   command: ralph
+  # Default arguments appended to the executor command.
   args: []
+  # Global on/off switch for executor usage.
   enabled: true
 
 models:
+  # Fallback model for generic operations when no more specific model is set.
   default: gpt-5
+  # Default model for newly created tasks.
   task_default: gpt-5-mini
+  # Default model used by `trains split` decomposition.
   split_default: gpt-5
+  # Default model for review-oriented hooks/workflows.
   review_default: gpt-5
 
 work:
+  # If true, chunk execution runs tasks sequentially unless explicitly overridden.
   sequential_by_default: true
+  # If true, execution may create a dedicated git worktree for isolated work.
   create_worktree: true
+  # Parent directory where execution worktrees are created.
   worktree_root: .worktrees
+  # Base branch used when creating new worktrees.
   base_branch: main
 
 hooks:
+  # Shell commands run before each task (empty list means disabled).
   pre_task_shell: []
+  # Shell commands run after each task (empty list means disabled).
   post_task_shell: []
+  # Optional markdown hook path executed before each task (null disables).
   pre_task_markdown: null
+  # Optional markdown hook path executed after each task.
   post_task_markdown: .train/hooks/post-task.md
+  # Optional markdown hook path executed after chunk completion.
   post_chunk_markdown: .train/hooks/post-chunk.md
 """,
     ".train/templates/plan.md": """# Summary
@@ -167,6 +196,45 @@ hooks:
 
 <!-- Blockers, refactors, or for-later tasks discovered during execution. -->
 """,
+    ".train/prompts/split-plan.md": """You are decomposing a plan into executable chunks.
+
+Output strict JSON with this exact shape:
+{
+  "chunks": [
+    {
+      "title": "string",
+      "description": "string",
+      "priority": "low|medium|high",
+      "model": "string"
+    }
+  ]
+}
+
+Constraints:
+- Return at least one chunk.
+- Keep chunk titles short and concrete.
+- Do not include markdown fences or any non-JSON text.
+""",
+    ".train/prompts/split-chunk.md": """You are decomposing a chunk into executable tasks.
+
+Output strict JSON with this exact shape:
+{
+  "tasks": [
+    {
+      "title": "string",
+      "description": "string",
+      "acceptance": ["string"],
+      "model": "string",
+      "human": false
+    }
+  ]
+}
+
+Constraints:
+- Return at least one task.
+- Each task must include one or more acceptance checks.
+- Do not include markdown fences or any non-JSON text.
+""",
     ".train/hooks/post-task.md": """---
 id: HOOK-post-task
 type: hook
@@ -247,6 +315,8 @@ REQUIRED_PATHS = [
     ".train/templates/chunk.md",
     ".train/templates/task.md",
     ".train/templates/run.md",
+    ".train/prompts/split-plan.md",
+    ".train/prompts/split-chunk.md",
     ".train/plans/index.yaml",
     ".train/plans/recent.yaml",
 ]
@@ -462,6 +532,22 @@ def _parse_artifact(path: Path) -> Artifact:
     return Artifact(file_path=path, body=body, metadata=metadata)
 
 
+def _is_workspace_root(root: Path) -> bool:
+    return (
+        (root / ".train.config.yaml").exists()
+        and (root / ".train").exists()
+        and (root / ".train/plans").exists()
+    )
+
+
+def _require_workspace(root: Path) -> None:
+    if _is_workspace_root(root):
+        return
+    raise ValueError(
+        f"not a Trains workspace: {root}. Run `trains init` here (or pass --root <workspace>)"
+    )
+
+
 def _format_artifact(metadata: dict[str, Any], body: str) -> str:
     frontmatter = _dump_simple_yaml(metadata).strip()
     return f"---\n{frontmatter}\n---\n\n{body.strip()}\n"
@@ -508,6 +594,659 @@ def _next_id(root: Path, prefix: str) -> str:
 
 def _load_template(root: Path, artifact_type: str) -> str:
     return (root / f".train/templates/{artifact_type}.md").read_text(encoding="utf-8")
+
+
+def _load_prompt(root: Path, prompt_name: str) -> str:
+    return (root / f".train/prompts/{prompt_name}").read_text(encoding="utf-8")
+
+
+def _load_config(root: Path) -> dict[str, Any]:
+    config_path = root / ".train.config.yaml"
+    if not config_path.exists():
+        return {}
+    parsed = _parse_simple_yaml(config_path.read_text(encoding="utf-8"))
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
+
+
+def _config_model(config: dict[str, Any], key: str, fallback: str) -> str:
+    models = config.get("models", {})
+    if isinstance(models, dict):
+        value = str(models.get(key, "")).strip()
+        if value:
+            return value
+    return fallback
+
+
+def _markdown_section(body: str, heading: str) -> str:
+    target = heading.strip().lower()
+    lines = body.splitlines()
+    start = -1
+    for i, line in enumerate(lines):
+        match = re.match(r"^#{1,6}\s+(.*)$", line.strip())
+        if not match:
+            continue
+        if match.group(1).strip().lower() == target:
+            start = i + 1
+            break
+    if start < 0:
+        return ""
+    end = len(lines)
+    for i in range(start, len(lines)):
+        if re.match(r"^#{1,6}\s+", lines[i].strip()):
+            end = i
+            break
+    return "\n".join(lines[start:end]).strip()
+
+
+def _extract_markdown_list_items(section: str) -> list[str]:
+    items: list[str] = []
+    for line in section.splitlines():
+        match = re.match(r"^\s*(?:-|\d+\.)\s+(.+?)\s*$", line)
+        if match:
+            value = match.group(1).strip()
+            if value:
+                items.append(value)
+    return items
+
+
+def _heuristic_split_plan_payload(artifact: Artifact, default_model: str) -> dict[str, Any]:
+    strategy_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Chunking strategy"))
+    goal_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Goals"))
+    seeds = strategy_items or goal_items
+    if not seeds:
+        seeds = [f"Implement {artifact.metadata.get('title', 'plan scope')}"]
+    chunks: list[dict[str, Any]] = []
+    for seed in seeds:
+        chunks.append(
+            {
+                "title": seed[:120].strip(),
+                "description": seed.strip(),
+                "priority": "medium",
+                "model": default_model,
+            }
+        )
+    return {"chunks": chunks}
+
+
+def _heuristic_split_chunk_payload(artifact: Artifact, default_model: str) -> dict[str, Any]:
+    scope_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Scope"))
+    completion_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Completion criteria"))
+    seeds = scope_items or completion_items
+    if not seeds:
+        seeds = [f"Implement {artifact.metadata.get('title', 'chunk scope')}"]
+    tasks: list[dict[str, Any]] = []
+    for seed in seeds:
+        tasks.append(
+            {
+                "title": seed[:120].strip(),
+                "description": seed.strip(),
+                "acceptance": [seed.strip()],
+                "model": default_model,
+                "human": False,
+            }
+        )
+    return {"tasks": tasks}
+
+
+def _run_split_model(
+    artifact: Artifact,
+    prompt_name: str,
+    model: str,
+    default_task_model: str,
+) -> str:
+    # Temporary bridge until executor-backed model calls are wired in.
+    env_override = str(os.environ.get("TRAIN_SPLIT_RESPONSE", "")).strip()
+    if env_override:
+        return env_override
+    if prompt_name == "split-plan.md":
+        payload = _heuristic_split_plan_payload(artifact, model)
+    else:
+        payload = _heuristic_split_chunk_payload(artifact, default_task_model)
+    return json.dumps(payload, indent=2)
+
+
+def _parse_split_payload(raw: str, key: str) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid split JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("invalid split JSON: root must be an object")
+    items = payload.get(key)
+    if not isinstance(items, list) or not items:
+        raise ValueError(f"invalid split JSON: '{key}' must be a non-empty array")
+    out: list[dict[str, Any]] = []
+    for i, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"invalid split JSON: {key}[{i}] must be an object")
+        out.append(item)
+    return out
+
+
+def _clean_string(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _normalize_priority(value: Any) -> str:
+    priority = _clean_string(value).lower()
+    return priority if priority in {"low", "medium", "high"} else "medium"
+
+
+def _normalize_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return _clean_string(value).lower() in {"1", "true", "yes", "y"}
+
+
+def _normalize_acceptance(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    single = _clean_string(value)
+    return [single] if single else []
+
+
+def _normalize_chunk_candidates(items: list[dict[str, Any]], default_model: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for i, item in enumerate(items, start=1):
+        title = _clean_string(item.get("title"))
+        description = _clean_string(item.get("description"))
+        if not title:
+            raise ValueError(f"split validation failed: chunks[{i}].title is required")
+        if not description:
+            raise ValueError(f"split validation failed: chunks[{i}].description is required")
+        model = _clean_string(item.get("model")) or default_model
+        out.append(
+            {
+                "title": title,
+                "description": description,
+                "priority": _normalize_priority(item.get("priority")),
+                "model": model,
+            }
+        )
+    return out
+
+
+def _normalize_task_candidates(items: list[dict[str, Any]], default_model: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for i, item in enumerate(items, start=1):
+        title = _clean_string(item.get("title"))
+        description = _clean_string(item.get("description"))
+        acceptance = _normalize_acceptance(item.get("acceptance"))
+        if not title:
+            raise ValueError(f"split validation failed: tasks[{i}].title is required")
+        if not description:
+            raise ValueError(f"split validation failed: tasks[{i}].description is required")
+        if not acceptance:
+            raise ValueError(f"split validation failed: tasks[{i}].acceptance is required")
+        model = _clean_string(item.get("model")) or default_model
+        if not model:
+            raise ValueError(f"split validation failed: tasks[{i}].model is required")
+        out.append(
+            {
+                "title": title,
+                "description": description,
+                "acceptance": acceptance,
+                "model": model,
+                "human": _normalize_bool(item.get("human")),
+            }
+        )
+    return out
+
+
+def _next_ids(root: Path, prefix: str, count: int) -> list[str]:
+    ids: set[int] = set()
+    regex = re.compile(rf"^{re.escape(prefix)}-(\d{{3}})$")
+    for artifact in _collect_artifacts(root):
+        candidate = str(artifact.metadata.get("id", ""))
+        match = regex.match(candidate)
+        if match:
+            ids.add(int(match.group(1)))
+    next_num = 1
+    out: list[str] = []
+    while len(out) < count:
+        if next_num not in ids:
+            out.append(f"{prefix}-{next_num:03d}")
+            ids.add(next_num)
+        next_num += 1
+    return out
+
+
+def _prepare_chunk_writes(
+    root: Path,
+    plan_artifact: Artifact,
+    candidates: list[dict[str, Any]],
+) -> list[tuple[str, Path, str]]:
+    plan_id = str(plan_artifact.metadata.get("id"))
+    plan_dir = _find_plan_dir(root, plan_id)
+    chunk_ids = _next_ids(root, "CHUNK", len(candidates))
+    now = _now_iso()
+    writes: list[tuple[str, Path, str]] = []
+    for chunk_id, candidate in zip(chunk_ids, candidates):
+        target = plan_dir / "chunks" / f"{chunk_id}-{_slugify(candidate['title'])}.md"
+        metadata = {
+            "id": chunk_id,
+            "type": "chunk",
+            "plan": plan_id,
+            "project": _artifact_project(plan_artifact),
+            "title": candidate["title"],
+            "status": "open",
+            "description": candidate["description"],
+            "priority": candidate["priority"],
+            "model": candidate["model"],
+            "created_at": now,
+            "updated_at": now,
+        }
+        body = "\n".join(
+            [
+                "# Summary",
+                "",
+                candidate["description"],
+                "",
+                "# Scope",
+                "",
+                f"- {candidate['description']}",
+                "",
+                "# Out of scope",
+                "",
+                "- None specified.",
+                "",
+                "# Dependencies",
+                "",
+                "- None specified.",
+                "",
+                "# Expected files/systems involved",
+                "",
+                "- Determine during implementation.",
+                "",
+                "# Completion criteria",
+                "",
+                f"- {candidate['description']}",
+                "",
+                "# Notes",
+                "",
+                "",
+            ]
+        )
+        writes.append((chunk_id, target, _format_artifact(metadata, body)))
+    return writes
+
+
+def _prepare_task_writes(
+    root: Path,
+    chunk_artifact: Artifact,
+    candidates: list[dict[str, Any]],
+) -> list[tuple[str, Path, str]]:
+    plan_id = str(chunk_artifact.metadata.get("plan"))
+    chunk_id = str(chunk_artifact.metadata.get("id"))
+    plan_dir = _find_plan_dir(root, plan_id)
+    task_ids = _next_ids(root, "TASK", len(candidates))
+    now = _now_iso()
+    writes: list[tuple[str, Path, str]] = []
+    for task_id, candidate in zip(task_ids, candidates):
+        target = plan_dir / "tasks" / f"{task_id}-{_slugify(candidate['title'])}.md"
+        metadata = {
+            "id": task_id,
+            "type": "task",
+            "plan": plan_id,
+            "chunk": chunk_id,
+            "project": _artifact_project(chunk_artifact),
+            "title": candidate["title"],
+            "status": "open",
+            "description": candidate["description"],
+            "human": candidate["human"],
+            "model": candidate["model"],
+            "executor": "ralph",
+            "depends_on": [],
+            "blocked_by": [],
+            "files": [],
+            "acceptance": candidate["acceptance"],
+            "created_at": now,
+            "updated_at": now,
+        }
+        acceptance_lines = "\n".join(f"- {item}" for item in candidate["acceptance"])
+        body = "\n".join(
+            [
+                "# Context",
+                "",
+                candidate["description"],
+                "",
+                "# Scope",
+                "",
+                f"- {candidate['description']}",
+                "",
+                "# Out of scope",
+                "",
+                "- None specified.",
+                "",
+                "# Files to inspect",
+                "",
+                "- Determine during implementation.",
+                "",
+                "# Implementation notes",
+                "",
+                "- Keep the change scoped to this task.",
+                "",
+                "# Acceptance criteria",
+                "",
+                acceptance_lines,
+                "",
+                "# Handoff notes",
+                "",
+                "",
+            ]
+        )
+        writes.append((task_id, target, _format_artifact(metadata, body)))
+    return writes
+
+
+def _assert_writes_safe(root: Path, writes: list[tuple[str, Path, str]]) -> None:
+    seen: set[Path] = set()
+    for _artifact_id, path, _content in writes:
+        if path in seen:
+            raise ValueError(f"split write collision: duplicate output path {path.relative_to(root)}")
+        seen.add(path)
+        if path.exists():
+            raise ValueError(f"split write collision: target already exists {path.relative_to(root)}")
+
+
+def _model_alias(model: str) -> str:
+    normalized = model.strip().lower().replace("_", "-")
+    aliases = {
+        "opus": "claude-opus-4-1",
+        "sonnet": "claude-sonnet-4",
+        "haiku": "claude-haiku-4",
+        "gpt5": "gpt-5",
+    }
+    return aliases.get(normalized, model.strip())
+
+
+def _run_timestamp() -> str:
+    return _now_iso().replace(":", "-")
+
+
+def _load_ongoing(root: Path) -> dict[str, Any]:
+    path = root / ".train/ongoing.json"
+    if not path.exists():
+        return {"version": 1, "updated_at": _now_iso(), "active_runs": []}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        payload = {"version": 1, "updated_at": _now_iso(), "active_runs": []}
+    if not isinstance(payload, dict):
+        payload = {"version": 1, "updated_at": _now_iso(), "active_runs": []}
+    if not isinstance(payload.get("active_runs"), list):
+        payload["active_runs"] = []
+    return payload
+
+
+def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
+    payload["updated_at"] = _now_iso()
+    path = root / ".train/ongoing.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
+    config = _load_config(root)
+    ralph = config.get("ralph", {})
+    if not isinstance(ralph, dict):
+        ralph = {}
+    command = _clean_string(ralph.get("command")) or "ralph"
+    command_args = ralph.get("args", [])
+    if not isinstance(command_args, list):
+        command_args = []
+    cmd = [command, *[str(item) for item in command_args]]
+
+    default_model = _config_model(config, "default", "gpt-5")
+    task_model = _clean_string(task.metadata.get("model")) or default_model
+    model = _model_alias(task_model)
+
+    task_id = str(task.metadata.get("id", ""))
+    run_id = f"RUN-{_run_timestamp()}-{task_id}"
+    run_dir = root / ".train/runs"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    run_json = run_dir / f"{run_id}.json"
+    run_log = run_dir / f"{run_id}.log"
+
+    started_at = _now_iso()
+    run_record: dict[str, Any] = {
+        "id": run_id,
+        "type": "run",
+        "target": task_id,
+        "plan": task.metadata.get("plan"),
+        "chunk": task.metadata.get("chunk"),
+        "status": "running",
+        "model": model,
+        "executor": "ralph",
+        "started_at": started_at,
+        "finished_at": None,
+        "log_path": str(run_log.relative_to(root)),
+        "error": "",
+    }
+    run_json.write_text(_dump_simple_yaml(run_record), encoding="utf-8")
+
+    ongoing = _load_ongoing(root)
+    active_runs = list(ongoing.get("active_runs", []))
+    active_runs.append(
+        {
+            "id": run_id,
+            "target": task_id,
+            "status": "running",
+            "model": model,
+            "log_path": str(run_log.relative_to(root)),
+            "started_at": started_at,
+        }
+    )
+    ongoing["active_runs"] = active_runs
+    _write_ongoing(root, ongoing)
+
+    payload = {
+        "task": task.metadata,
+        "body": task.body,
+    }
+    stdout = ""
+    stderr = ""
+    error = ""
+    ok = False
+    try:
+        result = subprocess.run(
+            cmd,
+            input=json.dumps(payload, indent=2),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        ok = result.returncode == 0
+        if not ok:
+            error = f"executor exited with code {result.returncode}"
+    except FileNotFoundError:
+        error = f"executor command not found: {command}"
+    except Exception as exc:  # noqa: BLE001
+        error = str(exc)
+
+    log_lines = []
+    log_lines.append(f"$ {' '.join(cmd)}")
+    log_lines.append("")
+    if stdout:
+        log_lines.append("[stdout]")
+        log_lines.append(stdout.rstrip())
+    if stderr:
+        if stdout:
+            log_lines.append("")
+        log_lines.append("[stderr]")
+        log_lines.append(stderr.rstrip())
+    if error:
+        if stdout or stderr:
+            log_lines.append("")
+        log_lines.append(f"[error] {error}")
+    run_log.write_text("\n".join(log_lines).rstrip() + "\n", encoding="utf-8")
+
+    finished_at = _now_iso()
+    run_record["status"] = "completed" if ok else "failed"
+    run_record["finished_at"] = finished_at
+    run_record["error"] = error
+    run_json.write_text(_dump_simple_yaml(run_record), encoding="utf-8")
+
+    ongoing = _load_ongoing(root)
+    remaining = [
+        item
+        for item in ongoing.get("active_runs", [])
+        if str(item.get("id", "")) != run_id
+    ]
+    ongoing["active_runs"] = remaining
+    _write_ongoing(root, ongoing)
+    return ok, run_id
+
+
+def _update_artifact_status(root: Path, artifact: Artifact, status: str) -> None:
+    artifact.metadata["status"] = status
+    artifact.metadata["updated_at"] = _now_iso()
+    _write_artifact(artifact)
+    _regenerate_indexes(root)
+
+
+def _work_task(root: Path, task: Artifact) -> tuple[bool, str]:
+    if str(task.metadata.get("type", "")) != "task":
+        raise ValueError(f"{task.metadata.get('id')} is not a task")
+    current = str(task.metadata.get("status", ""))
+    if current == "completed":
+        return True, ""
+    if current not in {"open", "in_progress"}:
+        raise ValueError(f"cannot work task in state '{current}'")
+
+    _update_artifact_status(root, task, "in_progress")
+    ok, run_id = _execute_task_run(root, task)
+    refreshed = _must_find_by_id(root, str(task.metadata.get("id", "")))
+    _update_artifact_status(root, refreshed, "completed" if ok else "open")
+    return ok, run_id
+
+
+def _ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact], bool]:
+    artifacts = _collect_artifacts(root)
+    tasks = [
+        a
+        for a in artifacts
+        if str(a.metadata.get("type", "")) == "task"
+        and str(a.metadata.get("chunk", "")) == chunk_id
+        and str(a.metadata.get("status", "")) in {"open", "in_progress"}
+    ]
+    tasks.sort(key=lambda a: str(a.metadata.get("id", "")))
+    if not tasks:
+        return [], True
+
+    status_by_id = {
+        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
+        for a in artifacts
+    }
+    ready: list[Artifact] = []
+    blocked_exists = False
+    for task in tasks:
+        deps = _as_str_list(task.metadata.get("depends_on"))
+        unmet = [dep for dep in deps if status_by_id.get(dep) != "completed"]
+        if unmet:
+            blocked_exists = True
+            continue
+        ready.append(task)
+    return ready, not blocked_exists
+
+
+def cmd_work(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+    artifact_type = str(artifact.metadata.get("type", ""))
+    if artifact_type == "task":
+        ok, run_id = _work_task(root, artifact)
+        if run_id:
+            print(f"Run {run_id}: {'completed' if ok else 'failed'}")
+        else:
+            print(f"{args.id} already completed")
+        return 0 if ok else 1
+    if artifact_type != "chunk":
+        raise ValueError(f"{args.id} is not a task or chunk")
+
+    chunk = artifact
+    chunk_id = str(chunk.metadata.get("id", ""))
+    if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
+        _update_artifact_status(root, chunk, "in_progress")
+
+    while True:
+        ready_tasks, all_resolved = _ordered_ready_chunk_tasks(root, chunk_id)
+        if not ready_tasks:
+            if not all_resolved:
+                print(f"Chunk {chunk_id} has unresolved task dependencies")
+                return 1
+            break
+        next_task = ready_tasks[0]
+        ok, run_id = _work_task(root, next_task)
+        print(f"Run {run_id}: {'completed' if ok else 'failed'}")
+        if not ok:
+            print(f"Stopping chunk work for {chunk_id} after task failure")
+            return 1
+
+    refreshed_chunk = _must_find_by_id(root, chunk_id)
+    if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
+        _update_artifact_status(root, refreshed_chunk, "completed")
+    print(f"Chunk {chunk_id} completed")
+    return 0
+
+
+def cmd_split(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+    artifact_type = str(artifact.metadata.get("type", ""))
+    if artifact_type not in {"plan", "chunk"}:
+        raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
+
+    config = _load_config(root)
+    split_model = _clean_string(args.model) or _config_model(config, "split_default", "gpt-5")
+    task_default_model = _config_model(config, "task_default", "gpt-5-mini")
+
+    prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
+    prompt = _load_prompt(root, prompt_name)
+    prompt_context = "\n".join(
+        [
+            prompt.strip(),
+            "",
+            "Source artifact metadata (YAML-like):",
+            _dump_simple_yaml(artifact.metadata).rstrip(),
+            "",
+            "Source artifact body:",
+            artifact.body.strip(),
+        ]
+    )
+    raw = _run_split_model(artifact, prompt_name, split_model, task_default_model)
+
+    if artifact_type == "plan":
+        parsed = _parse_split_payload(raw, "chunks")
+        normalized = _normalize_chunk_candidates(parsed, _config_model(config, "default", "gpt-5"))
+        writes = _prepare_chunk_writes(root, artifact, normalized)
+    else:
+        parsed = _parse_split_payload(raw, "tasks")
+        normalized = _normalize_task_candidates(parsed, task_default_model)
+        writes = _prepare_task_writes(root, artifact, normalized)
+
+    _assert_writes_safe(root, writes)
+
+    if args.dry_run:
+        print(f"Split dry-run for {args.id} using model={split_model}")
+        print(f"Prompt: .train/prompts/{prompt_name}")
+        print(f"Prompt context bytes: {len(prompt_context.encode('utf-8'))}")
+        for artifact_id, path, _content in writes:
+            print(f"PLAN: create {artifact_id}\t{path.relative_to(root)}")
+        return 0
+
+    for _artifact_id, path, content in writes:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    _regenerate_indexes(root)
+
+    for artifact_id, path, _content in writes:
+        print(f"Created {artifact_id} at {path.relative_to(root)}")
+    return 0
 
 
 def _find_by_id(root: Path, artifact_id: str) -> Artifact | None:
@@ -1028,11 +1767,30 @@ def cmd_progress(args: argparse.Namespace) -> int:
         )
 
     if not rows:
-        print("No in-progress artifacts")
-        return 0
+        ongoing = _load_ongoing(root)
+        active = ongoing.get("active_runs", [])
+        if not isinstance(active, list) or not active:
+            print("No in-progress artifacts")
+            return 0
+    else:
+        for row in sorted(rows):
+            print(row)
 
-    for row in sorted(rows):
-        print(row)
+    ongoing = _load_ongoing(root)
+    active = ongoing.get("active_runs", [])
+    if isinstance(active, list):
+        for run in active:
+            print(
+                "\t".join(
+                    [
+                        str(run.get("id", "")),
+                        "run",
+                        str(run.get("status", "running")),
+                        str(run.get("target", "")),
+                        str(run.get("log_path", "")),
+                    ]
+                )
+            )
     return 0
 
 
@@ -1283,7 +2041,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="train", description="Trains CLI")
+    parser = argparse.ArgumentParser(prog="trains", description="Trains CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="Initialize train directories and defaults")
@@ -1363,6 +2121,18 @@ def build_parser() -> argparse.ArgumentParser:
     archive_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     archive_parser.set_defaults(func=cmd_archive)
 
+    split_parser = subparsers.add_parser("split", help="Split a plan into chunks or a chunk into tasks")
+    split_parser.add_argument("id", help="Artifact ID (PLAN-### or CHUNK-###)")
+    split_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    split_parser.add_argument("--dry-run", action="store_true", help="Print planned artifacts without writing files")
+    split_parser.add_argument("--model", default="", help="Override split model")
+    split_parser.set_defaults(func=cmd_split)
+
+    work_parser = subparsers.add_parser("work", help="Execute a task or sequentially execute a chunk")
+    work_parser.add_argument("id", help="Artifact ID (TASK-### or CHUNK-###)")
+    work_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    work_parser.set_defaults(func=cmd_work)
+
     progress_parser = subparsers.add_parser("progress", help="Show in-progress artifacts")
     progress_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     progress_parser.set_defaults(func=cmd_progress)
@@ -1397,6 +2167,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if getattr(args, "command", "") != "init":
+            root_value = getattr(args, "root", ".")
+            _require_workspace(Path(root_value).resolve())
         return args.func(args)
     except ValueError as exc:
         print(f"Error: {exc}")
