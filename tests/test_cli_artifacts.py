@@ -128,3 +128,39 @@ def test_archive_moves_plan_out_of_active_set(tmp_path: Path, capsys):
     list_out = capsys.readouterr().out
     assert list_code == 0
     assert "No artifacts found" in list_out
+
+
+def test_next_prefers_ready_tasks_in_in_progress_chunk(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Task One"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Task Two"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["start", "--root", str(tmp_path), "CHUNK-001"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["next", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("TASK-001\ttask\topen\t")
+
+
+def test_next_skips_task_with_unmet_dependencies(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Deps"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Prereq"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Blocked"]) == 0
+    capsys.readouterr()
+
+    blocked_task_path = tmp_path / ".train/plans/PLAN-001-deps/tasks/TASK-002-blocked.md"
+    raw = blocked_task_path.read_text(encoding="utf-8")
+    raw = raw.replace("depends_on: []", "depends_on:\n  - TASK-001")
+    blocked_task_path.write_text(raw, encoding="utf-8")
+
+    code = cli.main(["next", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("TASK-001\ttask\topen\t")

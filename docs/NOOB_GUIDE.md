@@ -13,6 +13,7 @@ Right now this repo supports:
 - artifact inspection (`train show <ID>`)
 - state transitions (`train start|complete|cancel`)
 - active/completed views (`train progress`, `train recent`)
+- next-item suggestion (`train next`)
 - plan archival (`train archive PLAN-###`)
 
 Trains stores tracked planning state in `.train/plans/` and runtime state in `.train/`.

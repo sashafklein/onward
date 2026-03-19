@@ -510,6 +510,17 @@ def _transition_status(current: str, target: str) -> str:
     return transitions[target][current]
 
 
+def _as_str_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    raw = str(value).strip()
+    if not raw:
+        return []
+    return [raw]
+
+
 def _regenerate_indexes(root: Path) -> None:
     index_path = root / ".train/plans/index.yaml"
     recent_path = root / ".train/plans/recent.yaml"
@@ -897,6 +908,74 @@ def cmd_recent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_next(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifacts = _collect_artifacts(root)
+    status_by_id = {
+        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
+        for a in artifacts
+        if a.metadata.get("id")
+    }
+
+    ready_tasks: list[tuple[tuple[int, int, str], Artifact]] = []
+    open_chunks: list[Artifact] = []
+    open_plans: list[Artifact] = []
+
+    for artifact in artifacts:
+        artifact_type = str(artifact.metadata.get("type", ""))
+        status = str(artifact.metadata.get("status", ""))
+
+        if artifact_type == "task" and status == "open":
+            depends_on = _as_str_list(artifact.metadata.get("depends_on"))
+            blocked_by = _as_str_list(artifact.metadata.get("blocked_by"))
+            if blocked_by:
+                continue
+            unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
+            if unmet:
+                continue
+
+            chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
+            plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
+            rank = (
+                0 if chunk_status == "in_progress" else 1,
+                0 if plan_status == "in_progress" else 1,
+                str(artifact.metadata.get("id", "")),
+            )
+            ready_tasks.append((rank, artifact))
+
+        elif artifact_type == "chunk" and status == "open":
+            open_chunks.append(artifact)
+        elif artifact_type == "plan" and status == "open":
+            open_plans.append(artifact)
+
+    if ready_tasks:
+        ready_tasks.sort(key=lambda item: item[0])
+        chosen = ready_tasks[0][1]
+        print(
+            f"{chosen.metadata.get('id')}\ttask\topen\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
+        )
+        return 0
+
+    if open_chunks:
+        open_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
+        chosen = open_chunks[0]
+        print(
+            f"{chosen.metadata.get('id')}\tchunk\topen\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
+        )
+        return 0
+
+    if open_plans:
+        open_plans.sort(key=lambda a: str(a.metadata.get("id", "")))
+        chosen = open_plans[0]
+        print(
+            f"{chosen.metadata.get('id')}\tplan\topen\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
+        )
+        return 0
+
+    print("No next artifact found")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="train", description="Trains CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -979,6 +1058,10 @@ def build_parser() -> argparse.ArgumentParser:
     recent_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     recent_parser.add_argument("--limit", type=int, default=10, help="Max items to show")
     recent_parser.set_defaults(func=cmd_recent)
+
+    next_parser = subparsers.add_parser("next", help="Suggest next open artifact")
+    next_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    next_parser.set_defaults(func=cmd_next)
 
     return parser
 
