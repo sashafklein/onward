@@ -1,6 +1,6 @@
-# Trains
+# Onward
 
-Trains is a git-native CLI for planning and driving AI-enabled development work with markdown-first artifacts.
+Onward is a git-native CLI for planning and driving AI-enabled development work with markdown-first artifacts.
 
 Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list`, `show`, `start`, `complete`, `cancel`, `progress`, `recent`, `next`, `report`, `archive`) + dogfood workspace tooling + automated tests.
 
@@ -10,33 +10,33 @@ Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list
 python3.11 -m pip install -e .
 ```
 
-Then use `trains` from any shell location:
+Then use `onward` from any shell location:
 
 ```bash
-trains --help
+onward --help
 ```
 
-If your current directory is not a Trains workspace, non-`init` commands fail with guidance to run:
+If your current directory is not an Onward workspace, non-`init` commands fail with guidance to run:
 
 ```bash
-trains init
+onward init
 ```
 
 ## Quickstart
 
 ```bash
-trains init
-trains doctor
+onward init
+onward doctor
 ```
 
 ## Repository Layout
 
-- `.train.config.yaml` root config.
-- `.train/plans/` tracked planning artifacts (`plan/chunk/task`) and derived indexes.
-- `.train/templates/` artifact body templates.
-- `.train/hooks/` markdown hooks.
-- `.train/sync/` sync workspace state.
-- `.train/runs/` and `.train/ongoing.json` runtime state (gitignored).
+- `.onward.config.yaml` root config.
+- `.onward/plans/` tracked planning artifacts (`plan/chunk/task`) and derived indexes.
+- `.onward/templates/` artifact body templates.
+- `.onward/hooks/` markdown hooks.
+- `.onward/sync/` sync workspace state.
+- `.onward/runs/` and `.onward/ongoing.json` runtime state (gitignored).
 
 ## Dogfood
 
@@ -79,16 +79,16 @@ One-command test runner (falls back to dogfood e2e if `pytest` is unavailable):
 - New contributor walkthrough: [docs/NOOB_GUIDE.md](/Users/sasha/code/train/docs/NOOB_GUIDE.md)
 - Dogfood workflow: [docs/dogfood/README.md](/Users/sasha/code/train/docs/dogfood/README.md)
 - Work handoff design: [docs/architecture/work-handoff.md](/Users/sasha/code/train/docs/architecture/work-handoff.md)
-- Product spec: [docs/spec/train_v1_product_spec.md](/Users/sasha/code/train/docs/spec/train_v1_product_spec.md)
+- Product spec: [docs/spec/onward_v1_product_spec.md](/Users/sasha/code/train/docs/spec/onward_v1_product_spec.md)
 
 ## Useful Commands
 
 ```bash
-trains list --project alpha
-trains list --blocking --human
-trains next --project alpha
-trains tree --project alpha
-trains report --project alpha
+onward list --project alpha
+onward list --blocking --human
+onward next --project alpha
+onward tree --project alpha
+onward report --project alpha
 ```
 
 ## Documented Next Features
@@ -97,5 +97,5 @@ The spec now explicitly captures upcoming requirements for:
 
 - feedback-loop task capture during execution (blockers/refactors/for-later)
 - task metadata: `blocked_by`, `human`, optional `project`
-- focused blocking views (for example `train list --blocking --human`)
-- rich terminal overview via `train report`
+- focused blocking views (for example `onward list --blocking --human`)
+- rich terminal overview via `onward report`

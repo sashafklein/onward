@@ -1,4 +1,4 @@
-# Trains v1 Roadmap
+# Onward v1 Roadmap
 
 Execution order:
 
@@ -8,4 +8,4 @@ Execution order:
 4. PLAN-004: Execution runtime and handoff to Ralph
 5. PLAN-005: Sync modes and hardening
 
-Detailed acceptance criteria live in each plan file under `.train/plans/`.
+Detailed acceptance criteria live in each plan file under `.onward/plans/`.

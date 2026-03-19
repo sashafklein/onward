@@ -12,17 +12,17 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_DIRECTORIES = [
-    ".train/plans",
-    ".train/plans/.archive",
-    ".train/templates",
-    ".train/prompts",
-    ".train/hooks",
-    ".train/sync",
-    ".train/runs",
+    ".onward/plans",
+    ".onward/plans/.archive",
+    ".onward/templates",
+    ".onward/prompts",
+    ".onward/hooks",
+    ".onward/sync",
+    ".onward/runs",
 ]
 
 DEFAULT_FILES = {
-    ".train.config.yaml": """# Trains workspace config.
+    ".onward.config.yaml": """# Onward workspace config.
 # This file is read by the CLI at runtime. Keep it in repo root.
 
 # Schema version for future migrations.
@@ -30,22 +30,22 @@ version: 1
 
 paths:
   # Canonical directory for plan/chunk/task artifacts and derived indexes.
-  plans_dir: .train/plans
+  plans_dir: .onward/plans
   # Runtime state root for ongoing runs, logs, and ephemeral execution files.
-  runtime_dir: .train
+  runtime_dir: .onward
 
 sync:
   # Sync mode: local (disabled), branch (same repo branch), repo (separate repo).
   mode: local
   # Branch name used when sync mode is "branch".
-  branch: train
+  branch: onward
   # Optional separate git repository URL/path used when mode is "repo".
   repo: null
   # Local worktree path used for sync staging operations.
-  worktree_path: .train/sync
+  worktree_path: .onward/sync
 
 ralph:
-  # Executor command to run for `trains work` task execution.
+  # Executor command to run for `onward work` task execution.
   command: ralph
   # Default arguments appended to the executor command.
   args: []
@@ -57,7 +57,7 @@ models:
   default: gpt-5
   # Default model for newly created tasks.
   task_default: gpt-5-mini
-  # Default model used by `trains split` decomposition.
+  # Default model used by `onward split` decomposition.
   split_default: gpt-5
   # Default model for review-oriented hooks/workflows.
   review_default: gpt-5
@@ -80,11 +80,11 @@ hooks:
   # Optional markdown hook path executed before each task (null disables).
   pre_task_markdown: null
   # Optional markdown hook path executed after each task.
-  post_task_markdown: .train/hooks/post-task.md
+  post_task_markdown: .onward/hooks/post-task.md
   # Optional markdown hook path executed after chunk completion.
-  post_chunk_markdown: .train/hooks/post-chunk.md
+  post_chunk_markdown: .onward/hooks/post-chunk.md
 """,
-    ".train/templates/plan.md": """# Summary
+    ".onward/templates/plan.md": """# Summary
 
 <!-- For a semi-technical layperson: What does this scope of work accomplish? 2-4 sentences, not in the weeds. -->
 
@@ -124,7 +124,7 @@ hooks:
 
 <!-- Optional -->
 """,
-    ".train/templates/chunk.md": """# Summary
+    ".onward/templates/chunk.md": """# Summary
 
 <!-- For a semi-technical layperson: what this chunk ships and why it matters. -->
 
@@ -152,7 +152,7 @@ hooks:
 
 <!-- Optional -->
 """,
-    ".train/templates/task.md": """# Context
+    ".onward/templates/task.md": """# Context
 
 <!-- What this task is doing and where it fits in the chunk. -->
 
@@ -180,7 +180,7 @@ hooks:
 
 <!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
 """,
-    ".train/templates/run.md": """# Execution summary
+    ".onward/templates/run.md": """# Execution summary
 
 <!-- Short narrative of what was attempted and result. -->
 
@@ -196,7 +196,7 @@ hooks:
 
 <!-- Blockers, refactors, or for-later tasks discovered during execution. -->
 """,
-    ".train/prompts/split-plan.md": """You are decomposing a plan into executable chunks.
+    ".onward/prompts/split-plan.md": """You are decomposing a plan into executable chunks.
 
 Output strict JSON with this exact shape:
 {
@@ -215,7 +215,7 @@ Constraints:
 - Keep chunk titles short and concrete.
 - Do not include markdown fences or any non-JSON text.
 """,
-    ".train/prompts/split-chunk.md": """You are decomposing a chunk into executable tasks.
+    ".onward/prompts/split-chunk.md": """You are decomposing a chunk into executable tasks.
 
 Output strict JSON with this exact shape:
 {
@@ -235,7 +235,7 @@ Constraints:
 - Each task must include one or more acceptance checks.
 - Do not include markdown fences or any non-JSON text.
 """,
-    ".train/hooks/post-task.md": """---
+    ".onward/hooks/post-task.md": """---
 id: HOOK-post-task
 type: hook
 trigger: task.completed
@@ -260,7 +260,7 @@ Summarize what changed and propose next tasks.
 - Short completion summary
 - Follow-up list (if any)
 """,
-    ".train/hooks/post-chunk.md": """---
+    ".onward/hooks/post-chunk.md": """---
 id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
@@ -285,16 +285,16 @@ Capture chunk-level completion and recommend plan updates.
 - Chunk completion status
 - Risks and recommended next actions
 """,
-    ".train/plans/index.yaml": """generated_at: null
+    ".onward/plans/index.yaml": """generated_at: null
 plans: []
 chunks: []
 tasks: []
 runs: []
 """,
-    ".train/plans/recent.yaml": """generated_at: null
+    ".onward/plans/recent.yaml": """generated_at: null
 completed: []
 """,
-    ".train/ongoing.json": """{
+    ".onward/ongoing.json": """{
   "version": 1,
   "updated_at": null,
   "active_runs": []
@@ -303,22 +303,22 @@ completed: []
 }
 
 GITIGNORE_LINES = [
-    ".train/plans/.archive/",
-    ".train/runs/",
-    ".train/ongoing.json",
+    ".onward/plans/.archive/",
+    ".onward/runs/",
+    ".onward/ongoing.json",
     ".dogfood/",
 ]
 
 REQUIRED_PATHS = [
-    ".train.config.yaml",
-    ".train/templates/plan.md",
-    ".train/templates/chunk.md",
-    ".train/templates/task.md",
-    ".train/templates/run.md",
-    ".train/prompts/split-plan.md",
-    ".train/prompts/split-chunk.md",
-    ".train/plans/index.yaml",
-    ".train/plans/recent.yaml",
+    ".onward.config.yaml",
+    ".onward/templates/plan.md",
+    ".onward/templates/chunk.md",
+    ".onward/templates/task.md",
+    ".onward/templates/run.md",
+    ".onward/prompts/split-plan.md",
+    ".onward/prompts/split-chunk.md",
+    ".onward/plans/index.yaml",
+    ".onward/plans/recent.yaml",
 ]
 
 REQUIRED_FIELDS = {
@@ -534,9 +534,9 @@ def _parse_artifact(path: Path) -> Artifact:
 
 def _is_workspace_root(root: Path) -> bool:
     return (
-        (root / ".train.config.yaml").exists()
-        and (root / ".train").exists()
-        and (root / ".train/plans").exists()
+        (root / ".onward.config.yaml").exists()
+        and (root / ".onward").exists()
+        and (root / ".onward/plans").exists()
     )
 
 
@@ -544,7 +544,7 @@ def _require_workspace(root: Path) -> None:
     if _is_workspace_root(root):
         return
     raise ValueError(
-        f"not a Trains workspace: {root}. Run `trains init` here (or pass --root <workspace>)"
+        f"not an Onward workspace: {root}. Run `onward init` here (or pass --root <workspace>)"
     )
 
 
@@ -558,7 +558,7 @@ def _write_artifact(artifact: Artifact) -> None:
 
 
 def _artifact_glob(root: Path) -> list[Path]:
-    base = root / ".train/plans"
+    base = root / ".onward/plans"
     if not base.exists():
         return []
     results: list[Path] = []
@@ -593,15 +593,15 @@ def _next_id(root: Path, prefix: str) -> str:
 
 
 def _load_template(root: Path, artifact_type: str) -> str:
-    return (root / f".train/templates/{artifact_type}.md").read_text(encoding="utf-8")
+    return (root / f".onward/templates/{artifact_type}.md").read_text(encoding="utf-8")
 
 
 def _load_prompt(root: Path, prompt_name: str) -> str:
-    return (root / f".train/prompts/{prompt_name}").read_text(encoding="utf-8")
+    return (root / f".onward/prompts/{prompt_name}").read_text(encoding="utf-8")
 
 
 def _load_config(root: Path) -> dict[str, Any]:
-    config_path = root / ".train.config.yaml"
+    config_path = root / ".onward.config.yaml"
     if not config_path.exists():
         return {}
     parsed = _parse_simple_yaml(config_path.read_text(encoding="utf-8"))
@@ -967,7 +967,7 @@ def _run_timestamp() -> str:
 
 
 def _load_ongoing(root: Path) -> dict[str, Any]:
-    path = root / ".train/ongoing.json"
+    path = root / ".onward/ongoing.json"
     if not path.exists():
         return {"version": 1, "updated_at": _now_iso(), "active_runs": []}
     try:
@@ -983,7 +983,7 @@ def _load_ongoing(root: Path) -> dict[str, Any]:
 
 def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
     payload["updated_at"] = _now_iso()
-    path = root / ".train/ongoing.json"
+    path = root / ".onward/ongoing.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -1005,7 +1005,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
 
     task_id = str(task.metadata.get("id", ""))
     run_id = f"RUN-{_run_timestamp()}-{task_id}"
-    run_dir = root / ".train/runs"
+    run_dir = root / ".onward/runs"
     run_dir.mkdir(parents=True, exist_ok=True)
     run_json = run_dir / f"{run_id}.json"
     run_log = run_dir / f"{run_id}.log"
@@ -1233,7 +1233,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         print(f"Split dry-run for {args.id} using model={split_model}")
-        print(f"Prompt: .train/prompts/{prompt_name}")
+        print(f"Prompt: .onward/prompts/{prompt_name}")
         print(f"Prompt context bytes: {len(prompt_context.encode('utf-8'))}")
         for artifact_id, path, _content in writes:
             print(f"PLAN: create {artifact_id}\t{path.relative_to(root)}")
@@ -1265,7 +1265,7 @@ def _must_find_by_id(root: Path, artifact_id: str) -> Artifact:
 
 
 def _find_plan_dir(root: Path, plan_id: str) -> Path:
-    base = root / ".train/plans"
+    base = root / ".onward/plans"
     pattern = f"{plan_id}-*"
     matches = sorted(base.glob(pattern))
     if not matches:
@@ -1394,8 +1394,8 @@ def _select_next_artifact(artifacts: list[Artifact], project: str | None = None)
 
 
 def _regenerate_indexes(root: Path) -> None:
-    index_path = root / ".train/plans/index.yaml"
-    recent_path = root / ".train/plans/recent.yaml"
+    index_path = root / ".onward/plans/index.yaml"
+    recent_path = root / ".onward/plans/recent.yaml"
 
     plans: list[dict[str, Any]] = []
     chunks: list[dict[str, Any]] = []
@@ -1462,7 +1462,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     gitignore_updated = _update_gitignore(root)
     _regenerate_indexes(root)
 
-    print(f"Initialized Trains workspace in {root}")
+    print(f"Initialized Onward workspace in {root}")
     print(f"Created/updated files: {created}")
     if gitignore_updated:
         print("Updated .gitignore")
@@ -1479,12 +1479,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if not path.exists():
             issues.append(f"missing required file: {rel_path}")
 
-    ongoing_path = root / ".train/ongoing.json"
+    ongoing_path = root / ".onward/ongoing.json"
     if ongoing_path.exists():
         try:
             json.loads(ongoing_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            issues.append(f"invalid json in .train/ongoing.json: {exc}")
+            issues.append(f"invalid json in .onward/ongoing.json: {exc}")
 
     gitignore_path = root / ".gitignore"
     if not gitignore_path.exists():
@@ -1528,7 +1528,7 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     now = _now_iso()
     slug = _slugify(args.title)
 
-    plan_dir = root / ".train/plans" / f"{plan_id}-{slug}"
+    plan_dir = root / ".onward/plans" / f"{plan_id}-{slug}"
     plan_dir.mkdir(parents=True, exist_ok=False)
     (plan_dir / "chunks").mkdir(parents=True, exist_ok=True)
     (plan_dir / "tasks").mkdir(parents=True, exist_ok=True)
@@ -1733,7 +1733,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
         raise ValueError(f"{args.plan_id} is not a plan")
 
     plan_dir = _find_plan_dir(root, str(artifact.metadata["id"]))
-    archive_dir = root / ".train/plans/.archive"
+    archive_dir = root / ".onward/plans/.archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
     target = archive_dir / plan_dir.name
 
@@ -1941,7 +1941,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     blockers = _blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
 
-    print(_colorize("== Trains Report ==", "bold", color_enabled))
+    print(_colorize("== Onward Report ==", "bold", color_enabled))
     if project:
         print(f"project: {project}")
     print()
@@ -2041,15 +2041,15 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="trains", description="Trains CLI")
+    parser = argparse.ArgumentParser(prog="onward", description="Onward CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    init_parser = subparsers.add_parser("init", help="Initialize train directories and defaults")
+    init_parser = subparsers.add_parser("init", help="Initialize onward directories and defaults")
     init_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     init_parser.add_argument("--force", action="store_true", help="Overwrite default scaffold files")
     init_parser.set_defaults(func=cmd_init)
 
-    doctor_parser = subparsers.add_parser("doctor", help="Validate basic train workspace structure")
+    doctor_parser = subparsers.add_parser("doctor", help="Validate basic onward workspace structure")
     doctor_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     doctor_parser.set_defaults(func=cmd_doctor)
 

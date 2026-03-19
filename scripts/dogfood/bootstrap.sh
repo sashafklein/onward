@@ -16,22 +16,22 @@ python3 -m venv "${VENV_DIR}"
 source "${VENV_DIR}/bin/activate"
 
 SITE_PACKAGES="$(python -c 'import site; print(site.getsitepackages()[0])')"
-echo "${ROOT_DIR}/src" > "${SITE_PACKAGES}/trains-local.pth"
+echo "${ROOT_DIR}/src" > "${SITE_PACKAGES}/onward-local.pth"
 
-cat > "${VENV_DIR}/bin/train" <<'TRAIN'
+cat > "${VENV_DIR}/bin/onward" <<'TRAIN'
 #!/usr/bin/env bash
 set -euo pipefail
-exec python -m trains.cli "$@"
+exec python -m onward.cli "$@"
 TRAIN
-chmod +x "${VENV_DIR}/bin/train"
+chmod +x "${VENV_DIR}/bin/onward"
 
-train init --root "${APP_DIR}"
+onward init --root "${APP_DIR}"
 
-if ! train list --root "${APP_DIR}" | grep -q '^PLAN-'; then
-  train new --root "${APP_DIR}" plan "Dogfood Trains Core Loop" --description "Use trains to build trains"
+if ! onward list --root "${APP_DIR}" | grep -q '^PLAN-'; then
+  onward new --root "${APP_DIR}" plan "Dogfood Onward Core Loop" --description "Use onward to build onward"
 fi
 
 echo
 echo "Dogfood workspace ready: ${APP_DIR}"
 echo "Activate with: source ${VENV_DIR}/bin/activate"
-echo "Try: train list --root ${APP_DIR}"
+echo "Try: onward list --root ${APP_DIR}"

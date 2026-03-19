@@ -4,21 +4,21 @@ This is the key design stance for passing work from parent agents to worker agen
 
 ## Decision
 
-Use a file-backed run coordinator in Trains v1, not a long-running daemon.
+Use a file-backed run coordinator in Onward v1, not a long-running daemon.
 
 Reasoning:
 
 - It keeps behavior deterministic and debuggable.
 - It aligns with markdown/git-native state.
 - It avoids introducing process lifecycle complexity too early.
-- It still supports oversight via `train progress` and `train recent`.
+- It still supports oversight via `onward progress` and `onward recent`.
 
 A daemon can be added later behind the same runtime files if needed.
 
 ## Runtime state layout
 
 ```txt
-.train/
+.onward/
   ongoing.json
   runs/
     RUN-<timestamp>-TASK-<id>.json
@@ -31,7 +31,7 @@ A daemon can be added later behind the same runtime files if needed.
 
 ## Handoff packet
 
-For each task, Trains builds one packet and passes it to the executor:
+For each task, Onward builds one packet and passes it to the executor:
 
 - task frontmatter + body
 - chunk summary (if available)
@@ -61,19 +61,19 @@ Resolution priority:
 Keep the bridge narrow in v1:
 
 - Build executor command from packet.
-- Stream output to `.train/runs/<run>.log`.
+- Stream output to `.onward/runs/<run>.log`.
 - Update `.ongoing.json` on lifecycle transitions.
 - Write final run snapshot (`completed`/`failed`).
 
-This gives parent agents reliable oversight without coupling Trains to Ralph internals.
+This gives parent agents reliable oversight without coupling Onward to Ralph internals.
 
 ## Parent-agent oversight surface
 
 Parent agent operations should be file-based and cheap:
 
-- `train progress`: read `.ongoing.json` + active run summaries.
-- `train recent`: read most recent run snapshots.
-- `train show TASK-###`: include latest run pointers.
+- `onward progress`: read `.ongoing.json` + active run summaries.
+- `onward recent`: read most recent run snapshots.
+- `onward show TASK-###`: include latest run pointers.
 
 This keeps orchestration transparent and scriptable for OpenClaw-style overseers.
 

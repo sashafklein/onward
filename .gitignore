@@ -1,7 +1,8 @@
 __pycache__/
 *.py[cod]
 .venv/
-.train/plans/.archive/
-.train/runs/
-.train/ongoing.json
+.onward/plans/.archive/
+.onward/runs/
+.onward/ongoing.json
 .dogfood/
+.pytest_cache/

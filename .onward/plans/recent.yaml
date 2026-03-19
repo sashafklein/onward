@@ -1,12 +1,12 @@
-generated_at: "2026-03-19T04:26:15Z"
+generated_at: "2026-03-19T05:12:38Z"
 completed:
   -
     id: "PLAN-001"
     title: "Core artifact engine and CLI foundations"
     status: "completed"
-    path: ".train/plans/PLAN-001-core-artifact-engine/plan.md"
+    path: ".onward/plans/PLAN-001-core-artifact-engine/plan.md"
   -
     id: "PLAN-002"
     title: "Visibility surfaces and artifact state transitions"
     status: "completed"
-    path: ".train/plans/PLAN-002-visibility-and-state/plan.md"
+    path: ".onward/plans/PLAN-002-visibility-and-state/plan.md"

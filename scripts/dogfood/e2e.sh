@@ -26,23 +26,23 @@ assert_contains() {
 }
 
 echo "[e2e] doctor"
-DOCTOR_OUT="$(run train doctor --root "${APP_DIR}")"
+DOCTOR_OUT="$(run onward doctor --root "${APP_DIR}")"
 assert_contains "${DOCTOR_OUT}" "Doctor check passed"
 
 echo "[e2e] create chunk + task"
-CHUNK_CREATE_OUT="$(run train new --root "${APP_DIR}" chunk PLAN-001 "E2E Chunk" --description "created by e2e")"
+CHUNK_CREATE_OUT="$(run onward new --root "${APP_DIR}" chunk PLAN-001 "E2E Chunk" --description "created by e2e")"
 CHUNK_ID="$(echo "${CHUNK_CREATE_OUT}" | awk '{print $2}')"
-TASK_CREATE_OUT="$(run train new --root "${APP_DIR}" task "${CHUNK_ID}" "E2E Task" --description "created by e2e")"
+TASK_CREATE_OUT="$(run onward new --root "${APP_DIR}" task "${CHUNK_ID}" "E2E Task" --description "created by e2e")"
 TASK_ID="$(echo "${TASK_CREATE_OUT}" | awk '{print $2}')"
 
 echo "[e2e] list"
-LIST_OUT="$(run train list --root "${APP_DIR}")"
+LIST_OUT="$(run onward list --root "${APP_DIR}")"
 assert_contains "${LIST_OUT}" "PLAN-001"
 assert_contains "${LIST_OUT}" "${CHUNK_ID}"
 assert_contains "${LIST_OUT}" "${TASK_ID}"
 
 echo "[e2e] show"
-SHOW_OUT="$(run train show --root "${APP_DIR}" "${TASK_ID}")"
+SHOW_OUT="$(run onward show --root "${APP_DIR}" "${TASK_ID}")"
 assert_contains "${SHOW_OUT}" "# ${TASK_ID}"
 assert_contains "${SHOW_OUT}" "type: task"
 assert_contains "${SHOW_OUT}" "status: open"

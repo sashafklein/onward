@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "trains-cli"
+name = "onward-cli"
 version = "0.1.0"
 description = "Git-native planning and execution tool for AI-enabled software development"
 readme = "README.md"
@@ -15,8 +15,7 @@ dev = [
 ]
 
 [project.scripts]
-train = "trains.cli:main"
-trains = "trains.cli:main"
+onward = "onward.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,10 +1,10 @@
-# Train v1 Product Spec
+# Onward v1 Product Spec
 
-> Implementation note (March 19, 2026): active scaffold uses `.train.config.yaml` and `.train/plans/`.
+> Implementation note (March 19, 2026): active scaffold uses `.onward.config.yaml` and `.onward/plans/`.
 
 ## 1. Summary
 
-**Train** is a git-native planning and execution tool for AI-assisted software development.
+**Onward** is a git-native planning and execution tool for AI-assisted software development.
 
 It is built around a simple idea:
 
@@ -12,9 +12,9 @@ It is built around a simple idea:
 - state should be human-readable and editable
 - the CLI should help organize, inspect, and advance work
 - model orchestration should stay minimal until explicit execution time
-- `train work` is the boundary where Train hands execution to Ralph
+- `onward work` is the boundary where Onward hands execution to Ralph
 
-Train is **not** meant to be a generic project management platform. It is an opinionated personal workflow tool optimized for one developer running AI-heavy implementation loops inside code repositories.
+Onward is **not** meant to be a generic project management platform. It is an opinionated personal workflow tool optimized for one developer running AI-heavy implementation loops inside code repositories.
 
 The core value is **maintaining forward momentum** while keeping planning artifacts transparent, structured, and easy to sync across environments.
 
@@ -22,7 +22,7 @@ The core value is **maintaining forward momentum** while keeping planning artifa
 
 ## 2. Product framing
 
-Train is best thought of as:
+Onward is best thought of as:
 
 > a repo-native momentum engine for AI-assisted coding
 
@@ -34,7 +34,7 @@ Not:
 - a database-backed planner
 - a full agent framework
 
-Train should be strongest at:
+Onward should be strongest at:
 
 - creating and organizing plan/chunk/task artifacts
 - showing what exists, what is active, and what just finished
@@ -54,7 +54,7 @@ All core planning artifacts are markdown files with frontmatter.
 The source of truth lives in the filesystem and can be committed, diffed, branched, synced, and reviewed.
 
 ### 3.3 Opinionated
-Train uses a fixed hierarchy:
+Onward uses a fixed hierarchy:
 
 - plan
 - chunk
@@ -63,25 +63,25 @@ Train uses a fixed hierarchy:
 These terms and meanings are built in. v1 does **not** attempt to support custom artifact taxonomies.
 
 ### 3.4 Lightweight until execution
-Train should focus on organization, status, and visibility first. It should not eagerly orchestrate models during basic artifact creation.
+Onward should focus on organization, status, and visibility first. It should not eagerly orchestrate models during basic artifact creation.
 
 ### 3.5 Explicit execution boundary
-`train work` is where Train begins orchestrating actual AI execution via Ralph.
+`onward work` is where Onward begins orchestrating actual AI execution via Ralph.
 
 ### 3.6 Local-first, sync-capable
-Train should work entirely locally, but also support syncing planning artifacts to either:
+Onward should work entirely locally, but also support syncing planning artifacts to either:
 
 - a branch in the current repo
 - a separate repo dedicated to shared plan state
 
 ### 3.7 Archive by removal from git
-Archived plans move into `.train/plans/.archive/`, which is gitignored so they naturally disappear from versioned state.
+Archived plans move into `.onward/plans/.archive/`, which is gitignored so they naturally disappear from versioned state.
 
 ---
 
 ## 4. Scope of v1
 
-Train v1 includes:
+Onward v1 includes:
 
 - repo-local plan storage
 - markdown templates for plan/chunk/task/hook/run
@@ -90,11 +90,11 @@ Train v1 includes:
 - derived views like `progress`, `recent`, and `next`
 - local mode and shared sync mode
 - optional separate sync repo support
-- plan archiving into `.train/plans/.archive/`
-- Ralph integration at `train work`
+- plan archiving into `.onward/plans/.archive/`
+- Ralph integration at `onward work`
 - shell hooks and markdown agent hooks
 
-Train v1 does **not** include:
+Onward v1 does **not** include:
 
 - a web UI
 - a database
@@ -108,7 +108,7 @@ Train v1 does **not** include:
 
 ## 5. Information model
 
-Train has five core artifact types:
+Onward has five core artifact types:
 
 ## 5.1 Plan
 A high-level initiative.
@@ -197,20 +197,20 @@ Tasks may also carry a `human: true|false` boolean so human-only blocking work c
 
 ## 7. Repo layout
 
-Train uses one config file and one directory at repo root:
+Onward uses one config file and one directory at repo root:
 
 ```txt
-.train.config.yaml
-.train/
+.onward.config.yaml
+.onward/
 ```
 
-## 7.1 `.train/`
+## 7.1 `.onward/`
 Tooling configuration and templates.
 
 Suggested layout:
 
 ```txt
-.train/
+.onward/
   plans/
     index.yaml
     recent.yaml
@@ -238,7 +238,7 @@ Suggested layout:
   sync/
     .gitkeep
 ```
-`.train/plans/.archive/` must be gitignored.
+`.onward/plans/.archive/` must be gitignored.
 
 ---
 
@@ -246,7 +246,7 @@ Suggested layout:
 
 When a plan is archived:
 
-- its full plan directory is moved into `.train/plans/.archive/`
+- its full plan directory is moved into `.onward/plans/.archive/`
 - archived artifacts disappear from active git-tracked planning state
 - active indexes exclude archived items
 
@@ -256,20 +256,20 @@ This is intentionally destructive from the perspective of the active planning wo
 Add at least:
 
 ```txt
-.train/plans/.archive/
+.onward/plans/.archive/
 ```
 
 to `.gitignore`.
 
 ### 8.2 Command
 ```bash
-train archive PLAN-001
+onward archive PLAN-001
 ```
 
 This should:
 
 - validate the plan exists
-- move the plan folder into `.train/plans/.archive/`
+- move the plan folder into `.onward/plans/.archive/`
 - regenerate indexes
 - remove it from active views
 
@@ -277,7 +277,7 @@ This should:
 
 ## 9. Frontmatter schema
 
-Train should keep schema simple and explicit.
+Onward should keep schema simple and explicit.
 
 ## 9.1 Common fields
 Shared across plan/chunk/task:
@@ -482,7 +482,7 @@ Example sections:
 Primary config lives at:
 
 ```txt
-.train.config.yaml
+.onward.config.yaml
 ```
 
 This file defines:
@@ -500,13 +500,13 @@ Example:
 version: 1
 
 paths:
-  plans_dir: .train/plans
+  plans_dir: .onward/plans
 
 sync:
   mode: local
-  branch: train
+  branch: onward
   repo: null
-  worktree_path: .train/sync
+  worktree_path: .onward/sync
 
 ralph:
   command: ralph
@@ -528,15 +528,15 @@ hooks:
   pre_task_shell: []
   post_task_shell: []
   pre_task_markdown: null
-  post_task_markdown: .train/hooks/post-task.md
-  post_chunk_markdown: .train/hooks/post-chunk.md
+  post_task_markdown: .onward/hooks/post-task.md
+  post_chunk_markdown: .onward/hooks/post-chunk.md
 ```
 
 ---
 
 ## 12. Sync modes
 
-Train supports two modes.
+Onward supports two modes.
 
 ## 12.1 Local mode
 All planning artifacts stay in the current repo and current branch. No syncing required.
@@ -553,15 +553,15 @@ This shared location can be either:
 Example:
 
 - code work on normal branches
-- planning artifacts sync to branch `train`
+- planning artifacts sync to branch `onward`
 
 ### 12.2.2 Separate sync repo mode
 This is explicitly supported for workflows where an overseer agent, such as OpenClaw, manages task state outside the main project repo.
 
 In this mode:
 
-- source repo contains `.train/plans/`
-- Train syncs `.train/plans/` to another repo
+- source repo contains `.onward/plans/`
+- Onward syncs `.onward/plans/` to another repo
 - another agent can update shared task state there
 - the project repo can later pull/sync those changes back
 
@@ -570,31 +570,31 @@ This allows one big shared task list across environments.
 ### 12.2.3 Sync expectations
 Sync is best-effort and file-based. v1 does not attempt sophisticated merge conflict resolution.
 
-Train should expose commands such as:
+Onward should expose commands such as:
 
 ```bash
-train sync push
-train sync pull
-train sync status
+onward sync push
+onward sync pull
+onward sync status
 ```
 
 ---
 
 ## 13. CLI philosophy
 
-Train should be strongest at:
+Onward should be strongest at:
 
 - creating artifacts
 - showing current state
 - splitting larger artifacts into smaller ones
 - handing execution to Ralph when explicitly asked
 
-Train should **not** automatically kick off models for simple creation commands unless explicitly requested.
+Onward should **not** automatically kick off models for simple creation commands unless explicitly requested.
 
 This means the clean boundary is:
 
 ```bash
-train new plan "Unified onboarding rewrite" --description "..."
+onward new plan "Unified onboarding rewrite" --description "..."
 ```
 
 creates a plan artifact only.
@@ -610,21 +610,21 @@ This keeps creation deterministic and keeps orchestration from leaking into basi
 ## 14.1 Initialization
 
 ```bash
-train init
-train doctor
-train sync status
+onward init
+onward doctor
+onward sync status
 ```
 
-### `train init`
+### `onward init`
 Creates:
 
-- `.train/`
-- `.train/plans/`
+- `.onward/`
+- `.onward/plans/`
 - templates
 - default hooks
-- `.gitignore` update for `.train/plans/.archive/`
+- `.gitignore` update for `.onward/plans/.archive/`
 
-### `train doctor`
+### `onward doctor`
 Validates:
 
 - required directories exist
@@ -638,9 +638,9 @@ Validates:
 ## 14.2 Creation
 
 ```bash
-train new plan "Unified onboarding rewrite" --description "Consolidate onboarding flows"
-train new chunk PLAN-001 "Backend foundation" --description "Schema + API work"
-train new task CHUNK-001 "Add onboarding_session table" --description "DB schema and migration"
+onward new plan "Unified onboarding rewrite" --description "Consolidate onboarding flows"
+onward new chunk PLAN-001 "Backend foundation" --description "Schema + API work"
+onward new task CHUNK-001 "Add onboarding_session table" --description "DB schema and migration"
 ```
 
 These commands:
@@ -655,20 +655,20 @@ These commands:
 ## 14.3 Viewing and navigation
 
 ```bash
-train list
-train list --project onboarding
-train list --blocking
-train list --blocking --human
-train show PLAN-001
-train show CHUNK-001
-train show TASK-001
-train tree PLAN-001
-train progress
-train recent
-train next
+onward list
+onward list --project onboarding
+onward list --blocking
+onward list --blocking --human
+onward show PLAN-001
+onward show CHUNK-001
+onward show TASK-001
+onward tree PLAN-001
+onward progress
+onward recent
+onward next
 ```
 
-### `train progress`
+### `onward progress`
 Shows everything currently in progress, including:
 
 - plans in progress
@@ -677,17 +677,17 @@ Shows everything currently in progress, including:
 - active runs
 - assigned models/executors if available
 
-### `train recent`
+### `onward recent`
 Shows recently completed items in reverse chronological order.
 
-### `train next`
+### `onward next`
 Shows best next open work, likely prioritizing:
 
 - open tasks with no unmet dependencies
 - tasks within chunks already in progress
 - otherwise next open chunks/plans lacking tasks
 
-### `train list --blocking --human`
+### `onward list --blocking --human`
 Shows open tasks where:
 
 - `human: true`
@@ -700,12 +700,12 @@ This supports fast triage of the smallest human actions needed to unblock agent 
 ## 14.4 State changes
 
 ```bash
-train start TASK-001
-train complete TASK-001
-train cancel TASK-001
-train start CHUNK-001
-train complete CHUNK-001
-train archive PLAN-001
+onward start TASK-001
+onward complete TASK-001
+onward cancel TASK-001
+onward start CHUNK-001
+onward complete CHUNK-001
+onward archive PLAN-001
 ```
 
 These commands should:
@@ -720,13 +720,13 @@ These commands should:
 ## 14.5 Splitting / decomposition
 
 ```bash
-train split PLAN-001
-train split CHUNK-001
+onward split PLAN-001
+onward split CHUNK-001
 ```
 
-Train should determine artifact type from ID or file lookup.
+Onward should determine artifact type from ID or file lookup.
 
-### `train split PLAN-001`
+### `onward split PLAN-001`
 Default meaning:
 
 - read the plan doc
@@ -734,7 +734,7 @@ Default meaning:
 - use configured default split model
 - write proposed chunk artifacts to disk
 
-### `train split CHUNK-001`
+### `onward split CHUNK-001`
 Default meaning:
 
 - read the chunk doc
@@ -751,14 +751,14 @@ Unlike `new`, `split` is allowed to invoke a model by default because decomposit
 ## 14.6 Execution
 
 ```bash
-train work TASK-001
-train work CHUNK-001
+onward work TASK-001
+onward work CHUNK-001
 ```
 
 This is the main execution boundary.
 
-### `train work TASK-001`
-Train should:
+### `onward work TASK-001`
+Onward should:
 
 - resolve the task file
 - inspect frontmatter
@@ -772,8 +772,8 @@ Train should:
 - update task status and run record
 - surface result to the user
 
-### `train work CHUNK-001`
-Train should:
+### `onward work CHUNK-001`
+Onward should:
 
 - gather tasks in the chunk
 - order them, respecting dependencies where possible
@@ -790,7 +790,7 @@ This command is allowed to perform queue management and execution coordination b
 
 ### 14.6.1 Feedback loop: adding discovered follow-up work
 
-During `train work`, workers should be guided to capture newly discovered work explicitly:
+During `onward work`, workers should be guided to capture newly discovered work explicitly:
 
 - blocker tasks
 - refactor tasks
@@ -811,11 +811,11 @@ This can be implemented through default worker guidance and/or a post-task markd
 ## 14.7 Reporting
 
 ```bash
-train report
-train report --project onboarding
+onward report
+onward report --project onboarding
 ```
 
-`train report` should produce a consolidated, colorized terminal report with readable ASCII tables that includes:
+`onward report` should produce a consolidated, colorized terminal report with readable ASCII tables that includes:
 
 - in-progress plans/chunks/tasks
 - next suggested work
@@ -835,7 +835,7 @@ v1 should couple to Ralph directly rather than abstracting over many executors.
 That is the simplest and most useful boundary.
 
 ## 15.1 Integration stance
-Train does not need a generic executor plugin system in v1.
+Onward does not need a generic executor plugin system in v1.
 
 It only needs enough structure to:
 
@@ -860,7 +860,7 @@ ralph:
 ```
 
 ## 15.3 Task handoff packet
-Train should construct a clear payload for Ralph from:
+Onward should construct a clear payload for Ralph from:
 
 - task frontmatter
 - task body
@@ -868,10 +868,10 @@ Train should construct a clear payload for Ralph from:
 - hook-generated instructions if applicable
 - model and executor metadata
 
-Train may initially hand Ralph a synthesized prompt or temp file.
+Onward may initially hand Ralph a synthesized prompt or temp file.
 
 ## 15.4 Status tracking
-Train should track:
+Onward should track:
 
 - queued
 - running
@@ -886,7 +886,7 @@ This keeps execution detail out of the main artifact state model.
 
 ## 16. Hook model
 
-Train supports two hook types.
+Onward supports two hook types.
 
 ## 16.1 Shell hooks
 Configured in YAML and executed directly.
@@ -921,13 +921,13 @@ Useful for:
 Repo-level:
 
 ```txt
-.train/hooks/post-task.md
+.onward/hooks/post-task.md
 ```
 
 Plan-level override:
 
 ```txt
-.train/plans/PLAN-001-foo/hooks/post-task.md
+.onward/plans/PLAN-001-foo/hooks/post-task.md
 ```
 
 ### 16.2.3 Hook precedence
@@ -941,7 +941,7 @@ For v1:
 
 ## 17. Worktrees
 
-Train should support worktree-based execution during `train work`, especially for chunk execution.
+Onward should support worktree-based execution during `onward work`, especially for chunk execution.
 
 Expected flow:
 
@@ -964,10 +964,10 @@ work:
 
 ## 18. Derived indexes
 
-Train may maintain derived files such as:
+Onward may maintain derived files such as:
 
-- `.train/plans/index.yaml`
-- `.train/plans/recent.yaml`
+- `.onward/plans/index.yaml`
+- `.onward/plans/recent.yaml`
 
 These are not the canonical source of truth.
 
@@ -990,7 +990,7 @@ These should be regenerable from disk.
 ## 19.1 Create a plan manually
 
 ```bash
-train new plan "Unified onboarding rewrite" --description "Consolidate onboarding flows into one architecture"
+onward new plan "Unified onboarding rewrite" --description "Consolidate onboarding flows into one architecture"
 ```
 
 Then edit the generated `plan.md`.
@@ -998,40 +998,40 @@ Then edit the generated `plan.md`.
 ## 19.2 Split into chunks
 
 ```bash
-train split PLAN-001
+onward split PLAN-001
 ```
 
-Train uses the configured split model to propose chunk files.
+Onward uses the configured split model to propose chunk files.
 
 ## 19.3 Split a chunk into tasks
 
 ```bash
-train split CHUNK-001
+onward split CHUNK-001
 ```
 
-Train generates task files with frontmatter, acceptance criteria, and model defaults.
+Onward generates task files with frontmatter, acceptance criteria, and model defaults.
 
 ## 19.4 Execute a task
 
 ```bash
-train work TASK-001
+onward work TASK-001
 ```
 
-Train calls Ralph, tracks the run, and updates progress.
+Onward calls Ralph, tracks the run, and updates progress.
 
 ## 19.5 Execute a whole chunk
 
 ```bash
-train work CHUNK-001
+onward work CHUNK-001
 ```
 
-Train works through chunk tasks sequentially in a worktree, reporting status through `progress` and `recent`.
+Onward works through chunk tasks sequentially in a worktree, reporting status through `progress` and `recent`.
 
 ---
 
 ## 20. Non-goals
 
-Train v1 should not attempt to solve all of the following:
+Onward v1 should not attempt to solve all of the following:
 
 - arbitrary collaboration semantics
 - perfect merge conflict handling
@@ -1148,7 +1148,7 @@ Recommended v1 answer:
 
 ## 23. Final design stance
 
-Train should feel like this:
+Onward should feel like this:
 
 - easy to inspect
 - easy to edit
@@ -1172,21 +1172,21 @@ That is the heart of the tool.
 
 The first milestone should be:
 
-- `train init`
-- `train new plan|chunk|task`
-- `train list`
-- `train show`
-- `train progress`
-- `train recent`
-- `train start|complete|cancel`
-- `train archive`
-- `train split PLAN`
-- `train split CHUNK`
-- `train work TASK`
+- `onward init`
+- `onward new plan|chunk|task`
+- `onward list`
+- `onward show`
+- `onward progress`
+- `onward recent`
+- `onward start|complete|cancel`
+- `onward archive`
+- `onward split PLAN`
+- `onward split CHUNK`
+- `onward work TASK`
 
 Then second milestone:
 
-- `train work CHUNK`
+- `onward work CHUNK`
 - worktree support
 - markdown hooks
 - sync push/pull/status

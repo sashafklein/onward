@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from trains import cli
+from onward import cli
 
 
 def _init_workspace(root: Path) -> None:
@@ -50,7 +50,7 @@ def test_new_ids_increment(tmp_path: Path, capsys):
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Two"]) == 0
     capsys.readouterr()
 
-    out = (tmp_path / ".train/plans/index.yaml").read_text(encoding="utf-8")
+    out = (tmp_path / ".onward/plans/index.yaml").read_text(encoding="utf-8")
     assert 'id: "PLAN-001"' in out
     assert 'id: "PLAN-002"' in out
 
@@ -122,7 +122,7 @@ def test_archive_moves_plan_out_of_active_set(tmp_path: Path, capsys):
 
     assert archive_code == 0
     assert "Archived PLAN-001" in archive_out
-    assert (tmp_path / ".train/plans/.archive/PLAN-001-archive-me/plan.md").exists()
+    assert (tmp_path / ".onward/plans/.archive/PLAN-001-archive-me/plan.md").exists()
 
     list_code = cli.main(["list", "--root", str(tmp_path), "--type", "plan"])
     list_out = capsys.readouterr().out
@@ -155,7 +155,7 @@ def test_next_skips_task_with_unmet_dependencies(tmp_path: Path, capsys):
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Blocked"]) == 0
     capsys.readouterr()
 
-    blocked_task_path = tmp_path / ".train/plans/PLAN-001-deps/tasks/TASK-002-blocked.md"
+    blocked_task_path = tmp_path / ".onward/plans/PLAN-001-deps/tasks/TASK-002-blocked.md"
     raw = blocked_task_path.read_text(encoding="utf-8")
     raw = raw.replace("depends_on: []", "depends_on:\n  - TASK-001")
     blocked_task_path.write_text(raw, encoding="utf-8")
@@ -189,7 +189,7 @@ def test_list_filters_project_human_and_blocking(tmp_path: Path, capsys):
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Blocked task", "--project", "alpha"]) == 0
     capsys.readouterr()
 
-    blocked_task_path = tmp_path / ".train/plans/PLAN-001-proj/tasks/TASK-002-blocked-task.md"
+    blocked_task_path = tmp_path / ".onward/plans/PLAN-001-proj/tasks/TASK-002-blocked-task.md"
     raw = blocked_task_path.read_text(encoding="utf-8")
     raw = raw.replace("blocked_by: []", "blocked_by:\n  - TASK-001")
     blocked_task_path.write_text(raw, encoding="utf-8")
@@ -218,7 +218,7 @@ def test_report_contains_expected_sections(tmp_path: Path, capsys):
     code = cli.main(["report", "--root", str(tmp_path), "--project", "alpha", "--no-color"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "== Trains Report ==" in out
+    assert "== Onward Report ==" in out
     assert "[In Progress]" in out
     assert "[Next]" in out
     assert "[Blocking Human Tasks]" in out

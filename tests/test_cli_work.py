@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from trains import cli
+from onward import cli
 
 
 def _init_workspace(root: Path) -> None:
@@ -8,7 +8,7 @@ def _init_workspace(root: Path) -> None:
 
 
 def _set_executor(root: Path, command: str) -> None:
-    config_path = root / ".train.config.yaml"
+    config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
     raw = raw.replace("  command: ralph", f"  command: {command}")
     config_path.write_text(raw, encoding="utf-8")
@@ -28,15 +28,15 @@ def test_work_task_success_creates_run_and_completes_task(tmp_path: Path, capsys
     assert "Run RUN-" in out
     assert "completed" in out
 
-    task_raw = (tmp_path / ".train/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
+    task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in task_raw
 
-    run_jsons = list((tmp_path / ".train/runs").glob("RUN-*-TASK-001.json"))
+    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
     assert 'status: "completed"' in run_raw
 
-    ongoing = (tmp_path / ".train/ongoing.json").read_text(encoding="utf-8")
+    ongoing = (tmp_path / ".onward/ongoing.json").read_text(encoding="utf-8")
     assert '"active_runs": []' in ongoing
 
 
@@ -54,10 +54,10 @@ def test_work_task_failure_records_failed_run_and_reopens_task(tmp_path: Path, c
     assert "Run RUN-" in out
     assert "failed" in out
 
-    task_raw = (tmp_path / ".train/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
+    task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
     assert 'status: "open"' in task_raw
 
-    run_jsons = list((tmp_path / ".train/runs").glob("RUN-*-TASK-001.json"))
+    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
     assert 'status: "failed"' in run_raw
@@ -72,7 +72,7 @@ def test_work_chunk_executes_ready_tasks_in_dependency_order(tmp_path: Path, cap
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Two"]) == 0
     capsys.readouterr()
 
-    task_two = tmp_path / ".train/plans/PLAN-001-alpha/tasks/TASK-002-two.md"
+    task_two = tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-002-two.md"
     raw = task_two.read_text(encoding="utf-8")
     task_two.write_text(raw.replace("depends_on: []", "depends_on:\n  - TASK-001"), encoding="utf-8")
 
@@ -82,10 +82,10 @@ def test_work_chunk_executes_ready_tasks_in_dependency_order(tmp_path: Path, cap
     assert out.count("Run RUN-") == 2
     assert "Chunk CHUNK-001 completed" in out
 
-    chunk_raw = (tmp_path / ".train/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
+    chunk_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in chunk_raw
 
-    task_one_raw = (tmp_path / ".train/plans/PLAN-001-alpha/tasks/TASK-001-one.md").read_text(encoding="utf-8")
-    task_two_raw = (tmp_path / ".train/plans/PLAN-001-alpha/tasks/TASK-002-two.md").read_text(encoding="utf-8")
+    task_one_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-one.md").read_text(encoding="utf-8")
+    task_two_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-002-two.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in task_one_raw
     assert 'status: "completed"' in task_two_raw

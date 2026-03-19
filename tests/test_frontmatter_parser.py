@@ -1,6 +1,6 @@
 import pytest
 
-from trains import cli
+from onward import cli
 
 
 def test_parse_simple_yaml_round_trip_lists_and_scalars():
