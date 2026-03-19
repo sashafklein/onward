@@ -1,8 +1,10 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 .onward/plans/.archive/
 .onward/runs/
+.onward/reviews/
 .onward/ongoing.json
 .dogfood/
 .pytest_cache/

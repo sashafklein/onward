@@ -1,6 +1,7 @@
 import pytest
 
 from onward import cli
+from onward.util import _dump_simple_yaml, _parse_simple_yaml, _split_frontmatter
 
 
 def test_parse_simple_yaml_round_trip_lists_and_scalars():
@@ -19,7 +20,7 @@ ratio: 1.5
 notes: null
 """
 
-    parsed = cli._parse_simple_yaml(frontmatter)
+    parsed = _parse_simple_yaml(frontmatter)
     assert parsed["depends_on"] == ["TASK-010", "TASK-011"]
     assert parsed["blocked_by"] == []
     assert parsed["enabled"] is True
@@ -27,8 +28,8 @@ notes: null
     assert parsed["ratio"] == 1.5
     assert parsed["notes"] is None
 
-    dumped = cli._dump_simple_yaml(parsed)
-    reparsed = cli._parse_simple_yaml(dumped)
+    dumped = _dump_simple_yaml(parsed)
+    reparsed = _parse_simple_yaml(dumped)
 
     assert reparsed == parsed
 
@@ -40,7 +41,7 @@ def test_parse_simple_yaml_rejects_mixed_nested_block():
 """
 
     with pytest.raises(ValueError, match="mixed nested yaml"):
-        cli._parse_simple_yaml(invalid)
+        _parse_simple_yaml(invalid)
 
 
 def test_split_frontmatter_parses_body():
@@ -51,13 +52,13 @@ type: task
 
 # Body\n"""
 
-    frontmatter, body = cli._split_frontmatter(raw)
+    frontmatter, body = _split_frontmatter(raw)
 
     assert "id: TASK-001" in frontmatter
     assert body.startswith("\n# Body")
 
 
 def test_split_frontmatter_without_markers_returns_none():
-    frontmatter, body = cli._split_frontmatter("# no frontmatter")
+    frontmatter, body = _split_frontmatter("# no frontmatter")
     assert frontmatter is None
     assert body == "# no frontmatter"

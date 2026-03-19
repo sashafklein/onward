@@ -1,1872 +1,81 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
-import os
-import re
-import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-DEFAULT_DIRECTORIES = [
-    ".onward/plans",
-    ".onward/plans/.archive",
-    ".onward/templates",
-    ".onward/prompts",
-    ".onward/hooks",
-    ".onward/sync",
-    ".onward/runs",
-    ".onward/reviews",
-    ".onward/notes",
-]
-
-DEFAULT_FILES = {
-    ".onward.config.yaml": """# Onward workspace config.
-# This file is read by the CLI at runtime. Keep it in repo root.
-
-# Schema version for future migrations.
-version: 1
-
-# Root directory for all Onward artifacts (plans, templates, hooks, runs, etc).
-path: .onward
-
-sync:
-  # Sync mode: local (disabled), branch (same repo branch), repo (separate repo).
-  mode: local
-  # Branch name used when sync mode is "branch".
-  branch: onward
-  # Optional separate git repository URL/path used when mode is "repo".
-  repo: null
-  # Local worktree path used for sync staging operations.
-  worktree_path: .onward/sync
-
-ralph:
-  # Executor command to run for `onward work` task execution.
-  command: ralph
-  # Default arguments appended to the executor command.
-  args: []
-  # Global on/off switch for executor usage.
-  enabled: true
-
-models:
-  # Fallback model for generic operations when no more specific model is set.
-  # Supports aliases: opus-latest, sonnet-latest, codex-latest, haiku-latest.
-  default: opus-latest
-  # Default model for newly created tasks.
-  task_default: sonnet-latest
-  # Default model used by `onward split` decomposition (blank = use default).
-  split_default:
-  # Default model for review-oriented hooks/workflows.
-  review_default: codex-latest
-
-review:
-  # If true, plan reviews spawn two independent reviewers (review_default + default).
-  double_review: true
-
-work:
-  # If true, chunk execution runs tasks sequentially unless explicitly overridden.
-  sequential_by_default: true
-  # If true, execution may create a dedicated git worktree for isolated work.
-  create_worktree: true
-  # Parent directory where execution worktrees are created.
-  worktree_root: .worktrees
-  # Base branch used when creating new worktrees.
-  base_branch: main
-
-hooks:
-  # Shell commands run before each task (empty list means disabled).
-  pre_task_shell: []
-  # Shell commands run after each task (empty list means disabled).
-  post_task_shell: []
-  # Optional markdown hook path executed before each task (null disables).
-  pre_task_markdown: null
-  # Optional markdown hook path executed after each task.
-  post_task_markdown: .onward/hooks/post-task.md
-  # Optional markdown hook path executed after chunk completion.
-  post_chunk_markdown: .onward/hooks/post-chunk.md
-""",
-    ".onward/templates/plan.md": """# Summary
-
-<!-- For a semi-technical layperson: What does this scope of work accomplish? 2-4 sentences, not in the weeds. -->
-
-# Problem
-
-<!-- Optional -->
-
-# Goals
-
-<!-- Bullets -->
-
-# Non-goals
-
-<!-- Bullets -->
-
-# End state
-
-<!-- A checklist of user stories representing the ideal end state. -->
-
-# Context
-
-<!-- Optional -->
-
-# Proposed approach
-
-<!-- This section could be huge. As big as it needs to. Hundreds of lines. The goal is to exhaustively specify the plan. Everything we intend to do. Files, tests, connections, etc. -->
-
-# Key artifacts
-
-<!-- Optional. If relevant, any ENVs, processes, etc that may need to be documented or acted on when the work is complete. -->
-
-# Acceptance criteria
-
-<!-- Specific tests, e2es, QA assertions, file existences, documentation, etc, that attest to the successful completion of the work -->
-
-# Notes
-
-<!-- Optional -->
-""",
-    ".onward/templates/chunk.md": """# Summary
-
-<!-- For a semi-technical layperson: what this chunk ships and why it matters. -->
-
-# Scope
-
-<!-- Concrete bullets of what is in this chunk. -->
-
-# Out of scope
-
-<!-- Concrete bullets of what is explicitly not included. -->
-
-# Dependencies
-
-<!-- IDs, systems, or decisions that must exist first. -->
-
-# Expected files/systems involved
-
-<!-- List likely files, directories, services, and tables touched. -->
-
-# Completion criteria
-
-<!-- Checklist that can be verified by tests/review. -->
-
-# Notes
-
-<!-- Optional -->
-""",
-    ".onward/templates/task.md": """# Context
-
-<!-- What this task is doing and where it fits in the chunk. -->
-
-# Scope
-
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
-
-# Out of scope
-
-<!-- Explicitly exclude adjacent work. -->
-
-# Files to inspect
-
-<!-- Start here. Include exact paths when known. -->
-
-# Implementation notes
-
-<!-- Constraints, gotchas, and edge cases to handle. -->
-
-# Acceptance criteria
-
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
-
-# Handoff notes
-
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
-""",
-    ".onward/templates/run.md": """# Execution summary
-
-<!-- Short narrative of what was attempted and result. -->
-
-# Inputs
-
-<!-- Task ID, model/executor, important context passed in. -->
-
-# Output
-
-<!-- Key output, files changed, and notable terminal/log details. -->
-
-# Follow-up
-
-<!-- Blockers, refactors, or for-later tasks discovered during execution. -->
-""",
-    ".onward/prompts/split-plan.md": """You are decomposing a plan into executable chunks.
-
-Output strict JSON with this exact shape:
-{
-  "chunks": [
-    {
-      "title": "string",
-      "description": "string",
-      "priority": "low|medium|high",
-      "model": "string"
-    }
-  ]
-}
-
-Constraints:
-- Return at least one chunk.
-- Keep chunk titles short and concrete.
-- Do not include markdown fences or any non-JSON text.
-""",
-    ".onward/prompts/split-chunk.md": """You are decomposing a chunk into executable tasks.
-
-Output strict JSON with this exact shape:
-{
-  "tasks": [
-    {
-      "title": "string",
-      "description": "string",
-      "acceptance": ["string"],
-      "model": "string",
-      "human": false
-    }
-  ]
-}
-
-Constraints:
-- Return at least one task.
-- Each task must include one or more acceptance checks.
-- Do not include markdown fences or any non-JSON text.
-""",
-    ".onward/prompts/review-plan.md": """You are an adversarial plan reviewer. Your job is to find gaps, risks, and issues that the plan author missed. Be thorough and direct.
-
-Review the plan for:
-- **Gaps in requirements:** Are there missing edge cases, undefined behaviors, or unstated assumptions?
-- **Security implications:** Does the plan introduce attack surface, handle sensitive data, or need auth/authz considerations?
-- **Deployment and operational risks:** Are there migration concerns, rollback strategies, monitoring needs, or ENV/config changes not addressed?
-- **Scope concerns:** Is the plan trying to do too much? Too little? Are boundaries clear?
-- **Feasibility:** Are there technical risks, unproven approaches, or dependency concerns?
-- **Testing strategy:** Is the testing plan adequate? Are there gaps in coverage?
-
-Rate each finding by severity:
-- **Critical:** Must be addressed before work begins. Security holes, data loss risks, fundamental design flaws.
-- **Important:** Should be addressed. Missing requirements, deployment gaps, significant edge cases.
-- **Minor:** Nice to fix. Code quality, documentation, minor edge cases.
-- **Nitpick:** Optional. Style preferences, suggestions, alternative approaches.
-
-Output your review in this exact markdown format:
-
-## Review: {plan title}
-
-### Overall Assessment: {Approved | Revision Needed | Blocked}
-
-### Findings
-
-| # | Severity | Category | Finding | Recommendation |
-|---|----------|----------|---------|----------------|
-| 1 | Critical | ... | ... | ... |
-
-If there are no findings at a given severity, omit those rows. If the plan is genuinely solid, say so — but that should be rare.
-
-### Notes
-
-Any broader observations about the approach, architecture, or patterns that don't fit neatly into the findings table.
-""",
-    ".onward/hooks/post-task.md": """---
-id: HOOK-post-task
-type: hook
-trigger: task.completed
-model: opus-latest
-executor: ralph
-scope: repo
----
-
-# Purpose
-Summarize what changed and propose next tasks.
-
-# Inputs
-- Completed task
-- Run output
-
-# Instructions
-1. Confirm acceptance criteria status.
-2. Note key files touched.
-3. Propose follow-up tasks if needed.
-
-# Required output
-- Short completion summary
-- Follow-up list (if any)
-""",
-    ".onward/hooks/post-chunk.md": """---
-id: HOOK-post-chunk
-type: hook
-trigger: chunk.completed
-model: opus-latest
-executor: ralph
-scope: repo
----
-
-# Purpose
-Capture chunk-level completion and recommend plan updates.
-
-# Inputs
-- Completed chunk
-- Child task outcomes
-
-# Instructions
-1. Verify the chunk completion criteria.
-2. Summarize major outputs and known risks.
-3. Suggest next chunk ordering.
-
-# Required output
-- Chunk completion status
-- Risks and recommended next actions
-""",
-    ".onward/plans/index.yaml": """generated_at: null
-plans: []
-chunks: []
-tasks: []
-runs: []
-""",
-    ".onward/plans/recent.yaml": """generated_at: null
-completed: []
-""",
-    ".onward/ongoing.json": """{
-  "version": 1,
-  "updated_at": null,
-  "active_runs": []
-}
-""",
-}
-
-GITIGNORE_LINES = [
-    ".onward/plans/.archive/",
-    ".onward/runs/",
-    ".onward/reviews/",
-    ".onward/ongoing.json",
-    ".dogfood/",
-]
-
-REQUIRED_PATHS = [
-    ".onward.config.yaml",
-    ".onward/templates/plan.md",
-    ".onward/templates/chunk.md",
-    ".onward/templates/task.md",
-    ".onward/templates/run.md",
-    ".onward/prompts/split-plan.md",
-    ".onward/prompts/split-chunk.md",
-    ".onward/plans/index.yaml",
-    ".onward/plans/recent.yaml",
-]
-
-REQUIRED_FIELDS = {
-    "plan": ["id", "type", "title", "status", "created_at", "updated_at"],
-    "chunk": ["id", "type", "plan", "title", "status", "created_at", "updated_at"],
-    "task": ["id", "type", "plan", "chunk", "title", "status", "created_at", "updated_at"],
-}
-
-
-@dataclass
-class Artifact:
-    file_path: Path
-    body: str
-    metadata: dict[str, Any]
-
-
-def _write_file(path: Path, content: str, force: bool) -> bool:
-    if path.exists() and not force:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-    return True
-
-
-def _update_gitignore(root: Path) -> bool:
-    gitignore = root / ".gitignore"
-    existing = []
-    if gitignore.exists():
-        existing = gitignore.read_text(encoding="utf-8").splitlines()
-
-    changed = False
-    lines = existing.copy()
-    for entry in GITIGNORE_LINES:
-        if entry not in lines:
-            lines.append(entry)
-            changed = True
-
-    if not changed:
-        return False
-
-    gitignore.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
-    return True
-
-
-def _now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower())
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    return slug or "item"
-
-
-def _parse_scalar(raw: str) -> Any:
-    value = raw.strip()
-    if value in {"null", "~"}:
-        return None
-    if value == "true":
-        return True
-    if value == "false":
-        return False
-    if value.startswith('"') and value.endswith('"'):
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            return value[1:-1]
-    if value.startswith("[") and value.endswith("]"):
-        inner = value[1:-1].strip()
-        if not inner:
-            return []
-        return [_parse_scalar(part.strip()) for part in inner.split(",")]
-    if re.fullmatch(r"-?\d+", value):
-        return int(value)
-    if re.fullmatch(r"-?\d+\.\d+", value):
-        return float(value)
-    return value
-
-
-def _parse_simple_yaml(text: str) -> dict[str, Any]:
-    lines = text.splitlines()
-    i = 0
-    result: dict[str, Any] = {}
-
-    while i < len(lines):
-        line = lines[i]
-        if not line.strip() or line.lstrip().startswith("#"):
-            i += 1
-            continue
-
-        if line.startswith("  "):
-            raise ValueError(f"unexpected indentation near: {line}")
-
-        if ":" not in line:
-            raise ValueError(f"invalid yaml line: {line}")
-
-        key, remainder = line.split(":", 1)
-        key = key.strip()
-        remainder = remainder.strip()
-
-        if remainder:
-            result[key] = _parse_scalar(remainder)
-            i += 1
-            continue
-
-        j = i + 1
-        list_items: list[Any] = []
-        nested_lines: list[str] = []
-
-        while j < len(lines):
-            child = lines[j]
-            if not child.strip():
-                j += 1
-                continue
-            if not child.startswith("  "):
-                break
-
-            if child.startswith("  - "):
-                list_items.append(_parse_scalar(child[4:].strip()))
-            else:
-                nested_lines.append(child[2:])
-            j += 1
-
-        if list_items and nested_lines:
-            raise ValueError(f"mixed nested yaml not supported for key: {key}")
-
-        if list_items:
-            result[key] = list_items
-        elif nested_lines:
-            result[key] = _parse_simple_yaml("\n".join(nested_lines))
-        else:
-            result[key] = ""
-
-        i = j
-
-    return result
-
-
-def _format_scalar(value: Any) -> str:
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    return json.dumps(str(value))
-
-
-def _dump_simple_yaml_lines(data: Any, indent: int = 0) -> list[str]:
-    pad = " " * indent
-
-    if isinstance(data, dict):
-        out: list[str] = []
-        for key, value in data.items():
-            if isinstance(value, dict):
-                if not value:
-                    out.append(f"{pad}{key}: {{}}")
-                    continue
-                out.append(f"{pad}{key}:")
-                out.extend(_dump_simple_yaml_lines(value, indent + 2))
-            elif isinstance(value, list):
-                if not value:
-                    out.append(f"{pad}{key}: []")
-                    continue
-                out.append(f"{pad}{key}:")
-                out.extend(_dump_simple_yaml_lines(value, indent + 2))
-            else:
-                out.append(f"{pad}{key}: {_format_scalar(value)}")
-        return out
-
-    if isinstance(data, list):
-        out = []
-        for item in data:
-            if isinstance(item, (dict, list)):
-                out.append(f"{pad}-")
-                out.extend(_dump_simple_yaml_lines(item, indent + 2))
-            else:
-                out.append(f"{pad}- {_format_scalar(item)}")
-        return out
-
-    return [f"{pad}{_format_scalar(data)}"]
-
-
-def _dump_simple_yaml(data: dict[str, Any]) -> str:
-    return "\n".join(_dump_simple_yaml_lines(data)) + "\n"
-
-
-def _split_frontmatter(raw: str) -> tuple[str | None, str]:
-    if not raw.startswith("---\n"):
-        return None, raw
-    remainder = raw[4:]
-    marker = "\n---\n"
-    idx = remainder.find(marker)
-    if idx < 0:
-        return None, raw
-    frontmatter = remainder[:idx]
-    body = remainder[idx + len(marker) :]
-    return frontmatter, body
-
-
-def _parse_artifact(path: Path) -> Artifact:
-    raw = path.read_text(encoding="utf-8")
-    frontmatter_text, body = _split_frontmatter(raw)
-    if frontmatter_text is None:
-        raise ValueError(f"missing or invalid frontmatter in {path}")
-
-    metadata = _parse_simple_yaml(frontmatter_text)
-    if not isinstance(metadata, dict):
-        raise ValueError(f"frontmatter is not a map in {path}")
-
-    return Artifact(file_path=path, body=body, metadata=metadata)
-
-
-def _is_workspace_root(root: Path) -> bool:
-    return (
-        (root / ".onward.config.yaml").exists()
-        and (root / ".onward").exists()
-        and (root / ".onward/plans").exists()
-    )
-
-
-def _require_workspace(root: Path) -> None:
-    if _is_workspace_root(root):
-        return
-    raise ValueError(
-        f"not an Onward workspace: {root}. Run `onward init` here (or pass --root <workspace>)"
-    )
-
-
-def _format_artifact(metadata: dict[str, Any], body: str) -> str:
-    frontmatter = _dump_simple_yaml(metadata).strip()
-    return f"---\n{frontmatter}\n---\n\n{body.strip()}\n"
-
-
-def _write_artifact(artifact: Artifact) -> None:
-    artifact.file_path.write_text(_format_artifact(artifact.metadata, artifact.body), encoding="utf-8")
-
-
-def _artifact_glob(root: Path) -> list[Path]:
-    base = root / ".onward/plans"
-    if not base.exists():
-        return []
-    results: list[Path] = []
-    for path in sorted(base.glob("**/*.md")):
-        if ".archive" in path.relative_to(base).parts:
-            continue
-        results.append(path)
-    return results
-
-
-def _collect_artifacts(root: Path) -> list[Artifact]:
-    artifacts: list[Artifact] = []
-    for path in _artifact_glob(root):
-        artifacts.append(_parse_artifact(path))
-    return artifacts
-
-
-def _next_id(root: Path, prefix: str) -> str:
-    ids: set[int] = set()
-    regex = re.compile(rf"^{re.escape(prefix)}-(\d{{3}})$")
-
-    for artifact in _collect_artifacts(root):
-        candidate = str(artifact.metadata.get("id", ""))
-        match = regex.match(candidate)
-        if match:
-            ids.add(int(match.group(1)))
-
-    next_num = 1
-    while next_num in ids:
-        next_num += 1
-    return f"{prefix}-{next_num:03d}"
-
-
-def _load_template(root: Path, artifact_type: str) -> str:
-    return (root / f".onward/templates/{artifact_type}.md").read_text(encoding="utf-8")
-
-
-def _load_prompt(root: Path, prompt_name: str) -> str:
-    return (root / f".onward/prompts/{prompt_name}").read_text(encoding="utf-8")
-
-
-def _load_config(root: Path) -> dict[str, Any]:
-    config_path = root / ".onward.config.yaml"
-    if not config_path.exists():
-        return {}
-    parsed = _parse_simple_yaml(config_path.read_text(encoding="utf-8"))
-    if isinstance(parsed, dict):
-        return parsed
-    return {}
-
-
-def _config_model(config: dict[str, Any], key: str, fallback: str) -> str:
-    models = config.get("models", {})
-    if isinstance(models, dict):
-        value = str(models.get(key, "")).strip()
-        if value:
-            return value
-    return fallback
-
-
-def _markdown_section(body: str, heading: str) -> str:
-    target = heading.strip().lower()
-    lines = body.splitlines()
-    start = -1
-    for i, line in enumerate(lines):
-        match = re.match(r"^#{1,6}\s+(.*)$", line.strip())
-        if not match:
-            continue
-        if match.group(1).strip().lower() == target:
-            start = i + 1
-            break
-    if start < 0:
-        return ""
-    end = len(lines)
-    for i in range(start, len(lines)):
-        if re.match(r"^#{1,6}\s+", lines[i].strip()):
-            end = i
-            break
-    return "\n".join(lines[start:end]).strip()
-
-
-def _extract_markdown_list_items(section: str) -> list[str]:
-    items: list[str] = []
-    for line in section.splitlines():
-        match = re.match(r"^\s*(?:-|\d+\.)\s+(.+?)\s*$", line)
-        if match:
-            value = match.group(1).strip()
-            if value:
-                items.append(value)
-    return items
-
-
-def _heuristic_split_plan_payload(artifact: Artifact, default_model: str) -> dict[str, Any]:
-    strategy_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Chunking strategy"))
-    goal_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Goals"))
-    seeds = strategy_items or goal_items
-    if not seeds:
-        seeds = [f"Implement {artifact.metadata.get('title', 'plan scope')}"]
-    chunks: list[dict[str, Any]] = []
-    for seed in seeds:
-        chunks.append(
-            {
-                "title": seed[:120].strip(),
-                "description": seed.strip(),
-                "priority": "medium",
-                "model": default_model,
-            }
-        )
-    return {"chunks": chunks}
-
-
-def _heuristic_split_chunk_payload(artifact: Artifact, default_model: str) -> dict[str, Any]:
-    scope_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Scope"))
-    completion_items = _extract_markdown_list_items(_markdown_section(artifact.body, "Completion criteria"))
-    seeds = scope_items or completion_items
-    if not seeds:
-        seeds = [f"Implement {artifact.metadata.get('title', 'chunk scope')}"]
-    tasks: list[dict[str, Any]] = []
-    for seed in seeds:
-        tasks.append(
-            {
-                "title": seed[:120].strip(),
-                "description": seed.strip(),
-                "acceptance": [seed.strip()],
-                "model": default_model,
-                "human": False,
-            }
-        )
-    return {"tasks": tasks}
-
-
-def _run_split_model(
-    artifact: Artifact,
-    prompt_name: str,
-    model: str,
-    default_task_model: str,
-) -> str:
-    # Temporary bridge until executor-backed model calls are wired in.
-    env_override = str(os.environ.get("TRAIN_SPLIT_RESPONSE", "")).strip()
-    if env_override:
-        return env_override
-    if prompt_name == "split-plan.md":
-        payload = _heuristic_split_plan_payload(artifact, model)
-    else:
-        payload = _heuristic_split_chunk_payload(artifact, default_task_model)
-    return json.dumps(payload, indent=2)
-
-
-def _parse_split_payload(raw: str, key: str) -> list[dict[str, Any]]:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid split JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("invalid split JSON: root must be an object")
-    items = payload.get(key)
-    if not isinstance(items, list) or not items:
-        raise ValueError(f"invalid split JSON: '{key}' must be a non-empty array")
-    out: list[dict[str, Any]] = []
-    for i, item in enumerate(items, start=1):
-        if not isinstance(item, dict):
-            raise ValueError(f"invalid split JSON: {key}[{i}] must be an object")
-        out.append(item)
-    return out
-
-
-def _clean_string(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
-
-
-def _normalize_priority(value: Any) -> str:
-    priority = _clean_string(value).lower()
-    return priority if priority in {"low", "medium", "high"} else "medium"
-
-
-def _normalize_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    return _clean_string(value).lower() in {"1", "true", "yes", "y"}
-
-
-def _normalize_acceptance(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    single = _clean_string(value)
-    return [single] if single else []
-
-
-def _normalize_chunk_candidates(items: list[dict[str, Any]], default_model: str) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for i, item in enumerate(items, start=1):
-        title = _clean_string(item.get("title"))
-        description = _clean_string(item.get("description"))
-        if not title:
-            raise ValueError(f"split validation failed: chunks[{i}].title is required")
-        if not description:
-            raise ValueError(f"split validation failed: chunks[{i}].description is required")
-        model = _clean_string(item.get("model")) or default_model
-        out.append(
-            {
-                "title": title,
-                "description": description,
-                "priority": _normalize_priority(item.get("priority")),
-                "model": model,
-            }
-        )
-    return out
-
-
-def _normalize_task_candidates(items: list[dict[str, Any]], default_model: str) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for i, item in enumerate(items, start=1):
-        title = _clean_string(item.get("title"))
-        description = _clean_string(item.get("description"))
-        acceptance = _normalize_acceptance(item.get("acceptance"))
-        if not title:
-            raise ValueError(f"split validation failed: tasks[{i}].title is required")
-        if not description:
-            raise ValueError(f"split validation failed: tasks[{i}].description is required")
-        if not acceptance:
-            raise ValueError(f"split validation failed: tasks[{i}].acceptance is required")
-        model = _clean_string(item.get("model")) or default_model
-        if not model:
-            raise ValueError(f"split validation failed: tasks[{i}].model is required")
-        out.append(
-            {
-                "title": title,
-                "description": description,
-                "acceptance": acceptance,
-                "model": model,
-                "human": _normalize_bool(item.get("human")),
-            }
-        )
-    return out
-
-
-def _next_ids(root: Path, prefix: str, count: int) -> list[str]:
-    ids: set[int] = set()
-    regex = re.compile(rf"^{re.escape(prefix)}-(\d{{3}})$")
-    for artifact in _collect_artifacts(root):
-        candidate = str(artifact.metadata.get("id", ""))
-        match = regex.match(candidate)
-        if match:
-            ids.add(int(match.group(1)))
-    next_num = 1
-    out: list[str] = []
-    while len(out) < count:
-        if next_num not in ids:
-            out.append(f"{prefix}-{next_num:03d}")
-            ids.add(next_num)
-        next_num += 1
-    return out
-
-
-def _prepare_chunk_writes(
-    root: Path,
-    plan_artifact: Artifact,
-    candidates: list[dict[str, Any]],
-) -> list[tuple[str, Path, str]]:
-    plan_id = str(plan_artifact.metadata.get("id"))
-    plan_dir = _find_plan_dir(root, plan_id)
-    chunk_ids = _next_ids(root, "CHUNK", len(candidates))
-    now = _now_iso()
-    writes: list[tuple[str, Path, str]] = []
-    for chunk_id, candidate in zip(chunk_ids, candidates):
-        target = plan_dir / "chunks" / f"{chunk_id}-{_slugify(candidate['title'])}.md"
-        metadata = {
-            "id": chunk_id,
-            "type": "chunk",
-            "plan": plan_id,
-            "project": _artifact_project(plan_artifact),
-            "title": candidate["title"],
-            "status": "open",
-            "description": candidate["description"],
-            "priority": candidate["priority"],
-            "model": candidate["model"],
-            "created_at": now,
-            "updated_at": now,
-        }
-        body = "\n".join(
-            [
-                "# Summary",
-                "",
-                candidate["description"],
-                "",
-                "# Scope",
-                "",
-                f"- {candidate['description']}",
-                "",
-                "# Out of scope",
-                "",
-                "- None specified.",
-                "",
-                "# Dependencies",
-                "",
-                "- None specified.",
-                "",
-                "# Expected files/systems involved",
-                "",
-                "- Determine during implementation.",
-                "",
-                "# Completion criteria",
-                "",
-                f"- {candidate['description']}",
-                "",
-                "# Notes",
-                "",
-                "",
-            ]
-        )
-        writes.append((chunk_id, target, _format_artifact(metadata, body)))
-    return writes
-
-
-def _prepare_task_writes(
-    root: Path,
-    chunk_artifact: Artifact,
-    candidates: list[dict[str, Any]],
-) -> list[tuple[str, Path, str]]:
-    plan_id = str(chunk_artifact.metadata.get("plan"))
-    chunk_id = str(chunk_artifact.metadata.get("id"))
-    plan_dir = _find_plan_dir(root, plan_id)
-    task_ids = _next_ids(root, "TASK", len(candidates))
-    now = _now_iso()
-    writes: list[tuple[str, Path, str]] = []
-    for task_id, candidate in zip(task_ids, candidates):
-        target = plan_dir / "tasks" / f"{task_id}-{_slugify(candidate['title'])}.md"
-        metadata = {
-            "id": task_id,
-            "type": "task",
-            "plan": plan_id,
-            "chunk": chunk_id,
-            "project": _artifact_project(chunk_artifact),
-            "title": candidate["title"],
-            "status": "open",
-            "description": candidate["description"],
-            "human": candidate["human"],
-            "model": candidate["model"],
-            "executor": "ralph",
-            "depends_on": [],
-            "blocked_by": [],
-            "files": [],
-            "acceptance": candidate["acceptance"],
-            "created_at": now,
-            "updated_at": now,
-        }
-        acceptance_lines = "\n".join(f"- {item}" for item in candidate["acceptance"])
-        body = "\n".join(
-            [
-                "# Context",
-                "",
-                candidate["description"],
-                "",
-                "# Scope",
-                "",
-                f"- {candidate['description']}",
-                "",
-                "# Out of scope",
-                "",
-                "- None specified.",
-                "",
-                "# Files to inspect",
-                "",
-                "- Determine during implementation.",
-                "",
-                "# Implementation notes",
-                "",
-                "- Keep the change scoped to this task.",
-                "",
-                "# Acceptance criteria",
-                "",
-                acceptance_lines,
-                "",
-                "# Handoff notes",
-                "",
-                "",
-            ]
-        )
-        writes.append((task_id, target, _format_artifact(metadata, body)))
-    return writes
-
-
-def _assert_writes_safe(root: Path, writes: list[tuple[str, Path, str]]) -> None:
-    seen: set[Path] = set()
-    for _artifact_id, path, _content in writes:
-        if path in seen:
-            raise ValueError(f"split write collision: duplicate output path {path.relative_to(root)}")
-        seen.add(path)
-        if path.exists():
-            raise ValueError(f"split write collision: target already exists {path.relative_to(root)}")
-
-
-MODEL_FAMILIES: dict[str, str] = {
-    "opus": "claude-opus-4-6",
-    "sonnet": "claude-sonnet-4-6",
-    "haiku": "claude-haiku-4",
-    "codex": "codex-5-3",
-    "gpt5": "gpt-5",
-}
-
-
-def _model_alias(model: str) -> str:
-    normalized = model.strip().lower().replace("_", "-")
-    if normalized.endswith("-latest"):
-        family = normalized[: -len("-latest")]
-        if family in MODEL_FAMILIES:
-            return MODEL_FAMILIES[family]
-    if normalized in MODEL_FAMILIES:
-        return MODEL_FAMILIES[normalized]
-    return model.strip()
-
-
-def _run_timestamp() -> str:
-    return _now_iso().replace(":", "-")
-
-
-def _hook_commands(config: dict[str, Any], key: str) -> list[str]:
-    hooks = config.get("hooks", {})
-    if not isinstance(hooks, dict):
-        return []
-    value = hooks.get(key)
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    scalar = str(value or "").strip()
-    return [scalar] if scalar else []
-
-
-def _hook_markdown_path(config: dict[str, Any], key: str) -> str:
-    hooks = config.get("hooks", {})
-    if not isinstance(hooks, dict):
-        return ""
-    value = hooks.get(key)
-    return str(value or "").strip()
-
-
-def _run_shell_hooks(root: Path, commands: list[str], phase: str) -> tuple[bool, str]:
-    if not commands:
-        return True, f"[{phase}]\n(no hooks)"
-
-    lines = [f"[{phase}]"]
-    for i, command in enumerate(commands, start=1):
-        lines.append(f"$ {command}")
-        try:
-            result = subprocess.run(
-                command,
-                cwd=root,
-                shell=True,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-        except Exception as exc:  # noqa: BLE001
-            lines.append(f"[error] {exc}")
-            return False, "\n".join(lines)
-        if result.stdout:
-            lines.append("[stdout]")
-            lines.append(result.stdout.rstrip())
-        if result.stderr:
-            lines.append("[stderr]")
-            lines.append(result.stderr.rstrip())
-        if result.returncode != 0:
-            lines.append(f"[error] exit code {result.returncode}")
-            return False, "\n".join(lines)
-    return True, "\n".join(lines)
-
-
-def _run_markdown_hook(
-    root: Path,
-    cmd: list[str],
-    hook_rel_path: str,
-    phase: str,
-    model: str,
-    task: Artifact,
-    run_id: str,
-) -> tuple[bool, str]:
-    if not hook_rel_path:
-        return True, f"[{phase}]\n(no hook)"
-
-    hook_path = root / hook_rel_path
-    if not hook_path.exists():
-        return False, f"[{phase}]\n[error] hook file not found: {hook_rel_path}"
-
-    payload = {
-        "type": "hook",
-        "phase": phase,
-        "run_id": run_id,
-        "model": model,
-        "hook_path": hook_rel_path,
-        "hook_body": hook_path.read_text(encoding="utf-8"),
-        "task": task.metadata,
-        "task_body": task.body,
-    }
-
-    lines = [f"[{phase}]", f"$ {' '.join(cmd)}"]
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=root,
-            input=json.dumps(payload, indent=2),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    except Exception as exc:  # noqa: BLE001
-        lines.append(f"[error] {exc}")
-        return False, "\n".join(lines)
-
-    if result.stdout:
-        lines.append("[stdout]")
-        lines.append(result.stdout.rstrip())
-    if result.stderr:
-        lines.append("[stderr]")
-        lines.append(result.stderr.rstrip())
-    if result.returncode != 0:
-        lines.append(f"[error] exit code {result.returncode}")
-        return False, "\n".join(lines)
-    return True, "\n".join(lines)
-
-
-def _load_ongoing(root: Path) -> dict[str, Any]:
-    path = root / ".onward/ongoing.json"
-    if not path.exists():
-        return {"version": 1, "updated_at": _now_iso(), "active_runs": []}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        payload = {"version": 1, "updated_at": _now_iso(), "active_runs": []}
-    if not isinstance(payload, dict):
-        payload = {"version": 1, "updated_at": _now_iso(), "active_runs": []}
-    if not isinstance(payload.get("active_runs"), list):
-        payload["active_runs"] = []
-    return payload
-
-
-def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
-    payload["updated_at"] = _now_iso()
-    path = root / ".onward/ongoing.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-
-def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
-    config = _load_config(root)
-    ralph = config.get("ralph", {})
-    if not isinstance(ralph, dict):
-        ralph = {}
-    command = _clean_string(ralph.get("command")) or "ralph"
-    command_args = ralph.get("args", [])
-    if not isinstance(command_args, list):
-        command_args = []
-    cmd = [command, *[str(item) for item in command_args]]
-
-    default_model = _config_model(config, "default", "opus-latest")
-    task_model = _clean_string(task.metadata.get("model")) or default_model
-    model = _model_alias(task_model)
-
-    task_id = str(task.metadata.get("id", ""))
-    run_id = f"RUN-{_run_timestamp()}-{task_id}"
-    run_dir = root / ".onward/runs"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    run_json = run_dir / f"{run_id}.json"
-    run_log = run_dir / f"{run_id}.log"
-
-    started_at = _now_iso()
-    run_record: dict[str, Any] = {
-        "id": run_id,
-        "type": "run",
-        "target": task_id,
-        "plan": task.metadata.get("plan"),
-        "chunk": task.metadata.get("chunk"),
-        "status": "running",
-        "model": model,
-        "executor": "ralph",
-        "started_at": started_at,
-        "finished_at": None,
-        "log_path": str(run_log.relative_to(root)),
-        "error": "",
-    }
-    run_json.write_text(_dump_simple_yaml(run_record), encoding="utf-8")
-
-    ongoing = _load_ongoing(root)
-    active_runs = list(ongoing.get("active_runs", []))
-    active_runs.append(
-        {
-            "id": run_id,
-            "target": task_id,
-            "status": "running",
-            "model": model,
-            "log_path": str(run_log.relative_to(root)),
-            "started_at": started_at,
-        }
-    )
-    ongoing["active_runs"] = active_runs
-    _write_ongoing(root, ongoing)
-
-    task_id = str(task.metadata.get("id", ""))
-    notes = _read_notes(root, task_id)
-    payload: dict[str, Any] = {
-        "type": "task",
-        "run_id": run_id,
-        "task": task.metadata,
-        "body": task.body,
-        "notes": notes if notes.strip() else None,
-        "notes_hint": (
-            f"To add a note to this task, run: onward note {task_id} \"your note\". "
-            f"To read existing notes: onward note {task_id}"
-        ),
-    }
-    log_sections: list[str] = [f"$ {' '.join(cmd)}"]
-    error = ""
-    ok = False
-    pre_shell = _hook_commands(config, "pre_task_shell")
-    post_shell = _hook_commands(config, "post_task_shell")
-    pre_md = _hook_markdown_path(config, "pre_task_markdown")
-    post_md = _hook_markdown_path(config, "post_task_markdown")
-
-    pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell")
-    log_sections.append(pre_shell_log)
-    if not pre_shell_ok:
-        error = "pre_task_shell hook failed"
-    else:
-        pre_md_ok, pre_md_log = _run_markdown_hook(root, cmd, pre_md, "pre_task_markdown", model, task, run_id)
-        log_sections.append(pre_md_log)
-        if not pre_md_ok:
-            error = "pre_task_markdown hook failed"
-
-    if not error:
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=root,
-                input=json.dumps(payload, indent=2),
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            if result.stdout:
-                log_sections.append("[task stdout]\n" + result.stdout.rstrip())
-            if result.stderr:
-                log_sections.append("[task stderr]\n" + result.stderr.rstrip())
-            ok = result.returncode == 0
-            if not ok:
-                error = f"executor exited with code {result.returncode}"
-        except FileNotFoundError:
-            error = f"executor command not found: {command}"
-        except Exception as exc:  # noqa: BLE001
-            error = str(exc)
-
-    if ok and not error:
-        post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell")
-        log_sections.append(post_shell_log)
-        if not post_shell_ok:
-            ok = False
-            error = "post_task_shell hook failed"
-    if ok and not error:
-        post_md_ok, post_md_log = _run_markdown_hook(root, cmd, post_md, "post_task_markdown", model, task, run_id)
-        log_sections.append(post_md_log)
-        if not post_md_ok:
-            ok = False
-            error = "post_task_markdown hook failed"
-
-    if error:
-        log_sections.append(f"[error] {error}")
-    run_log.write_text("\n\n".join(section.rstrip() for section in log_sections if section).rstrip() + "\n", encoding="utf-8")
-
-    finished_at = _now_iso()
-    run_record["status"] = "completed" if ok else "failed"
-    run_record["finished_at"] = finished_at
-    run_record["error"] = error
-    run_json.write_text(_dump_simple_yaml(run_record), encoding="utf-8")
-
-    ongoing = _load_ongoing(root)
-    remaining = [
-        item
-        for item in ongoing.get("active_runs", [])
-        if str(item.get("id", "")) != run_id
-    ]
-    ongoing["active_runs"] = remaining
-    _write_ongoing(root, ongoing)
-    return ok, run_id
-
-
-def _update_artifact_status(root: Path, artifact: Artifact, status: str) -> None:
-    artifact.metadata["status"] = status
-    artifact.metadata["updated_at"] = _now_iso()
-    _write_artifact(artifact)
-    _regenerate_indexes(root)
-
-
-def _work_task(root: Path, task: Artifact) -> tuple[bool, str]:
-    if str(task.metadata.get("type", "")) != "task":
-        raise ValueError(f"{task.metadata.get('id')} is not a task")
-    current = str(task.metadata.get("status", ""))
-    if current == "completed":
-        return True, ""
-    if current not in {"open", "in_progress"}:
-        raise ValueError(f"cannot work task in state '{current}'")
-
-    _update_artifact_status(root, task, "in_progress")
-    ok, run_id = _execute_task_run(root, task)
-    refreshed = _must_find_by_id(root, str(task.metadata.get("id", "")))
-    _update_artifact_status(root, refreshed, "completed" if ok else "open")
-    return ok, run_id
-
-
-def _ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact], bool]:
-    artifacts = _collect_artifacts(root)
-    tasks = [
-        a
-        for a in artifacts
-        if str(a.metadata.get("type", "")) == "task"
-        and str(a.metadata.get("chunk", "")) == chunk_id
-        and str(a.metadata.get("status", "")) in {"open", "in_progress"}
-    ]
-    tasks.sort(key=lambda a: str(a.metadata.get("id", "")))
-    if not tasks:
-        return [], True
-
-    status_by_id = {
-        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
-        for a in artifacts
-    }
-    ready: list[Artifact] = []
-    blocked_exists = False
-    for task in tasks:
-        deps = _as_str_list(task.metadata.get("depends_on"))
-        unmet = [dep for dep in deps if status_by_id.get(dep) != "completed"]
-        if unmet:
-            blocked_exists = True
-            continue
-        ready.append(task)
-    return ready, not blocked_exists
-
-
-def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str]:
-    config = _load_config(root)
-    hook_rel_path = _hook_markdown_path(config, "post_chunk_markdown")
-    if not hook_rel_path:
-        return True, "(no hook)"
-
-    hook_path = root / hook_rel_path
-    if not hook_path.exists():
-        return False, f"hook file not found: {hook_rel_path}"
-
-    ralph = config.get("ralph", {})
-    if not isinstance(ralph, dict):
-        ralph = {}
-    command = _clean_string(ralph.get("command")) or "ralph"
-    command_args = ralph.get("args", [])
-    if not isinstance(command_args, list):
-        command_args = []
-    cmd = [command, *[str(item) for item in command_args]]
-    model = _model_alias(_config_model(config, "review_default", _config_model(config, "default", "opus-latest")))
-    payload = {
-        "type": "hook",
-        "phase": "post_chunk_markdown",
-        "model": model,
-        "hook_path": hook_rel_path,
-        "hook_body": hook_path.read_text(encoding="utf-8"),
-        "chunk": chunk.metadata,
-        "chunk_body": chunk.body,
-    }
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=root,
-            input=json.dumps(payload, indent=2),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        return False, f"executor command not found: {command}"
-    except Exception as exc:  # noqa: BLE001
-        return False, str(exc)
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        return False, stderr or f"exit code {result.returncode}"
-    return True, ""
-
-
-def _execute_plan_review(
-    root: Path,
-    plan: Artifact,
-    model: str,
-    label: str,
-    prompt: str,
-) -> tuple[bool, Path]:
-    config = _load_config(root)
-    ralph = config.get("ralph", {})
-    if not isinstance(ralph, dict):
-        ralph = {}
-    command = _clean_string(ralph.get("command")) or "ralph"
-    command_args = ralph.get("args", [])
-    if not isinstance(command_args, list):
-        command_args = []
-    cmd = [command, *[str(item) for item in command_args]]
-
-    plan_id = str(plan.metadata.get("id", ""))
-    timestamp = _run_timestamp()
-
-    review_dir = root / ".onward/reviews"
-    review_dir.mkdir(parents=True, exist_ok=True)
-    review_path = review_dir / f"{plan_id}-{timestamp}-{label}.md"
-
-    prompt_context = "\n".join([
-        prompt.strip(),
-        "",
-        "---",
-        "",
-        "Plan metadata:",
-        _dump_simple_yaml(plan.metadata).rstrip(),
-        "",
-        "Plan body:",
-        plan.body.strip(),
-    ])
-
-    payload = {
-        "type": "review",
-        "model": model,
-        "plan_id": plan_id,
-        "prompt": prompt_context,
-        "plan_metadata": plan.metadata,
-        "plan_body": plan.body,
-    }
-
-    env_override = str(os.environ.get("TRAIN_REVIEW_RESPONSE", "")).strip()
-    if env_override:
-        review_path.write_text(env_override, encoding="utf-8")
-        return True, review_path
-
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=root,
-            input=json.dumps(payload, indent=2),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        print(f"Error: executor command not found: {command}")
-        return False, review_path
-    except Exception as exc:  # noqa: BLE001
-        print(f"Error: {exc}")
-        return False, review_path
-
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        print(f"Error: review failed for {label} ({model}): {stderr or f'exit code {result.returncode}'}")
-        return False, review_path
-
-    output = (result.stdout or "").strip()
-    if not output:
-        output = f"## Review: {plan.metadata.get('title', plan_id)}\n\n### Overall Assessment: No output from reviewer\n"
-
-    review_path.write_text(output + "\n", encoding="utf-8")
-    return True, review_path
-
-
-def cmd_note(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
-    artifact_id = str(artifact.metadata.get("id", ""))
-
-    message = getattr(args, "message", None)
-    if message:
-        path = _append_note(root, artifact, message)
-        print(f"Note added to {artifact_id} at {path.relative_to(root)}")
-        return 0
-
-    notes = _read_notes(root, artifact_id)
-    if not notes.strip():
-        print(f"No notes for {artifact_id}.")
-        return 0
-
-    print(f"Notes for {artifact_id}:\n")
-    print(notes.rstrip())
-    return 0
-
-
-def cmd_review_plan(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-    _require_workspace(root)
-    plan = _must_find_by_id(root, args.plan_id)
-    plan_type = str(plan.metadata.get("type", ""))
-    if plan_type != "plan":
-        raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
-
-    config = _load_config(root)
-    default_model = _config_model(config, "default", "opus-latest")
-    review_model = _config_model(config, "review_default", default_model)
-
-    review_cfg = config.get("review", {})
-    if not isinstance(review_cfg, dict):
-        review_cfg = {}
-    double = review_cfg.get("double_review", True)
-    if isinstance(double, str):
-        double = double.strip().lower() in {"1", "true", "yes", "y"}
-
-    models: list[tuple[str, str]] = []
-    models.append((_model_alias(review_model), "reviewer-1"))
-    if double:
-        models.append((_model_alias(default_model), "reviewer-2"))
-
-    prompt_path = root / ".onward/prompts/review-plan.md"
-    if prompt_path.exists():
-        prompt = prompt_path.read_text(encoding="utf-8")
-    else:
-        prompt = "Review this plan for gaps, security issues, missing requirements, and deployment risks."
-
-    plan_id = str(plan.metadata.get("id", ""))
-    review_paths: list[Path] = []
-
-    for model, label in models:
-        print(f"Running review: {label} (model={model})...")
-        ok, review_path = _execute_plan_review(root, plan, model, label, prompt)
-        if ok:
-            review_paths.append(review_path)
-            print(f"  -> {review_path.relative_to(root)}")
-        else:
-            print(f"  -> Review {label} failed.")
-
-    if not review_paths:
-        print(f"\nNo reviews completed for {plan_id}.")
-        return 1
-
-    print()
-    print(f"Review complete for {plan_id}. {len(review_paths)} review(s) written:")
-    for rp in review_paths:
-        print(f"  {rp.relative_to(root)}")
-    print()
-    print("Recommendation: read through the review(s) and judiciously incorporate")
-    print("findings into the plan before splitting or starting work.")
-    return 0
-
-
-def cmd_work(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
-    artifact_type = str(artifact.metadata.get("type", ""))
-    if artifact_type == "task":
-        ok, run_id = _work_task(root, artifact)
-        if run_id:
-            print(f"Run {run_id}: {'completed' if ok else 'failed'}")
-        else:
-            print(f"{args.id} already completed")
-        return 0 if ok else 1
-    if artifact_type != "chunk":
-        raise ValueError(f"{args.id} is not a task or chunk")
-
-    chunk = artifact
-    chunk_id = str(chunk.metadata.get("id", ""))
-    if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        _update_artifact_status(root, chunk, "in_progress")
-
-    while True:
-        ready_tasks, all_resolved = _ordered_ready_chunk_tasks(root, chunk_id)
-        if not ready_tasks:
-            if not all_resolved:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
-                return 1
-            break
-        next_task = ready_tasks[0]
-        ok, run_id = _work_task(root, next_task)
-        print(f"Run {run_id}: {'completed' if ok else 'failed'}")
-        if not ok:
-            print(f"Stopping chunk work for {chunk_id} after task failure")
-            return 1
-
-    refreshed_chunk = _must_find_by_id(root, chunk_id)
-    hook_ok, hook_error = _run_chunk_post_markdown_hook(root, refreshed_chunk)
-    if not hook_ok:
-        print(f"Chunk {chunk_id} post hook failed: {hook_error}")
-        return 1
-    if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        _update_artifact_status(root, refreshed_chunk, "completed")
-    print(f"Chunk {chunk_id} completed")
-    return 0
-
-
-def cmd_split(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
-    artifact_type = str(artifact.metadata.get("type", ""))
-    if artifact_type not in {"plan", "chunk"}:
-        raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
-
-    config = _load_config(root)
-    default_model = _config_model(config, "default", "opus-latest")
-    split_model = _clean_string(args.model) or _config_model(config, "split_default", "") or default_model
-    task_default_model = _config_model(config, "task_default", "sonnet-latest")
-
-    prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
-    prompt = _load_prompt(root, prompt_name)
-    prompt_context = "\n".join(
-        [
-            prompt.strip(),
-            "",
-            "Source artifact metadata (YAML-like):",
-            _dump_simple_yaml(artifact.metadata).rstrip(),
-            "",
-            "Source artifact body:",
-            artifact.body.strip(),
-        ]
-    )
-    raw = _run_split_model(artifact, prompt_name, split_model, task_default_model)
-
-    if artifact_type == "plan":
-        parsed = _parse_split_payload(raw, "chunks")
-        normalized = _normalize_chunk_candidates(parsed, default_model)
-        writes = _prepare_chunk_writes(root, artifact, normalized)
-    else:
-        parsed = _parse_split_payload(raw, "tasks")
-        normalized = _normalize_task_candidates(parsed, task_default_model)
-        writes = _prepare_task_writes(root, artifact, normalized)
-
-    _assert_writes_safe(root, writes)
-
-    if args.dry_run:
-        print(f"Split dry-run for {args.id} using model={split_model}")
-        print(f"Prompt: .onward/prompts/{prompt_name}")
-        print(f"Prompt context bytes: {len(prompt_context.encode('utf-8'))}")
-        for artifact_id, path, _content in writes:
-            print(f"PLAN: create {artifact_id}\t{path.relative_to(root)}")
-        return 0
-
-    for _artifact_id, path, content in writes:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    _regenerate_indexes(root)
-
-    for artifact_id, path, _content in writes:
-        print(f"Created {artifact_id} at {path.relative_to(root)}")
-    return 0
-
-
-def _find_by_id(root: Path, artifact_id: str) -> Artifact | None:
-    target = artifact_id.strip()
-    for artifact in _collect_artifacts(root):
-        if str(artifact.metadata.get("id", "")) == target:
-            return artifact
-    return None
-
-
-def _must_find_by_id(root: Path, artifact_id: str) -> Artifact:
-    artifact = _find_by_id(root, artifact_id)
-    if not artifact:
-        raise ValueError(f"artifact not found: {artifact_id}")
-    return artifact
-
-
-def _find_plan_dir(root: Path, plan_id: str) -> Path:
-    base = root / ".onward/plans"
-    pattern = f"{plan_id}-*"
-    matches = sorted(base.glob(pattern))
-    if not matches:
-        raise ValueError(f"plan not found: {plan_id}")
-    return matches[0]
-
-
-def _notes_path(root: Path, artifact_id: str) -> Path:
-    return root / ".onward/notes" / f"{artifact_id}.md"
-
-
-def _read_notes(root: Path, artifact_id: str) -> str:
-    path = _notes_path(root, artifact_id)
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8")
-
-
-def _append_note(root: Path, artifact: Artifact, message: str) -> Path:
-    artifact_id = str(artifact.metadata.get("id", ""))
-    path = _notes_path(root, artifact_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    timestamp = _now_iso()
-    entry = f"## {timestamp}\n\n{message.strip()}\n\n"
-
-    if path.exists():
-        existing = path.read_text(encoding="utf-8")
-        path.write_text(existing + entry, encoding="utf-8")
-    else:
-        path.write_text(entry, encoding="utf-8")
-
-    if not artifact.metadata.get("has_notes"):
-        artifact.metadata["has_notes"] = True
-        artifact.metadata["updated_at"] = _now_iso()
-        _write_artifact(artifact)
-        _regenerate_indexes(root)
-
-    return path
-
-
-def _validate_artifact(artifact: Artifact) -> list[str]:
-    issues: list[str] = []
-    artifact_type = str(artifact.metadata.get("type", ""))
-    fields = REQUIRED_FIELDS.get(artifact_type)
-    if not fields:
-        issues.append(f"{artifact.file_path}: unknown type '{artifact_type}'")
-        return issues
-
-    for field in fields:
-        if artifact.metadata.get(field) in (None, ""):
-            issues.append(f"{artifact.file_path}: missing required field '{field}'")
-
-    status = str(artifact.metadata.get("status", ""))
-    if status and status not in {"open", "in_progress", "completed", "canceled"}:
-        issues.append(f"{artifact.file_path}: invalid status '{status}'")
-
-    return issues
-
-
-def _transition_status(current: str, target: str) -> str:
-    transitions = {
-        "start": {"open": "in_progress"},
-        "complete": {"open": "completed", "in_progress": "completed"},
-        "cancel": {"open": "canceled", "in_progress": "canceled"},
-    }
-    if target not in transitions:
-        raise ValueError(f"unknown transition target: {target}")
-    if current not in transitions[target]:
-        raise ValueError(f"cannot {target} artifact in state '{current}'")
-    return transitions[target][current]
-
-
-def _as_str_list(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    raw = str(value).strip()
-    if not raw:
-        return []
-    return [raw]
-
-
-def _artifact_project(artifact: Artifact) -> str:
-    return str(artifact.metadata.get("project", "")).strip()
-
-
-def _is_human_task(artifact: Artifact) -> bool:
-    if str(artifact.metadata.get("type", "")) != "task":
-        return False
-    value = artifact.metadata.get("human", False)
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in {"1", "true", "yes", "y"}
-
-
-def _blocking_ids(artifacts: list[Artifact]) -> set[str]:
-    blockers: set[str] = set()
-    for artifact in artifacts:
-        status = str(artifact.metadata.get("status", ""))
-        if status not in {"open", "in_progress"}:
-            continue
-        blockers.update(_as_str_list(artifact.metadata.get("depends_on")))
-        blockers.update(_as_str_list(artifact.metadata.get("blocked_by")))
-    return {item for item in blockers if item}
-
-
-def _select_next_artifact(artifacts: list[Artifact], project: str | None = None) -> Artifact | None:
-    status_by_id = {
-        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
-        for a in artifacts
-        if a.metadata.get("id")
-    }
-
-    ready_tasks: list[tuple[tuple[int, int, str], Artifact]] = []
-    open_chunks: list[Artifact] = []
-    open_plans: list[Artifact] = []
-
-    for artifact in artifacts:
-        artifact_type = str(artifact.metadata.get("type", ""))
-        status = str(artifact.metadata.get("status", ""))
-
-        if project and _artifact_project(artifact) != project:
-            continue
-
-        if artifact_type == "task" and status == "open":
-            depends_on = _as_str_list(artifact.metadata.get("depends_on"))
-            blocked_by = _as_str_list(artifact.metadata.get("blocked_by"))
-            if blocked_by:
-                continue
-            unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
-            if unmet:
-                continue
-
-            chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
-            plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
-            rank = (
-                0 if chunk_status == "in_progress" else 1,
-                0 if plan_status == "in_progress" else 1,
-                str(artifact.metadata.get("id", "")),
-            )
-            ready_tasks.append((rank, artifact))
-
-        elif artifact_type == "chunk" and status == "open":
-            open_chunks.append(artifact)
-        elif artifact_type == "plan" and status == "open":
-            open_plans.append(artifact)
-
-    if ready_tasks:
-        ready_tasks.sort(key=lambda item: item[0])
-        return ready_tasks[0][1]
-    if open_chunks:
-        open_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
-        return open_chunks[0]
-    if open_plans:
-        open_plans.sort(key=lambda a: str(a.metadata.get("id", "")))
-        return open_plans[0]
-    return None
-
-
-def _regenerate_indexes(root: Path) -> None:
-    index_path = root / ".onward/plans/index.yaml"
-    recent_path = root / ".onward/plans/recent.yaml"
-
-    plans: list[dict[str, Any]] = []
-    chunks: list[dict[str, Any]] = []
-    tasks: list[dict[str, Any]] = []
-
-    for artifact in _collect_artifacts(root):
-        m = artifact.metadata
-        row = {
-            "id": m.get("id"),
-            "title": m.get("title"),
-            "status": m.get("status"),
-            "path": str(artifact.file_path.relative_to(root)),
-        }
-
-        artifact_type = m.get("type")
-        if artifact_type == "plan":
-            plans.append(row)
-        elif artifact_type == "chunk":
-            row["plan"] = m.get("plan")
-            chunks.append(row)
-        elif artifact_type == "task":
-            row["plan"] = m.get("plan")
-            row["chunk"] = m.get("chunk")
-            tasks.append(row)
-
-    key_fn = lambda row: (str(row.get("id", "")), str(row.get("title", "")))
-    plans.sort(key=key_fn)
-    chunks.sort(key=key_fn)
-    tasks.sort(key=key_fn)
-
-    index_payload = {
-        "generated_at": _now_iso(),
-        "plans": plans,
-        "chunks": chunks,
-        "tasks": tasks,
-        "runs": [],
-    }
-    index_path.write_text(_dump_simple_yaml(index_payload), encoding="utf-8")
-
-    completed_rows = [
-        *[p for p in plans if p.get("status") == "completed"],
-        *[c for c in chunks if c.get("status") == "completed"],
-        *[t for t in tasks if t.get("status") == "completed"],
-    ]
-    recent_payload = {
-        "generated_at": _now_iso(),
-        "completed": completed_rows,
-    }
-    recent_path.write_text(_dump_simple_yaml(recent_payload), encoding="utf-8")
+from onward.artifacts import (
+    Artifact,
+    _append_note,
+    _artifact_glob,
+    _artifact_project,
+    _blocking_ids,
+    _collect_artifacts,
+    _find_by_id,
+    _find_plan_dir,
+    _format_artifact,
+    _is_human_task,
+    _must_find_by_id,
+    _next_id,
+    _parse_artifact,
+    _read_notes,
+    _regenerate_indexes,
+    _render_open_tree_lines,
+    _report_rows,
+    _select_next_artifact,
+    _transition_status,
+    _update_artifact_status,
+    _validate_artifact,
+    _write_artifact,
+)
+from onward.config import (
+    _config_model,
+    _load_config,
+    _load_prompt,
+    _load_template,
+    _model_alias,
+)
+from onward.execution import (
+    _execute_plan_review,
+    _load_ongoing,
+    _ordered_ready_chunk_tasks,
+    _run_chunk_post_markdown_hook,
+    _work_task,
+)
+from onward.scaffold import (
+    DEFAULT_DIRECTORIES,
+    DEFAULT_FILES,
+    GITIGNORE_LINES,
+    REQUIRED_PATHS,
+    _require_workspace,
+    _update_gitignore,
+    _write_file,
+)
+from onward.split import (
+    _assert_writes_safe,
+    _normalize_chunk_candidates,
+    _normalize_task_candidates,
+    _parse_split_payload,
+    _prepare_chunk_writes,
+    _prepare_task_writes,
+    _run_split_model,
+)
+from onward.util import (
+    _clean_string,
+    _colorize,
+    _dump_simple_yaml,
+    _now_iso,
+    _parse_simple_yaml,
+    _slugify,
+    _split_frontmatter,
+    _status_color,
+)
+
+
+# ---------------------------------------------------------------------------
+# Command handlers
+# ---------------------------------------------------------------------------
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -2122,6 +331,27 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_note(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+    artifact_id = str(artifact.metadata.get("id", ""))
+
+    message = getattr(args, "message", None)
+    if message:
+        path = _append_note(root, artifact, message)
+        print(f"Note added to {artifact_id} at {path.relative_to(root)}")
+        return 0
+
+    notes = _read_notes(root, artifact_id)
+    if not notes.strip():
+        print(f"No notes for {artifact_id}.")
+        return 0
+
+    print(f"Notes for {artifact_id}:\n")
+    print(notes.rstrip())
+    return 0
+
+
 def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     root = Path(args.root).resolve()
     artifact = _must_find_by_id(root, args.id)
@@ -2173,6 +403,162 @@ def cmd_archive(args: argparse.Namespace) -> int:
     plan_dir.rename(target)
     _regenerate_indexes(root)
     print(f"Archived {args.plan_id} -> {target.relative_to(root)}")
+    return 0
+
+
+def cmd_review_plan(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    _require_workspace(root)
+    plan = _must_find_by_id(root, args.plan_id)
+    plan_type = str(plan.metadata.get("type", ""))
+    if plan_type != "plan":
+        raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
+
+    config = _load_config(root)
+    default_model = _config_model(config, "default", "opus-latest")
+    review_model = _config_model(config, "review_default", default_model)
+
+    review_cfg = config.get("review", {})
+    if not isinstance(review_cfg, dict):
+        review_cfg = {}
+    double = review_cfg.get("double_review", True)
+    if isinstance(double, str):
+        double = double.strip().lower() in {"1", "true", "yes", "y"}
+
+    models: list[tuple[str, str]] = []
+    models.append((_model_alias(review_model), "reviewer-1"))
+    if double:
+        models.append((_model_alias(default_model), "reviewer-2"))
+
+    prompt_path = root / ".onward/prompts/review-plan.md"
+    if prompt_path.exists():
+        prompt = prompt_path.read_text(encoding="utf-8")
+    else:
+        prompt = "Review this plan for gaps, security issues, missing requirements, and deployment risks."
+
+    plan_id = str(plan.metadata.get("id", ""))
+    review_paths: list[Path] = []
+
+    for model, label in models:
+        print(f"Running review: {label} (model={model})...")
+        ok, review_path = _execute_plan_review(root, plan, model, label, prompt)
+        if ok:
+            review_paths.append(review_path)
+            print(f"  -> {review_path.relative_to(root)}")
+        else:
+            print(f"  -> Review {label} failed.")
+
+    if not review_paths:
+        print(f"\nNo reviews completed for {plan_id}.")
+        return 1
+
+    print()
+    print(f"Review complete for {plan_id}. {len(review_paths)} review(s) written:")
+    for rp in review_paths:
+        print(f"  {rp.relative_to(root)}")
+    print()
+    print("Recommendation: read through the review(s) and judiciously incorporate")
+    print("findings into the plan before splitting or starting work.")
+    return 0
+
+
+def cmd_work(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+    artifact_type = str(artifact.metadata.get("type", ""))
+    if artifact_type == "task":
+        ok, run_id = _work_task(root, artifact)
+        if run_id:
+            print(f"Run {run_id}: {'completed' if ok else 'failed'}")
+        else:
+            print(f"{args.id} already completed")
+        return 0 if ok else 1
+    if artifact_type != "chunk":
+        raise ValueError(f"{args.id} is not a task or chunk")
+
+    chunk = artifact
+    chunk_id = str(chunk.metadata.get("id", ""))
+    if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
+        _update_artifact_status(root, chunk, "in_progress")
+
+    while True:
+        ready_tasks, all_resolved = _ordered_ready_chunk_tasks(root, chunk_id)
+        if not ready_tasks:
+            if not all_resolved:
+                print(f"Chunk {chunk_id} has unresolved task dependencies")
+                return 1
+            break
+        next_task = ready_tasks[0]
+        ok, run_id = _work_task(root, next_task)
+        print(f"Run {run_id}: {'completed' if ok else 'failed'}")
+        if not ok:
+            print(f"Stopping chunk work for {chunk_id} after task failure")
+            return 1
+
+    refreshed_chunk = _must_find_by_id(root, chunk_id)
+    hook_ok, hook_error = _run_chunk_post_markdown_hook(root, refreshed_chunk)
+    if not hook_ok:
+        print(f"Chunk {chunk_id} post hook failed: {hook_error}")
+        return 1
+    if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
+        _update_artifact_status(root, refreshed_chunk, "completed")
+    print(f"Chunk {chunk_id} completed")
+    return 0
+
+
+def cmd_split(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+    artifact_type = str(artifact.metadata.get("type", ""))
+    if artifact_type not in {"plan", "chunk"}:
+        raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
+
+    config = _load_config(root)
+    default_model = _config_model(config, "default", "opus-latest")
+    split_model = _clean_string(args.model) or _config_model(config, "split_default", "") or default_model
+    task_default_model = _config_model(config, "task_default", "sonnet-latest")
+
+    prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
+    prompt = _load_prompt(root, prompt_name)
+    prompt_context = "\n".join(
+        [
+            prompt.strip(),
+            "",
+            "Source artifact metadata (YAML-like):",
+            _dump_simple_yaml(artifact.metadata).rstrip(),
+            "",
+            "Source artifact body:",
+            artifact.body.strip(),
+        ]
+    )
+    raw = _run_split_model(artifact, prompt_name, split_model, task_default_model)
+
+    if artifact_type == "plan":
+        parsed = _parse_split_payload(raw, "chunks")
+        normalized = _normalize_chunk_candidates(parsed, default_model)
+        writes = _prepare_chunk_writes(root, artifact, normalized)
+    else:
+        parsed = _parse_split_payload(raw, "tasks")
+        normalized = _normalize_task_candidates(parsed, task_default_model)
+        writes = _prepare_task_writes(root, artifact, normalized)
+
+    _assert_writes_safe(root, writes)
+
+    if args.dry_run:
+        print(f"Split dry-run for {args.id} using model={split_model}")
+        print(f"Prompt: .onward/prompts/{prompt_name}")
+        print(f"Prompt context bytes: {len(prompt_context.encode('utf-8'))}")
+        for artifact_id, path, _content in writes:
+            print(f"PLAN: create {artifact_id}\t{path.relative_to(root)}")
+        return 0
+
+    for _artifact_id, path, content in writes:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    _regenerate_indexes(root)
+
+    for artifact_id, path, _content in writes:
+        print(f"Created {artifact_id} at {path.relative_to(root)}")
     return 0
 
 
@@ -2264,90 +650,6 @@ def cmd_next(args: argparse.Namespace) -> int:
 
     print("No next artifact found")
     return 0
-
-
-def _colorize(text: str, color: str, enabled: bool) -> str:
-    if not enabled:
-        return text
-    colors = {
-        "red": "\033[31m",
-        "green": "\033[32m",
-        "yellow": "\033[33m",
-        "blue": "\033[34m",
-        "magenta": "\033[35m",
-        "cyan": "\033[36m",
-        "bold": "\033[1m",
-    }
-    reset = "\033[0m"
-    return f"{colors.get(color, '')}{text}{reset}" if color in colors else text
-
-
-def _status_color(status: str) -> str:
-    return {
-        "open": "yellow",
-        "in_progress": "blue",
-        "completed": "green",
-        "canceled": "magenta",
-    }.get(status, "cyan")
-
-
-def _report_rows(artifacts: list[Artifact], root: Path, status: str | None = None, project: str | None = None) -> list[str]:
-    rows: list[str] = []
-    for artifact in artifacts:
-        if status and str(artifact.metadata.get("status", "")) != status:
-            continue
-        if project and _artifact_project(artifact) != project:
-            continue
-        rows.append(
-            "\t".join(
-                [
-                    str(artifact.metadata.get("id", "")),
-                    str(artifact.metadata.get("type", "")),
-                    str(artifact.metadata.get("status", "")),
-                    str(artifact.metadata.get("title", "")),
-                    str(artifact.file_path.relative_to(root)),
-                ]
-            )
-        )
-    return sorted(rows)
-
-
-def _render_open_tree_lines(
-    artifacts: list[Artifact],
-    root: Path,
-    project: str | None = None,
-    color_enabled: bool = False,
-) -> list[str]:
-    plans = [
-        a
-        for a in artifacts
-        if str(a.metadata.get("type", "")) == "plan"
-        and str(a.metadata.get("status", "")) == "open"
-        and (not project or _artifact_project(a) == project)
-    ]
-    plans.sort(key=lambda a: str(a.metadata.get("id", "")))
-    if not plans:
-        return []
-
-    chunks = [a for a in artifacts if str(a.metadata.get("type", "")) == "chunk"]
-    tasks = [a for a in artifacts if str(a.metadata.get("type", "")) == "task"]
-    lines: list[str] = []
-    for plan in plans:
-        lines.append(f"{plan.metadata.get('id')} {plan.metadata.get('title')}")
-        plan_chunks = [c for c in chunks if str(c.metadata.get("plan", "")) == str(plan.metadata.get("id", ""))]
-        plan_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
-        for chunk in plan_chunks:
-            status = str(chunk.metadata.get("status", ""))
-            status_text = _colorize(status, _status_color(status), color_enabled)
-            lines.append(f"  |- {chunk.metadata.get('id')} [{status_text}] {chunk.metadata.get('title')}")
-            chunk_tasks = [t for t in tasks if str(t.metadata.get('chunk', '')) == str(chunk.metadata.get("id", ""))]
-            chunk_tasks.sort(key=lambda a: str(a.metadata.get("id", "")))
-            for task in chunk_tasks:
-                t_status = str(task.metadata.get("status", ""))
-                t_status_text = _colorize(t_status, _status_color(t_status), color_enabled)
-                marker = "H" if _is_human_task(task) else "A"
-                lines.append(f"  |  |- {task.metadata.get('id')} [{t_status_text}] ({marker}) {task.metadata.get('title')}")
-    return lines
 
 
 def cmd_tree(args: argparse.Namespace) -> int:
@@ -2468,6 +770,11 @@ def cmd_report(args: argparse.Namespace) -> int:
     for line in tree_lines:
         print(line)
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Parser & entry point
+# ---------------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
