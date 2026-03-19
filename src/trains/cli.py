@@ -411,11 +411,20 @@ def _format_artifact(metadata: dict[str, Any], body: str) -> str:
     return f"---\n{frontmatter}\n---\n\n{body.strip()}\n"
 
 
+def _write_artifact(artifact: Artifact) -> None:
+    artifact.file_path.write_text(_format_artifact(artifact.metadata, artifact.body), encoding="utf-8")
+
+
 def _artifact_glob(root: Path) -> list[Path]:
     base = root / ".train/plans"
     if not base.exists():
         return []
-    return sorted(base.glob("**/*.md"))
+    results: list[Path] = []
+    for path in sorted(base.glob("**/*.md")):
+        if ".archive" in path.relative_to(base).parts:
+            continue
+        results.append(path)
+    return results
 
 
 def _collect_artifacts(root: Path) -> list[Artifact]:
@@ -453,6 +462,13 @@ def _find_by_id(root: Path, artifact_id: str) -> Artifact | None:
     return None
 
 
+def _must_find_by_id(root: Path, artifact_id: str) -> Artifact:
+    artifact = _find_by_id(root, artifact_id)
+    if not artifact:
+        raise ValueError(f"artifact not found: {artifact_id}")
+    return artifact
+
+
 def _find_plan_dir(root: Path, plan_id: str) -> Path:
     base = root / ".train/plans"
     pattern = f"{plan_id}-*"
@@ -479,6 +495,19 @@ def _validate_artifact(artifact: Artifact) -> list[str]:
         issues.append(f"{artifact.file_path}: invalid status '{status}'")
 
     return issues
+
+
+def _transition_status(current: str, target: str) -> str:
+    transitions = {
+        "start": {"open": "in_progress"},
+        "complete": {"open": "completed", "in_progress": "completed"},
+        "cancel": {"open": "canceled", "in_progress": "canceled"},
+    }
+    if target not in transitions:
+        raise ValueError(f"unknown transition target: {target}")
+    if current not in transitions[target]:
+        raise ValueError(f"cannot {target} artifact in state '{current}'")
+    return transitions[target][current]
 
 
 def _regenerate_indexes(root: Path) -> None:
@@ -765,6 +794,109 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.id)
+
+    current = str(artifact.metadata.get("status", ""))
+    artifact.metadata["status"] = _transition_status(current, action)
+    artifact.metadata["updated_at"] = _now_iso()
+    _write_artifact(artifact)
+
+    _regenerate_indexes(root)
+    print(f"{artifact.metadata.get('id')} status: {current} -> {artifact.metadata.get('status')}")
+    return 0
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    return _cmd_set_status(args, "start")
+
+
+def cmd_complete(args: argparse.Namespace) -> int:
+    return _cmd_set_status(args, "complete")
+
+
+def cmd_cancel(args: argparse.Namespace) -> int:
+    return _cmd_set_status(args, "cancel")
+
+
+def cmd_archive(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = _must_find_by_id(root, args.plan_id)
+    if artifact.metadata.get("type") != "plan":
+        raise ValueError(f"{args.plan_id} is not a plan")
+
+    plan_dir = _find_plan_dir(root, str(artifact.metadata["id"]))
+    archive_dir = root / ".train/plans/.archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    target = archive_dir / plan_dir.name
+
+    if target.exists():
+        raise ValueError(f"archive target already exists: {target.relative_to(root)}")
+
+    plan_dir.rename(target)
+    _regenerate_indexes(root)
+    print(f"Archived {args.plan_id} -> {target.relative_to(root)}")
+    return 0
+
+
+def cmd_progress(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    rows: list[str] = []
+
+    for artifact in _collect_artifacts(root):
+        status = str(artifact.metadata.get("status", ""))
+        if status != "in_progress":
+            continue
+        rows.append(
+            "\t".join(
+                [
+                    str(artifact.metadata.get("id", "")),
+                    str(artifact.metadata.get("type", "")),
+                    status,
+                    str(artifact.metadata.get("title", "")),
+                    str(artifact.file_path.relative_to(root)),
+                ]
+            )
+        )
+
+    if not rows:
+        print("No in-progress artifacts")
+        return 0
+
+    for row in sorted(rows):
+        print(row)
+    return 0
+
+
+def cmd_recent(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    completed: list[tuple[str, str, str, str, str]] = []
+
+    for artifact in _collect_artifacts(root):
+        status = str(artifact.metadata.get("status", ""))
+        if status != "completed":
+            continue
+        completed.append(
+            (
+                str(artifact.metadata.get("updated_at", "")),
+                str(artifact.metadata.get("id", "")),
+                str(artifact.metadata.get("type", "")),
+                str(artifact.metadata.get("title", "")),
+                str(artifact.file_path.relative_to(root)),
+            )
+        )
+
+    if not completed:
+        print("No recently completed artifacts")
+        return 0
+
+    completed.sort(reverse=True)
+    for updated_at, artifact_id, artifact_type, title, path in completed[: args.limit]:
+        print(f"{updated_at}\t{artifact_id}\t{artifact_type}\tcompleted\t{title}\t{path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="train", description="Trains CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -818,6 +950,35 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser.add_argument("id", help="Artifact ID (PLAN-###, CHUNK-###, TASK-###)")
     show_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     show_parser.set_defaults(func=cmd_show)
+
+    start_parser = subparsers.add_parser("start", help="Move artifact to in_progress")
+    start_parser.add_argument("id", help="Artifact ID")
+    start_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    start_parser.set_defaults(func=cmd_start)
+
+    complete_parser = subparsers.add_parser("complete", help="Move artifact to completed")
+    complete_parser.add_argument("id", help="Artifact ID")
+    complete_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    complete_parser.set_defaults(func=cmd_complete)
+
+    cancel_parser = subparsers.add_parser("cancel", help="Move artifact to canceled")
+    cancel_parser.add_argument("id", help="Artifact ID")
+    cancel_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    cancel_parser.set_defaults(func=cmd_cancel)
+
+    archive_parser = subparsers.add_parser("archive", help="Archive a plan")
+    archive_parser.add_argument("plan_id", help="Plan ID (PLAN-###)")
+    archive_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    archive_parser.set_defaults(func=cmd_archive)
+
+    progress_parser = subparsers.add_parser("progress", help="Show in-progress artifacts")
+    progress_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    progress_parser.set_defaults(func=cmd_progress)
+
+    recent_parser = subparsers.add_parser("recent", help="Show recently completed artifacts")
+    recent_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    recent_parser.add_argument("--limit", type=int, default=10, help="Max items to show")
+    recent_parser.set_defaults(func=cmd_recent)
 
     return parser
 

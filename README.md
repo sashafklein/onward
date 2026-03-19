@@ -2,7 +2,7 @@
 
 Trains is a git-native CLI for planning and driving AI-enabled development work with markdown-first artifacts.
 
-Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list`, `show`) + dogfood workspace tooling + automated tests.
+Current state: scaffold + core artifact commands (`init`, `doctor`, `new`, `list`, `show`, `start`, `complete`, `cancel`, `progress`, `recent`, `archive`) + dogfood workspace tooling + automated tests.
 
 ## Quickstart
 

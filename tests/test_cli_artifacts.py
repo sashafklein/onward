@@ -86,3 +86,45 @@ def test_show_missing_id_returns_nonzero(tmp_path: Path, capsys):
 
     assert code == 1
     assert "Artifact not found: TASK-404" in out
+
+
+def test_status_transitions_progress_and_recent(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Implement"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["start", "--root", str(tmp_path), "TASK-001"]) == 0
+    progress_code = cli.main(["progress", "--root", str(tmp_path)])
+    progress_out = capsys.readouterr().out
+
+    assert progress_code == 0
+    assert "TASK-001" in progress_out
+    assert "in_progress" in progress_out
+
+    assert cli.main(["complete", "--root", str(tmp_path), "TASK-001"]) == 0
+    recent_code = cli.main(["recent", "--root", str(tmp_path), "--limit", "5"])
+    recent_out = capsys.readouterr().out
+
+    assert recent_code == 0
+    assert "TASK-001" in recent_out
+    assert "\tcompleted\t" in recent_out
+
+
+def test_archive_moves_plan_out_of_active_set(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Archive Me"]) == 0
+    capsys.readouterr()
+
+    archive_code = cli.main(["archive", "--root", str(tmp_path), "PLAN-001"])
+    archive_out = capsys.readouterr().out
+
+    assert archive_code == 0
+    assert "Archived PLAN-001" in archive_out
+    assert (tmp_path / ".train/plans/.archive/PLAN-001-archive-me/plan.md").exists()
+
+    list_code = cli.main(["list", "--root", str(tmp_path), "--type", "plan"])
+    list_out = capsys.readouterr().out
+    assert list_code == 0
+    assert "No artifacts found" in list_out
