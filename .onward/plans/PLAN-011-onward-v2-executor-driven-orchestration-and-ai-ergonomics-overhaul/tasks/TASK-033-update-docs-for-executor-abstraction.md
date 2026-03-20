@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-008"
 project: ""
 title: "Update docs for executor abstraction"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -17,19 +17,19 @@ depends_on:
   - "TASK-032"
 blocked_by: []
 files:
-  - AGENTS.md
-  - INSTALLATION.md
-  - README.md
-  - docs/WORK_HANDOFF.md
-  - docs/LIFECYCLE.md
-  - docs/CAPABILITIES.md
-  - docs/AI_OPERATOR.md
+  - "AGENTS.md"
+  - "INSTALLATION.md"
+  - "README.md"
+  - "docs/WORK_HANDOFF.md"
+  - "docs/LIFECYCLE.md"
+  - "docs/CAPABILITIES.md"
+  - "docs/AI_OPERATOR.md"
 acceptance:
   - "grep -r 'ralph' docs/ AGENTS.md INSTALLATION.md README.md returns zero hits outside migration notes"
-  - "all doc references to config use executor: not ralph:"
+  - "all doc references to config use executor not legacy ralph key"
   - "LIFECYCLE.md documents plan-level work"
 created_at: "2026-03-20T16:00:56Z"
-updated_at: "2026-03-20T16:00:56Z"
+updated_at: "2026-03-20T16:47:31Z"
 ---
 
 # Context

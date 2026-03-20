@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T16:46:21Z"
+generated_at: "2026-03-20T16:47:45Z"
 plans:
   -
     id: "PLAN-001"
@@ -101,7 +101,7 @@ chunks:
   -
     id: "CHUNK-008"
     title: "Executor foundation and dogfood enablement"
-    status: "open"
+    status: "completed"
     path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/chunks/CHUNK-008-executor-foundation-and-dogfood-enablement.md"
     plan: "PLAN-011"
   -
@@ -362,7 +362,7 @@ tasks:
   -
     id: "TASK-033"
     title: "Update docs for executor abstraction"
-    status: "open"
+    status: "completed"
     path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-033-update-docs-for-executor-abstraction.md"
     plan: "PLAN-011"
     chunk: "CHUNK-008"

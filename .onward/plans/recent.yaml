@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T16:46:21Z"
+generated_at: "2026-03-20T16:47:45Z"
 completed:
   -
     id: "PLAN-001"
@@ -92,6 +92,12 @@ completed:
     status: "completed"
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/chunks/CHUNK-007-provider-interoperability-and-execution-truthfulness.md"
     plan: "PLAN-010"
+  -
+    id: "CHUNK-008"
+    title: "Executor foundation and dogfood enablement"
+    status: "completed"
+    path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/chunks/CHUNK-008-executor-foundation-and-dogfood-enablement.md"
+    plan: "PLAN-011"
   -
     id: "TASK-001"
     title: "Produce prioritized repo design assessment"
@@ -314,5 +320,12 @@ completed:
     title: "Add default commit-after-task hook"
     status: "completed"
     path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-032-add-default-commit-after-task-hook.md"
+    plan: "PLAN-011"
+    chunk: "CHUNK-008"
+  -
+    id: "TASK-033"
+    title: "Update docs for executor abstraction"
+    status: "completed"
+    path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-033-update-docs-for-executor-abstraction.md"
     plan: "PLAN-011"
     chunk: "CHUNK-008"
