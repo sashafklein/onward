@@ -59,9 +59,16 @@ def _hook_markdown_path(config: dict[str, Any], key: str) -> str:
     return str(value or "").strip()
 
 
-def _run_shell_hooks(root: Path, commands: list[str], phase: str) -> tuple[bool, str]:
+def _run_shell_hooks(
+    root: Path,
+    commands: list[str],
+    phase: str,
+    extra_env: dict[str, str] | None = None,
+) -> tuple[bool, str]:
     if not commands:
         return True, f"[{phase}]\n(no hooks)"
+
+    child_env = {**os.environ, **extra_env} if extra_env else None
 
     lines = [f"[{phase}]"]
     for i, command in enumerate(commands, start=1):
@@ -74,6 +81,7 @@ def _run_shell_hooks(root: Path, commands: list[str], phase: str) -> tuple[bool,
                 text=True,
                 capture_output=True,
                 check=False,
+                env=child_env,
             )
         except Exception as exc:  # noqa: BLE001
             lines.append(f"[error] {exc}")
@@ -264,7 +272,13 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     pre_md = _hook_markdown_path(config, "pre_task_markdown")
     post_md = _hook_markdown_path(config, "post_task_markdown")
 
-    pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell")
+    hook_env = {
+        "ONWARD_RUN_ID": run_id,
+        "ONWARD_TASK_ID": task_id,
+        "ONWARD_TASK_TITLE": str(task.metadata.get("title", "")),
+    }
+
+    pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell", hook_env)
     log_sections.append(pre_shell_log)
     if not pre_shell_ok:
         error = "pre_task_shell hook failed"
@@ -310,7 +324,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
             error = str(exc)
 
     if ok and not error:
-        post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell")
+        post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell", hook_env)
         log_sections.append(post_shell_log)
         if not post_shell_ok:
             ok = False

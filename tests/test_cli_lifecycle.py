@@ -4,9 +4,12 @@ from pathlib import Path
 
 from onward import cli
 
+from tests.workspace_helpers import clear_post_task_shell
+
 
 def _init_workspace(root: Path) -> None:
     assert cli.main(["init", "--root", str(root)]) == 0
+    clear_post_task_shell(root)
 
 
 def _set_executor(root: Path, command: str) -> None:

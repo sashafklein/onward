@@ -69,8 +69,9 @@ work:
 hooks:
   # Shell commands run before each task (empty list means disabled).
   pre_task_shell: []
-  # Shell commands run after each task (empty list means disabled).
-  post_task_shell: []
+  # Shell commands run after each task (ONWARD_* env vars are set — see docs/WORK_HANDOFF.md).
+  post_task_shell:
+    - "git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK_TITLE}' --allow-empty"
   # Optional markdown hook path executed before each task (null disables).
   pre_task_markdown: null
   # Optional markdown hook path executed after each task.

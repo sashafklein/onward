@@ -12,6 +12,8 @@ from pathlib import Path
 
 from onward import cli
 
+from tests.workspace_helpers import clear_post_task_shell
+
 
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
@@ -24,6 +26,7 @@ def test_onboarding_flow_init_doctor_new_next_report_work(tmp_path: Path, capsys
     root = str(tmp_path)
 
     assert cli.main(["init", "--root", root]) == 0
+    clear_post_task_shell(tmp_path)
     assert cli.main(["doctor", "--root", root]) == 0
     doctor_out = capsys.readouterr().out
     assert "Doctor check passed" in doctor_out

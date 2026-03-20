@@ -11,10 +11,12 @@ from onward import cli
 from onward.artifacts import must_find_by_id
 from onward.execution import run_chunk_post_markdown_hook
 from onward.preflight import preflight_executor_command
+from tests.workspace_helpers import clear_post_task_shell
 
 
 def _init_workspace(root: Path) -> None:
     assert cli.main(["init", "--root", str(root)]) == 0
+    clear_post_task_shell(root)
 
 
 def _set_executor(root: Path, command: str) -> None:

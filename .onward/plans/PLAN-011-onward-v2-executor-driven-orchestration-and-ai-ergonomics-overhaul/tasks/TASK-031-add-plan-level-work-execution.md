@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-008"
 project: ""
 title: "Add plan-level work execution"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -14,16 +14,16 @@ depends_on:
   - "TASK-029"
 blocked_by: []
 files:
-  - src/onward/cli_commands.py
-  - src/onward/execution.py
-  - src/onward/artifacts.py
-  - tests/test_cli_work.py
+  - "src/onward/cli_commands.py"
+  - "src/onward/execution.py"
+  - "src/onward/artifacts.py"
+  - "tests/test_cli_work.py"
 acceptance:
   - "onward work PLAN-X drains all chunks and their tasks"
   - "onward work PLAN-X auto-completes the plan when all chunks finish"
   - "onward work PLAN-X stops on first chunk failure"
 created_at: "2026-03-20T16:00:56Z"
-updated_at: "2026-03-20T16:00:56Z"
+updated_at: "2026-03-20T16:44:59Z"
 ---
 
 # Context

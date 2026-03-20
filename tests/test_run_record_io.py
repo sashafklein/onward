@@ -66,7 +66,10 @@ log_path: ".onward/runs/x.log"
 def test_new_writes_are_json_files(tmp_path: Path, capsys):
     from onward import cli
 
+    from tests.workspace_helpers import clear_post_task_shell
+
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    clear_post_task_shell(tmp_path)
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
     config_path.write_text(raw.replace("  command: onward-exec", '  command: "true"'), encoding="utf-8")

@@ -1,13 +1,18 @@
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 from onward import cli
+
+from tests.workspace_helpers import clear_post_task_shell
 
 
 def _init_workspace(root: Path) -> None:
     assert cli.main(["init", "--root", str(root)]) == 0
+    clear_post_task_shell(root)
 
 
 def _set_executor(root: Path, command: str) -> None:
@@ -481,3 +486,43 @@ def test_work_rejects_non_task_chunk_plan(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert code == 1
     assert "task, chunk, or plan" in out
+
+
+def test_post_task_shell_receives_onward_env_vars(tmp_path: Path, capsys, monkeypatch):
+    """Default post_task_shell sees ONWARD_* (cleared in _init_workspace; re-enable for this test)."""
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    captured: list[dict[str, str]] = []
+    orig_run = subprocess.run
+
+    def fake_run(*args, **kwargs):
+        env = kwargs.get("env")
+        if kwargs.get("shell") and isinstance(env, dict) and env.get("ONWARD_TASK_ID"):
+            captured.append(
+                {
+                    "ONWARD_RUN_ID": env.get("ONWARD_RUN_ID", ""),
+                    "ONWARD_TASK_ID": env.get("ONWARD_TASK_ID", ""),
+                    "ONWARD_TASK_TITLE": env.get("ONWARD_TASK_TITLE", ""),
+                }
+            )
+            class R:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return R()
+        return orig_run(*args, **kwargs)
+
+    with patch("onward.execution.subprocess.run", fake_run):
+        assert cli.main(["work", "--root", str(tmp_path), "TASK-001"]) == 0
+
+    assert len(captured) == 1
+    post = captured[0]
+    assert post["ONWARD_TASK_ID"] == "TASK-001"
+    assert "Ship" in post["ONWARD_TASK_TITLE"]
+    assert post["ONWARD_RUN_ID"].startswith("RUN-")

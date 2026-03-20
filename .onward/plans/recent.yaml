@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T16:42:44Z"
+generated_at: "2026-03-20T16:44:59Z"
 completed:
   -
     id: "PLAN-001"
@@ -300,5 +300,12 @@ completed:
     title: "Create reference executor script"
     status: "completed"
     path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-030-create-reference-executor-script.md"
+    plan: "PLAN-011"
+    chunk: "CHUNK-008"
+  -
+    id: "TASK-031"
+    title: "Add plan-level work execution"
+    status: "completed"
+    path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-031-add-plan-level-work-execution.md"
     plan: "PLAN-011"
     chunk: "CHUNK-008"
