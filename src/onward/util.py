@@ -218,6 +218,25 @@ def _dump_simple_yaml(data: dict[str, Any]) -> str:
     return "\n".join(_dump_simple_yaml_lines(data)) + "\n"
 
 
+def _dump_run_json_record(data: dict[str, Any]) -> str:
+    """Serialize a task run snapshot for `.onward/runs/RUN-*.json` (strict JSON, UTF-8)."""
+    return json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+
+
+def _read_run_json_record(text: str) -> dict[str, Any]:
+    """Parse `.onward/runs/RUN-*.json`. Accepts JSON or legacy simple-YAML-shaped content."""
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("empty run record")
+    try:
+        loaded = json.loads(stripped)
+    except json.JSONDecodeError:
+        loaded = _parse_simple_yaml(stripped)
+    if not isinstance(loaded, dict):
+        raise ValueError("run record root must be a mapping")
+    return loaded
+
+
 def _split_frontmatter(raw: str) -> tuple[str | None, str]:
     if not raw.startswith("---\n"):
         return None, raw

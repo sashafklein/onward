@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T00:39:34Z"
+generated_at: "2026-03-20T00:44:52Z"
 completed:
   -
     id: "PLAN-001"
@@ -79,6 +79,20 @@ completed:
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-004-add-doctor-checks-for-config-contract-violations.md"
     plan: "PLAN-010"
     chunk: "CHUNK-002"
+  -
+    id: "TASK-005"
+    title: "Unify persisted run file formats"
+    status: "completed"
+    path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-005-unify-persisted-run-file-formats.md"
+    plan: "PLAN-010"
+    chunk: "CHUNK-003"
+  -
+    id: "TASK-006"
+    title: "Define and version executor payload schema"
+    status: "completed"
+    path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-006-define-and-version-executor-payload-schema.md"
+    plan: "PLAN-010"
+    chunk: "CHUNK-003"
   -
     id: "TASK-017"
     title: "Draft brutal hardening blueprint"

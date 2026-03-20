@@ -15,12 +15,14 @@ from onward.artifacts import (
     _update_artifact_status,
 )
 from onward.config import _config_model, _load_config, _model_alias, _ralph_enabled
+from onward.executor_payload import with_schema_version
 from onward.util import (
     _as_str_list,
     _clean_string,
+    _dump_run_json_record,
     _dump_simple_yaml,
     _now_iso,
-    _parse_simple_yaml,
+    _read_run_json_record,
     _run_timestamp,
 )
 
@@ -112,7 +114,7 @@ def _run_markdown_hook(
         result = subprocess.run(
             cmd,
             cwd=root,
-            input=json.dumps(payload, indent=2),
+            input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
             text=True,
             capture_output=True,
             check=False,
@@ -202,7 +204,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
         "log_path": str(run_log.relative_to(root)),
         "error": "",
     }
-    run_json.write_text(_dump_simple_yaml(run_record), encoding="utf-8")
+    run_json.write_text(_dump_run_json_record(run_record), encoding="utf-8")
 
     ongoing = _load_ongoing(root)
     active_runs = list(ongoing.get("active_runs", []))
@@ -270,7 +272,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
             result = subprocess.run(
                 cmd,
                 cwd=root,
-                input=json.dumps(payload, indent=2),
+                input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
                 text=True,
                 capture_output=True,
                 check=False,
@@ -308,7 +310,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     run_record["status"] = "completed" if ok else "failed"
     run_record["finished_at"] = finished_at
     run_record["error"] = error
-    run_json.write_text(_dump_simple_yaml(run_record), encoding="utf-8")
+    run_json.write_text(_dump_run_json_record(run_record), encoding="utf-8")
 
     ongoing = _load_ongoing(root)
     remaining = [
@@ -401,7 +403,7 @@ def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, st
         result = subprocess.run(
             cmd,
             cwd=root,
-            input=json.dumps(payload, indent=2),
+            input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
             text=True,
             capture_output=True,
             check=False,
@@ -430,7 +432,7 @@ def _latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
     if not matches:
         return None
     try:
-        return _parse_simple_yaml(matches[0].read_text(encoding="utf-8"))
+        return _read_run_json_record(matches[0].read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return None
 
@@ -442,7 +444,7 @@ def _collect_run_records(root: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for path in sorted(run_dir.glob("RUN-*.json")):
         try:
-            records.append(_parse_simple_yaml(path.read_text(encoding="utf-8")))
+            records.append(_read_run_json_record(path.read_text(encoding="utf-8")))
         except Exception:  # noqa: BLE001
             continue
     return records
@@ -511,7 +513,7 @@ def _execute_plan_review(
         result = subprocess.run(
             cmd,
             cwd=root,
-            input=json.dumps(payload, indent=2),
+            input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
             text=True,
             capture_output=True,
             check=False,

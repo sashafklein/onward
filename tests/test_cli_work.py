@@ -1,4 +1,5 @@
 import re
+import json
 from pathlib import Path
 
 from onward import cli
@@ -45,7 +46,7 @@ def test_work_task_success_creates_run_and_completes_task(tmp_path: Path, capsys
     run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
-    assert 'status: "completed"' in run_raw
+    assert json.loads(run_raw)["status"] == "completed"
 
     ongoing = (tmp_path / ".onward/ongoing.json").read_text(encoding="utf-8")
     assert '"active_runs": []' in ongoing
@@ -71,7 +72,7 @@ def test_work_task_failure_records_failed_run_and_reopens_task(tmp_path: Path, c
     run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
-    assert 'status: "failed"' in run_raw
+    assert json.loads(run_raw)["status"] == "failed"
 
 
 def _set_sequential_by_default(root: Path, value: str) -> None:
@@ -284,6 +285,7 @@ def test_executor_payload_includes_chunk_and_plan_context(tmp_path: Path, capsys
     task_payloads = [p for p in captured_payloads if p.get("type") == "task"]
     assert task_payloads, "expected at least one task payload to be sent to executor"
     payload = task_payloads[0]
+    assert payload.get("schema_version") == 1
     assert payload.get("chunk") is not None
     assert payload["chunk"]["metadata"]["id"] == "CHUNK-001"
     assert payload.get("plan") is not None

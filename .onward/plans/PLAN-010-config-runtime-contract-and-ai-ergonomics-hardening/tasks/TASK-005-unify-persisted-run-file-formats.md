@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-003"
 project: ""
 title: "Unify persisted run file formats"
-status: "open"
+status: "completed"
 description: "Ensure file extension and serialization format match exactly"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:21Z"
-updated_at: "2026-03-20T00:22:21Z"
+updated_at: "2026-03-20T00:43:51Z"
 ---
 
 # Context
@@ -44,4 +44,6 @@ updated_at: "2026-03-20T00:22:21Z"
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+- `RUN-*.json` under `.onward/runs/` is written with strict JSON (`json.dumps`, UTF-8, `ensure_ascii=False`).
+- Readers use `_read_run_json_record()` in `util.py` (JSON first, then legacy simple-YAML-shaped content).
+- `docs/WORK_HANDOFF.md` updated. **TASK-007** can document migration if we ever drop YAML fallback.

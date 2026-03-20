@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "onward-executor-stdin-v1",
+  "title": "Onward executor stdin JSON (v1)",
+  "description": "JSON written to the configured executor's stdin for onward work, review-plan, and markdown hooks. Always includes integer schema_version; bump the schema when fields change incompatibly.",
+  "oneOf": [
+    { "$ref": "#/$defs/task" },
+    { "$ref": "#/$defs/review" },
+    { "$ref": "#/$defs/hookTaskMarkdown" },
+    { "$ref": "#/$defs/hookChunkMarkdown" }
+  ],
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "schema_version",
+        "run_id",
+        "task",
+        "body",
+        "notes",
+        "notes_hint",
+        "chunk",
+        "plan"
+      ],
+      "properties": {
+        "type": { "const": "task" },
+        "schema_version": { "type": "integer", "const": 1 }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "schema_version",
+        "model",
+        "plan_id",
+        "prompt",
+        "plan_metadata",
+        "plan_body"
+      ],
+      "properties": {
+        "type": { "const": "review" },
+        "schema_version": { "type": "integer", "const": 1 }
+      }
+    },
+    "hookTaskMarkdown": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "schema_version",
+        "phase",
+        "run_id",
+        "model",
+        "hook_path",
+        "hook_body",
+        "task",
+        "task_body"
+      ],
+      "properties": {
+        "type": { "const": "hook" },
+        "schema_version": { "type": "integer", "const": 1 },
+        "phase": {
+          "type": "string",
+          "enum": ["pre_task_markdown", "post_task_markdown"]
+        }
+      }
+    },
+    "hookChunkMarkdown": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "schema_version",
+        "phase",
+        "model",
+        "hook_path",
+        "hook_body",
+        "chunk",
+        "chunk_body"
+      ],
+      "properties": {
+        "type": { "const": "hook" },
+        "schema_version": { "type": "integer", "const": 1 },
+        "phase": { "const": "post_chunk_markdown" }
+      }
+    }
+  }
+}

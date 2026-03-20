@@ -11,6 +11,7 @@ from onward.util import (
     _dump_simple_yaml,
     _now_iso,
     _parse_simple_yaml,
+    _read_run_json_record,
     _slugify,
     _split_frontmatter,
     _status_color,
@@ -284,7 +285,7 @@ def _regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = N
         if run_dir.exists():
             for path in sorted(run_dir.glob("RUN-*.json")):
                 try:
-                    rec = _parse_simple_yaml(path.read_text(encoding="utf-8"))
+                    rec = _read_run_json_record(path.read_text(encoding="utf-8"))
                     runs_index.append({
                         "id": rec.get("id"),
                         "target": rec.get("target"),

@@ -26,16 +26,19 @@ A daemon can be added later behind the same runtime files if needed.
 ```
 
 - `.ongoing.json`: active run queue and current status for quick parent-agent visibility.
-- `.runs/*.json`: immutable run metadata snapshots (YAML format).
+- `.runs/*.json`: immutable run metadata snapshots (**JSON**; older workspaces may still have legacy simple-YAML-shaped files, which readers accept).
 - `.runs/*.log`: raw executor output including hook phases and progress stream.
 
 ## Handoff packet
 
-For each task, Onward builds a JSON packet and passes it via stdin to the executor. The packet contains:
+For each task, Onward builds a JSON packet and passes it via stdin to the executor. Every packet includes **`schema_version`** (currently **`1`**) so executors can branch on shape. Machine-readable schema: [`docs/schemas/onward-executor-stdin-v1.schema.json`](schemas/onward-executor-stdin-v1.schema.json).
+
+The task packet contains:
 
 ```json
 {
   "type": "task",
+  "schema_version": 1,
   "run_id": "RUN-<timestamp>-TASK-<id>",
   "task": { /* task frontmatter metadata */ },
   "body": "task markdown body",

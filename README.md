@@ -369,6 +369,7 @@ Bootstrap a consumer workspace that uses this repo as the source:
 | [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md)                               | Contributor guide & local dev walkthrough |
 | **`.onward/plans/`**                                                      | Plans, chunks, tasks, acceptance criteria (source of truth) |
 | [docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)                               | Execution handoff design                    |
+| [docs/schemas/onward-executor-stdin-v1.schema.json](docs/schemas/onward-executor-stdin-v1.schema.json) | Executor stdin JSON (versioned)             |
 | [docs/DOGFOOD.md](docs/DOGFOOD.md)                                         | Dogfood workflow                            |
 
 ---
