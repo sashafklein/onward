@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-005"
 project: ""
 title: "Extract orchestration services from cli.py"
-status: "open"
+status: "in_progress"
 description: "Move command policy into cohesive modules with explicit APIs"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:22Z"
-updated_at: "2026-03-20T00:22:22Z"
+updated_at: "2026-03-20T00:57:42Z"
 ---
 
 # Context
@@ -46,4 +46,6 @@ PLAN-010 phase 3 §6: **`cli.py` stays parser/dispatch**; domain policy moves to
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Command implementations live in **`src/onward/cli_commands.py`** (~840 lines); **`src/onward/cli.py`** is argparse `build_parser()` + `main()` only (~210 lines).
+- Entry point unchanged: `onward` → `onward.cli:main`. Tests use `from onward import cli`.
+- **TASK-012** can treat `cli_commands` as the primary handler surface for stable public APIs over time.

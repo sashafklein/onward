@@ -65,7 +65,7 @@ When the user describes a new initiative, feature, or project:
 
 ## Codebase Notes
 
-- Source lives in `src/onward/` (`cli.py` plus modules such as `artifacts.py`, `sync.py`, …)
+- Source lives in `src/onward/` (`cli.py` + `cli_commands.py` for handlers, plus `artifacts.py`, `sync.py`, …)
 - Tests are in `tests/` — run with `pytest` or `./scripts/test.sh`
 - The package is `onward-cli`, installed via `pip install -e .`
 - Entry point: `onward` command (maps to `onward.cli:main`)
