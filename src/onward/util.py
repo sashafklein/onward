@@ -218,6 +218,22 @@ def _dump_simple_yaml(data: dict[str, Any]) -> str:
     return "\n".join(_dump_simple_yaml_lines(data)) + "\n"
 
 
+# Older run snapshots may omit keys Onward now writes; readers merge these defaults (real values win).
+_RUN_RECORD_OPTIONAL_DEFAULTS: dict[str, Any] = {
+    "type": "run",
+    "plan": None,
+    "chunk": None,
+    "executor": "ralph",
+    "error": "",
+    "finished_at": None,
+}
+
+
+def _normalize_run_record_dict(data: dict[str, Any]) -> dict[str, Any]:
+    """Fill optional run-record keys missing in pre-unification snapshots."""
+    return {**_RUN_RECORD_OPTIONAL_DEFAULTS, **data}
+
+
 def _dump_run_json_record(data: dict[str, Any]) -> str:
     """Serialize a task run snapshot for `.onward/runs/RUN-*.json` (strict JSON, UTF-8)."""
     return json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
@@ -234,7 +250,7 @@ def _read_run_json_record(text: str) -> dict[str, Any]:
         loaded = _parse_simple_yaml(stripped)
     if not isinstance(loaded, dict):
         raise ValueError("run record root must be a mapping")
-    return loaded
+    return _normalize_run_record_dict(loaded)
 
 
 def _split_frontmatter(raw: str) -> tuple[str | None, str]:

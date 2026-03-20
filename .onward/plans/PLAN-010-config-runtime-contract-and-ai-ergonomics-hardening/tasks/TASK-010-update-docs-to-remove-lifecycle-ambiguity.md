@@ -20,28 +20,31 @@ updated_at: "2026-03-20T00:22:22Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 acceptance: **README / INSTALLATION / CONTRIBUTION** show the **same** lifecycle rules and command expectations as `docs/LIFECYCLE.md` and TASK-009 behavior. Removes residual “strict start/complete every task” folklore.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Sweep README, INSTALLATION, CONTRIBUTION, optional SKILL examples, and any diagrams/quick-refs for contradictions.
+- Add a short **capability truth table** (plan phase 2 §5): what is model-backed vs heuristic vs test-only.
+- Cross-link `docs/LIFECYCLE.md` everywhere the loop is described.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Implementing new split/review behavior; changing CLI (TASK-009).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `README.md`, `INSTALLATION.md`, `docs/CONTRIBUTION.md`, `docs/LIFECYCLE.md`, `.onward/templates/`, `docs/WORK_HANDOFF.md`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Align “AI-assisted split/review” claims with actual default paths (heuristic fallback) per plan problem statement.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- No doc claims mandatory `complete` after successful `work` unless documenting an optional discipline choice clearly labeled as such.
+- Truth table committed; spot-check commands in docs against `onward --help`.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

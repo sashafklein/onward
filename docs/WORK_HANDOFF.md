@@ -2,6 +2,8 @@
 
 This is the key design stance for passing work from parent agents to worker agents.
 
+Artifact **status** transitions (`start` / `complete` / `cancel` vs `work`) are specified in **[LIFECYCLE.md](LIFECYCLE.md)**.
+
 ## Decision
 
 Use a file-backed run coordinator in Onward v1, not a long-running daemon.
@@ -26,12 +28,12 @@ A daemon can be added later behind the same runtime files if needed.
 ```
 
 - `.ongoing.json`: active run queue and current status for quick parent-agent visibility.
-- `.runs/*.json`: immutable run metadata snapshots (**JSON**; older workspaces may still have legacy simple-YAML-shaped files, which readers accept).
+- `.runs/*.json`: immutable run metadata snapshots (**JSON**; older workspaces may still have legacy simple-YAML-shaped files, which readers accept). Optional keys missing in old snapshots are defaulted on read; see [Format migration](FORMAT_MIGRATION.md).
 - `.runs/*.log`: raw executor output including hook phases and progress stream.
 
 ## Handoff packet
 
-For each task, Onward builds a JSON packet and passes it via stdin to the executor. Every packet includes **`schema_version`** (currently **`1`**) so executors can branch on shape. Machine-readable schema: [`docs/schemas/onward-executor-stdin-v1.schema.json`](schemas/onward-executor-stdin-v1.schema.json).
+For each task, Onward builds a JSON packet and passes it via stdin to the executor. Every packet includes **`schema_version`** (currently **`1`**) so executors can branch on shape. Machine-readable schema: [`docs/schemas/onward-executor-stdin-v1.schema.json`](schemas/onward-executor-stdin-v1.schema.json). Custom tooling that replays older captures may omit that field — use `normalize_executor_stdin_payload()` (see [Format migration](FORMAT_MIGRATION.md)).
 
 The task packet contains:
 

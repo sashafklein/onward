@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:53Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+CHUNK-002 follow-up: when **`sync.mode: local`**, subcommands like **`onward sync push` / `pull` / `status`** currently reject with guidance — decide whether that should be **exit 0 no-op**, **non-zero soft failure**, or **consistent error** for scripting/CI, and document it.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Pick one semantics; align code, tests, and INSTALLATION/README troubleshooting.
+- Ensure `doctor` and sync errors stay coherent (related to contradictory `sync.repo` in local mode).
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Implementing new sync modes; remote sync behavior changes.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/sync.py`, `src/onward/cli.py`, `tests/test_sync.py`, `INSTALLATION.md`, `README.md`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Prefer least surprise for automation: explicit non-zero with stable message vs silent success — choose and justify in task handoff.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Documented policy + tests for exit code; no contradictory docs across INSTALLATION/README.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

@@ -2,6 +2,7 @@ import json
 
 from onward.executor_payload import (
     EXECUTOR_PAYLOAD_SCHEMA_VERSION,
+    normalize_executor_stdin_payload,
     validate_executor_stdin_payload,
     with_schema_version,
 )
@@ -78,6 +79,42 @@ def test_validate_rejects_wrong_version():
     p = {"type": "task", "schema_version": 99}
     issues = validate_executor_stdin_payload(p)
     assert any("schema_version" in i for i in issues)
+
+
+def test_validate_accepts_legacy_missing_schema_version():
+    p = {
+        "type": "task",
+        "run_id": "RUN-1",
+        "task": {"id": "TASK-001"},
+        "body": "x",
+        "notes": None,
+        "notes_hint": "hint",
+        "chunk": None,
+        "plan": None,
+    }
+    assert validate_executor_stdin_payload(p) == []
+
+
+def test_validate_accepts_legacy_null_schema_version():
+    p = {
+        "type": "task",
+        "schema_version": None,
+        "run_id": "RUN-1",
+        "task": {"id": "TASK-001"},
+        "body": "x",
+        "notes": None,
+        "notes_hint": "hint",
+        "chunk": None,
+        "plan": None,
+    }
+    assert validate_executor_stdin_payload(p) == []
+
+
+def test_normalize_executor_stdin_payload_fills_missing_version():
+    p = {"type": "task", "run_id": "x"}
+    n = normalize_executor_stdin_payload(p)
+    assert n["schema_version"] == EXECUTOR_PAYLOAD_SCHEMA_VERSION
+    assert "schema_version" not in p
 
 
 def test_schema_file_is_valid_json():

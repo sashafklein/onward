@@ -20,27 +20,28 @@ updated_at: "2026-03-20T00:32:52Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+Follows TASK-002. PLAN-010 phase 1: **no zombie keys** — implement, remove, or deprecate every config key the template/docs expose.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Wire dead keys into runtime or delete from scaffold/templates/docs with migration notes where needed.
+- Align dogfood and example configs.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Doctor allowlist mechanics (TASK-004); broad non-config refactors.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/config.py`, `src/onward/scaffold.py`, `cli.py`, `execution.py`, `sync.py`, `split.py`, README, INSTALLATION, `.dogfood/`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Match documented intent; if docs were wrong, fix docs or defer to TASK-010.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- No remaining “declared but ignored” keys from the audit without deprecation path; tests for new behavior.
 
 # Handoff notes
 

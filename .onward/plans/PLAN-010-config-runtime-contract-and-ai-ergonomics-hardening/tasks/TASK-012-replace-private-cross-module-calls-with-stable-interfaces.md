@@ -20,28 +20,31 @@ updated_at: "2026-03-20T00:22:22Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 3: modules call **`_private`** helpers across package boundaries today; extensions and refactors break silently. Introduce **stable public APIs** (documented functions, no leading underscore) for cross-module use.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Inventory `_`-prefixed imports between `onward.*` modules.
+- For each seam, expose a small public API (or consolidate into owning module).
+- Update call sites; deprecate or remove duplicate private entrypoints.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Third-party plugin system; changing external CLI contract.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- All `src/onward/*.py` import graphs; focus on `cli.py` → others after TASK-011.
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Prefer names that match domain language (`load_workspace`, `run_task`, etc.). Keep surface minimal.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- No remaining cross-module `_foo` imports for package-internal use (tests may still target internals if isolated).
+- TASK-013 can assert module boundaries.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

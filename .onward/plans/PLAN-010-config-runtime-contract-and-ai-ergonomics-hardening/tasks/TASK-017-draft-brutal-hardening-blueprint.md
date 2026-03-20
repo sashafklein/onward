@@ -20,28 +20,30 @@ updated_at: "2026-03-20T00:23:01Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+Early PLAN-010 / CHUNK-002: produce a **prioritized remediation blueprint** with sequencing and acceptance gates — effectively the structured plan body that became **PLAN-010** chunks and tasks.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Enumerate brutal gaps (config drift, lifecycle, execution truthfulness, dogfood, provider story).
+- Order work with dependencies (matches plan “Execution order and dependencies”).
+- Define “done” signals per phase.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Implementing the blueprint (follow-on tasks).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- Architecture review inputs, `plan.md` for PLAN-010, prior PLAN-009 notes
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Blueprint lives in plan narrative + chunk breakdown; no separate artifact required if PLAN-010 is the outcome.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- PLAN-010 approved structure with chunks/tasks covering blueprint items.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+- Completed; executable work tracked as PLAN-010 tasks CHUNK-002 through CHUNK-007.

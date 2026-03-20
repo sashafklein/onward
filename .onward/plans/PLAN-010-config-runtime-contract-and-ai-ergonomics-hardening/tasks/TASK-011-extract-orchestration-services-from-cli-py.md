@@ -20,28 +20,30 @@ updated_at: "2026-03-20T00:22:22Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 3 §6: **`cli.py` stays parser/dispatch**; domain policy moves to service-style modules so maintainers change behavior without editing glue everywhere (plan “Key artifacts” / end state).
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Identify cohesive command handlers (report, list, work orchestration, sync entrypoints, etc.) that embed policy.
+- Extract to one or more modules (e.g. `services.py`, `commands/`, or extend existing `execution.py` / `artifacts.py` with clear public functions).
+- Keep `main()` thin: parse args → call service.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Full package re-layout or every private import fixed (TASK-012); architecture tests (TASK-013).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/cli.py` (large), `execution.py`, `artifacts.py`, `sync.py`, `split.py`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Mechanical extract first; preserve behavior and tests. Prefer incremental PR-sized slices if needed.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Meaningful reduction of non-parsing logic in `cli.py`; existing tests pass; no user-visible regression.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

@@ -20,27 +20,28 @@ updated_at: "2026-03-20T00:39:34Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 acceptance: **`onward doctor`** catches unsupported/ignored/contradictory config and exits non-zero so drift is visible in CI and locally.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Validate shape and known keys; flag removed legacy keys; detect ignored combinations (e.g. `sync.repo` in local mode).
+- Clear, actionable messages.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Validating remote git credentials over the network in doctor.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/config.py`, `src/onward/cli.py` (`cmd_doctor`), `tests/`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Centralize allowlists (`CONFIG_TOP_LEVEL_KEYS`, section keys) — TASK-013 may add parity tests vs scaffold.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Tests prove doctor fails on bad fixtures; docs mention what doctor checks.
 
 # Handoff notes
 

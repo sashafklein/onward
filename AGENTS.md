@@ -19,12 +19,16 @@ Onward artifact. No exceptions. If it's not in `.onward/plans/`, it doesn't exis
 This is your operating rhythm. Follow it relentlessly:
 
 ```
-onward report              ← See the full picture
-onward next                ← Pick the next thing
-onward start <ID>          ← Claim it
-... do the work ...
-onward complete <ID>       ← Finish it
+onward report                 ← See the full picture
+onward next                   ← Pick the next thing
+onward start <ID>             ← Optional: mark in_progress (claim / visibility)
+onward work <TASK-ID>         ← Run executor; on success the task is completed
+onward report                 ← Hand off to the next session or agent
 ```
+
+Use **`onward complete <ID>`** when you finish work **without** running `onward work` (e.g. closure outside the executor). After a **successful** `onward work`, do not run `complete` on the same task — it is already **`completed`**.
+
+Authoritative rules: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 ### Starting New Work
 
@@ -38,8 +42,9 @@ When the user describes a new initiative, feature, or project:
 
 ### During Execution
 
-- Run `onward start <ID>` BEFORE beginning any task
-- Run `onward complete <ID>` AFTER finishing any task
+- Prefer **`onward work <TASK-ID>`** for executor-backed runs; it updates status and writes run records.
+- Run **`onward start <ID>`** when you want the artifact **`in_progress`** before other steps (optional if you go straight to `work`).
+- Run **`onward complete <ID>`** only when closing a task **without** `work`, or for artifacts that never use `work`.
 - If you discover follow-up work, blockers, or refactors: IMMEDIATELY create a new task
   with `onward new task <CHUNK-ID> "<title>"` and set `blocked_by`, `human`, and `project`
   metadata in the frontmatter as appropriate
@@ -53,7 +58,7 @@ When the user describes a new initiative, feature, or project:
 
 - Do NOT keep planning state only in chat. Persist it in Onward artifacts.
 - Do NOT create ad-hoc todo lists, markdown checklists, or scratch planning files.
-- Do NOT skip status updates. Every start, complete, and cancel must be recorded.
+- Do NOT leave work in a misleading status: use **`work`**, **`complete`**, or **`cancel`** as appropriate so `report` / `next` stay truthful.
 - If you discover work during execution, capture it as an Onward task IMMEDIATELY.
 - At the end of every session, run `onward report` so the next agent (or human) can
   pick up exactly where you left off.

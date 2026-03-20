@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:51Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 problem + phase 4: **dogfood** stress — venv / **Python version** must match package requirement (3.11+) so `pytest` / editable install and `onward` entrypoint behave consistently.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Fix `scripts/dogfood/bootstrap.sh` (and docs) to create venv with supported Python (`python3.11` or `uv` pin).
+- Verify `./scripts/test.sh` / e2e use that interpreter.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Supporting EOL Python versions; consumer app code changes.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `scripts/dogfood/bootstrap.sh`, `scripts/dogfood/e2e.sh`, `scripts/test.sh`, `docs/DOGFOOD.md`, `pyproject.toml`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Fail fast with clear message if no suitable `python3.11+` on PATH.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Fresh dogfood bootstrap runs tests on 3.11+; documented in DOGFOOD.md.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:52Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 2 **§5**: document **`(A)`** and **`(H)`** markers (and any similar) in **CLI help** and user docs so agents parse `report`/`tree` output correctly.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Add legend to `onward tree --help`, `onward report --help` (or shared epilog), plus README/INSTALLATION snippet.
+- Explain agent vs human task markers and blocking hints.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Changing marker characters (unless TASK-025 requires).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/cli.py` (argparse help strings), `README.md`, `INSTALLATION.md`, `docs/CONTRIBUTION.md`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Keep help width readable; one short table is enough.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Help text and docs define `(A)`/`(H)`; spot-check against actual printer code.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

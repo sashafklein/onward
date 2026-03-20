@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:46Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 problem + acceptance: **`review-plan`** needs explicit **multi-provider / model matrix** (OpenClaw-oriented path, plus Claude CLI + Cursor agent CLI options documented and tested).
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Config + CLI for reviewer selection and ordered fallback when a provider/model is unavailable.
+- Deterministic logging when falling back (plan §5b).
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Full OpenClaw server implementation; TASK-019 preflight (coordinate).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/cli.py` (`cmd_review_plan` / related), `execution.py`, `config.py`, `scaffold.py`, README/INSTALLATION
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Maintain single-provider default path per plan risk section.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- At least one matrix configuration works in tests or dogfood; docs describe how to set reviewers and fallbacks.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

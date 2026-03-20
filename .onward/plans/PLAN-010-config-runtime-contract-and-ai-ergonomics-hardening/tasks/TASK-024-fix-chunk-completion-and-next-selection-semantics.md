@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:52Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 2 **§5** UX bugs: **chunk completion** when all child tasks are completed; **`onward next`** must not return **non-actionable** items (e.g. chunks that cannot be progressed without human steps).
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Fix `_select_next_artifact` / chunk status rules so `next` surfaces actionable work; align chunk auto-completion with LIFECYCLE when all tasks terminal.
+- Add regression tests for reported bad states.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Tree labeling (TASK-025/026); split dry-run labels (TASK-027).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/artifacts.py` (`_select_next_artifact`, index helpers), `src/onward/cli.py` (`cmd_next`), `src/onward/execution.py` (chunk work completion), `tests/`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Cross-check `human`, `blocked_by`, `depends_on` when ranking “next”.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Tests encode expected `next` behavior; chunk completion matches documented intent in LIFECYCLE/README.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

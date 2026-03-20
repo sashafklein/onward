@@ -14,7 +14,7 @@ Right now this repo supports:
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
 - artifact inspection (`onward show <ID>` — tasks include latest run info)
 - per-artifact notes (`onward note <ID> ["message"]`)
-- state transitions (`onward start|complete|cancel`)
+- state transitions (`onward start|complete|cancel`) and executor-driven status from `onward work` — see [LIFECYCLE.md](LIFECYCLE.md)
 - task/chunk execution handoff (`onward work` — passes full chunk/plan context to executor, dependency-aware chunk execution, pre/post hooks)
 - active/completed views (`onward progress`, `onward recent` — recent includes run records)
 - next-item suggestion (`onward next`)

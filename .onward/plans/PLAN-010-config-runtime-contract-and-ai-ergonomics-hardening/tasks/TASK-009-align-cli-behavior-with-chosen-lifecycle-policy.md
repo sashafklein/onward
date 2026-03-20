@@ -20,28 +20,31 @@ updated_at: "2026-03-20T00:22:22Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 2 step 4 (implementation half): **`docs/LIFECYCLE.md`** is canonical; CLI errors, edge cases, and tests must match **work-owned execution + manual overlays** (TASK-008).
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Audit `start` / `complete` / `cancel` / `work` paths for mismatches vs LIFECYCLE (messages, invalid transitions, chunk failure leaves chunk `in_progress`, etc.).
+- Add tests for invalid transitions and happy paths called out in LIFECYCLE.
+- Tighten validation only where the doc promises it (avoid scope creep into TASK-024/027).
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Rewriting all user-facing docs (TASK-010); provider/execution truthfulness (CHUNK-007).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/cli.py`, `src/onward/artifacts.py`, `src/onward/execution.py`, `docs/LIFECYCLE.md`, `tests/test_cli_*.py`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Prefer clear `ValueError` / exit codes and user-visible strings that cite the policy (optional: “see docs/LIFECYCLE.md”).
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Tests cover invalid `complete` from `completed`, optional paths for `work` from `open` without prior `start`, and other rules in LIFECYCLE.
+- No behavior contradicts LIFECYCLE without updating LIFECYCLE in the same change.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

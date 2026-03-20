@@ -46,6 +46,23 @@ error: "oops"
     assert parsed["error"] == "oops"
 
 
+def test_read_run_record_fills_optional_defaults_for_sparse_legacy():
+    sparse = """id: "RUN-sparse-TASK-001"
+target: "TASK-001"
+status: "completed"
+model: "opus"
+started_at: "2026-01-01T00:00:00Z"
+log_path: ".onward/runs/x.log"
+"""
+    parsed = _read_run_json_record(sparse)
+    assert parsed["type"] == "run"
+    assert parsed["plan"] is None
+    assert parsed["chunk"] is None
+    assert parsed["executor"] == "ralph"
+    assert parsed["error"] == ""
+    assert parsed["finished_at"] is None
+
+
 def test_new_writes_are_json_files(tmp_path: Path, capsys):
     from onward import cli
 

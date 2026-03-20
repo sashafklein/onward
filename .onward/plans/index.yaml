@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T00:44:51Z"
+generated_at: "2026-03-20T00:50:44Z"
 plans:
   -
     id: "PLAN-001"
@@ -139,14 +139,14 @@ tasks:
   -
     id: "TASK-007"
     title: "Add backward-compatible readers and migration notes"
-    status: "open"
+    status: "completed"
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-007-add-backward-compatible-readers-and-migration-notes.md"
     plan: "PLAN-010"
     chunk: "CHUNK-003"
   -
     id: "TASK-008"
     title: "Decide strict lifecycle policy"
-    status: "open"
+    status: "completed"
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-008-decide-strict-lifecycle-policy.md"
     plan: "PLAN-010"
     chunk: "CHUNK-004"

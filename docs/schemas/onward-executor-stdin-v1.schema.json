@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "onward-executor-stdin-v1",
   "title": "Onward executor stdin JSON (v1)",
-  "description": "JSON written to the configured executor's stdin for onward work, review-plan, and markdown hooks. Always includes integer schema_version; bump the schema when fields change incompatibly.",
+  "description": "JSON written to the configured executor's stdin for onward work, review-plan, and markdown hooks. Onward always sets integer schema_version on write; legacy captures may omit it (treat as v1 when reading). Bump the schema when fields change incompatibly.",
   "oneOf": [
     { "$ref": "#/$defs/task" },
     { "$ref": "#/$defs/review" },

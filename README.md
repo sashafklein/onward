@@ -39,16 +39,19 @@ Onward is an **opinionated, single-developer momentum engine** for repos where A
 This is the heartbeat of Onward-driven development:
 
 ```
-┌─────────────────────────────────────────┐
-│                                         │
-│   1.  onward report        ← see where you are
-│   2.  onward next          ← pick what's next
-│   3.  onward start TASK-X  ← claim it
-│   4.  ... do the work ...
-│   5.  onward complete TASK-X
-│   6.  goto 1               ← keep moving
-│                                         │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│   1.  onward report           ← see where you are        │
+│   2.  onward next             ← pick what's next           │
+│   3.  onward start TASK-X     ← optional: claim / visibility │
+│   4.  onward work TASK-X      ← executor + status (success → completed) │
+│   5.  onward report           ← session handoff          │
+│   6.  goto 1                  ← keep moving                │
+│                                                          │
+│   Use onward complete when closing work without work.    │
+│   See docs/LIFECYCLE.md for the full policy.             │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
 Every cycle tightens the loop. Every artifact records what happened. Nothing falls through the cracks.
@@ -265,7 +268,7 @@ Refresh tokens currently never rotate...
 - Tests pass
 ```
 
-Status flows: `open` → `in_progress` → `completed` (or `canceled`)
+Status flows: `open` → `in_progress` → `completed` (or `canceled`). **`onward work`** applies these transitions around executor runs; **`start` / `complete` / `cancel`** are manual. Details: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 ---
 
@@ -319,7 +322,7 @@ If you skip agent setup, you have a nice CLI. If you do it, you have **structure
 
 ### Forward Momentum
 
-Onward is named for its core value: **keep moving forward.** Every command either shows you the state of the world or advances it. `report` → `next` → `start` → `complete` → `report`. The loop never stops.
+Onward is named for its core value: **keep moving forward.** Every command either shows you the state of the world or advances it. A typical execution loop is `report` → `next` → `work` → `report`, with optional `start` for claiming and `complete` when not using `work`. See **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 ### Feedback Capture
 

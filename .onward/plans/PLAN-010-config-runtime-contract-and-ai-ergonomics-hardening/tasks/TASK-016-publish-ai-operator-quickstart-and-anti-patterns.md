@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:22:23Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 goal: agents operate from **docs alone**. A dedicated **operator quickstart** + **anti-patterns** doc reduces folklore (wrong lifecycle, skipping `work`, planning in chat).
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- New doc (e.g. `docs/AI_OPERATOR.md`) or README section: minimal loop, project flags, when to use `work` vs `complete`, sync basics, `human` / `blocked_by`.
+- Anti-patterns: ad-hoc todos, ignoring `doctor`, assuming `split` is always model-backed, etc.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- INSTALLATION agent paste block rewrite (TASK-010 may overlap — dedupe).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `INSTALLATION.md`, `AGENTS.md`, `docs/LIFECYCLE.md`, `docs/WORK_HANDOFF.md`, `README.md`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Link from README “Agent Integration” and INSTALLATION.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Doc merged; links from README or INSTALLATION; consistent with LIFECYCLE.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

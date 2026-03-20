@@ -20,28 +20,30 @@ updated_at: "2026-03-20T00:28:46Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 2.5 **§5b**: explicit **provider routing** — map model families/aliases to concrete backends (OpenClaw, Claude CLI, Cursor agent CLI, etc.). Plan acceptance: review-plan matrix + documented paths.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Design config shape: e.g. `providers`, `models.*` routing tables, per-command overrides (`split`, `review-plan`, `work`, hooks).
+- Document resolution order (task model → flag → config defaults).
+- Optional feature flag for staged rollout (“Integration risk” in plan).
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Implementing every provider adapter end-to-end (TASK-019/021); execution proof (TASK-020).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/execution.py` (`_model_alias`), `config.py`, `split.py`, review-plan path in `cli.py` / `execution.py`, `.onward.config.yaml` scaffold
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Keep default single-provider path unchanged until config opts in.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Written design in `docs/` or plan chunk notes + ADR-style section; reviewed against acceptance “provider interoperability” bullets.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

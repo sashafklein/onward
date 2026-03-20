@@ -20,28 +20,30 @@ updated_at: "2026-03-20T00:22:22Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 3 §7 + acceptance: **contract / architecture guardrails** — block reintroduction of config drift, forbidden imports, stale commands in docs, etc.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Add tests: e.g. scaffold template keys vs `CONFIG_*` allowlists; `cli.py` import rules; optional AST grep for private imports.
+- Persisted format smoke checks where not already covered.
+- Payload/schema validation hooks if missing.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Full static type enforcement of entire codebase; runtime performance tests.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `tests/`, `src/onward/config.py`, `src/onward/scaffold.py`, `docs/schemas/`, TASK-004 handoff suggestions
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Keep tests fast and deterministic; run in default `pytest` CI.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- New tests fail on intentional drift fixtures; documented in CONTRIBUTION how to extend checks.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

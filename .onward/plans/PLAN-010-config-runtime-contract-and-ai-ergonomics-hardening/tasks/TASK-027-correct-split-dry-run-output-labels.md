@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:52Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 2 **§5**: **`onward split --dry-run`** labels must match **artifact type** (plan→chunks vs chunk→tasks) — avoid misleading “would create X” wording.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Fix dry-run printer in `split` command path: correct nouns per parent type.
+- Add/adjust tests on captured output.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Changing split heuristics or AI prompts; model-backed vs fallback logic (document in TASK-010).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/split.py`, `src/onward/cli.py`, `tests/test_cli_split.py` (or equivalent)
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Golden strings in tests prevent regression.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Tests assert correct labels for plan split vs chunk split dry-run.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

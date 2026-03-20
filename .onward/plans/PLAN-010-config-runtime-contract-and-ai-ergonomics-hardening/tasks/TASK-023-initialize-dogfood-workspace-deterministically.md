@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:28:52Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 acceptance **dogfood reliability**: fresh dogfood run must not need **undocumented manual `init`** reconciliation — bootstrap should leave a valid Onward workspace every time.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Ensure dogfood scripts run `onward init` (or equivalent) in the consumer workspace with deterministic config.
+- Align `.dogfood/consumer-app` fixture with what scripts expect.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Rewriting consumer app business logic.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `scripts/dogfood/bootstrap.sh`, `scripts/dogfood/e2e.sh`, `.dogfood/consumer-app/`, `docs/DOGFOOD.md`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Idempotent: safe to run twice without manual cleanup.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- CI or local doc’d procedure: clone → bootstrap → e2e passes with no extra init steps.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

@@ -20,28 +20,30 @@ updated_at: "2026-03-20T00:28:46Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 **§5d** + acceptance **execution truthfulness**: `onward work` must not mark tasks **completed** on generic **exit 0** alone — require **task-level success proof** (e.g. structured acknowledgment / result in executor output or extended payload contract).
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Define success contract (schema or protocol) between Onward and executor; document in WORK_HANDOFF / schema docs.
+- Parse executor stdout/stderr or agreed side-channel; fail run (task stays `open`) when proof missing.
+- Persist evidence in run artifacts for auditing.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Replacing Ralph entirely; multi-provider routing (TASK-018/021) beyond what’s needed for the contract.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/execution.py`, `executor_payload.py`, `docs/WORK_HANDOFF.md`, `docs/schemas/`, `tests/test_cli_work.py`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Plan suggests staging behind config if breaking; default can start as opt-in strict mode.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- Tests prove exit 0 without proof does **not** complete task; happy path with proof does.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

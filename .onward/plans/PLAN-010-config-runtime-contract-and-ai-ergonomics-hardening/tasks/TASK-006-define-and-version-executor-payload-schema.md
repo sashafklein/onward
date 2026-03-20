@@ -20,27 +20,29 @@ updated_at: "2026-03-20T00:44:51Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 acceptance: executor stdin for `work`, `review-plan`, and markdown hooks is **machine-safe and versioned**; integrators can validate payloads.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Add integer `schema_version` on all outbound stdin JSON (single current version, e.g. `1`).
+- Publish JSON Schema (draft 2020-12) + tests that validate representative payloads.
+- Document location of schema in `docs/schemas/` and WORK_HANDOFF.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Legacy reader behavior for old captures without `schema_version` (TASK-007).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/executor_payload.py`, `src/onward/execution.py`, `docs/schemas/onward-executor-stdin-v1.schema.json`, `docs/WORK_HANDOFF.md`, `tests/test_executor_payload.py`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Bump `EXECUTOR_PAYLOAD_SCHEMA_VERSION` and schema file together when breaking shape.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- All executor stdin writes include `schema_version`; schema file checked in; tests pass.
 
 # Handoff notes
 

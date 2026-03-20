@@ -20,28 +20,29 @@ updated_at: "2026-03-20T00:22:23Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 phase 4 §9: **CI-visible drift checks** — stale doc command lists, template vs code, schema mismatches should fail PRs.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Lightweight scripts or pytest: e.g. extract `onward` subcommands from `--help` vs README/INSTALLATION mentions; diff scaffold keys vs config allowlist (overlap TASK-013).
+- Contributor **checklist** in CONTRIBUTION for manual release steps if needed.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Full markdown linter for prose quality; spellcheck.
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `README.md`, `INSTALLATION.md`, `docs/CONTRIBUTION.md`, `pyproject.toml` / CI config, `tests/`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- Start with highest-value automated check; checklist documents the rest.
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- At least one automated check merged; checklist committed; documented how to run locally.
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+<!-- Fill when closing. -->

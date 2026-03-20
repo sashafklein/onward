@@ -20,27 +20,28 @@ updated_at: "2026-03-20T00:43:51Z"
 
 # Context
 
-<!-- What this task is doing and where it fits in the chunk. -->
+PLAN-010 problem: run snapshots used `.json` extension with non-JSON content. Acceptance: **`.json` files are valid JSON** on write.
 
 # Scope
 
-<!-- Tight, concrete bullets. Keep this task small and finishable. -->
+- Serialize new run records with strict JSON; keep a single write helper.
+- Ensure all writers use it.
 
 # Out of scope
 
-<!-- Explicitly exclude adjacent work. -->
+- Removing legacy YAML-shaped read path (TASK-007).
 
 # Files to inspect
 
-<!-- Start here. Include exact paths when known. -->
+- `src/onward/execution.py`, `src/onward/util.py`, `src/onward/artifacts.py`, `docs/WORK_HANDOFF.md`, `tests/test_run_record_io.py`
 
 # Implementation notes
 
-<!-- Constraints, gotchas, and edge cases to handle. -->
+- UTF-8, deterministic formatting as already chosen (`ensure_ascii=False`, etc.).
 
 # Acceptance criteria
 
-<!-- Binary checks: tests, outputs, behavior changes, docs updates. -->
+- New `RUN-*.json` files parse as JSON; tests cover write path; handoff doc updated.
 
 # Handoff notes
 
