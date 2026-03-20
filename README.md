@@ -112,13 +112,32 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 
 ### Syncing plan files (optional)
 
-Configure `sync` in `.onward.config.yaml` (`local`, `branch`, or `repo`). The sync checkout lives at `sync.worktree_path` (default `.onward/sync/`, gitignored).
+Use this when you want a **second git checkout** (same repo, different branch, or another clone) to hold a copy of `.onward/plans/` that you can push to a remote—handy for sharing plan state across machines or with a separate “planner” repo.
+
+Configure `sync` in `.onward.config.yaml`:
+
+| `sync.mode` | Behavior |
+| ----------- | -------- |
+| `local` | Default. No remote target; `onward sync push` / `pull` are rejected with a hint. |
+| `branch` | Creates or uses a [git worktree](https://git-scm.com/docs/git-worktree) at `sync.worktree_path` on `sync.branch` inside the **same** repository. Requires a `.git` directory at the workspace root. |
+| `repo` | `git clone` of `sync.repo` (URL or path) into `sync.worktree_path`. |
+
+The sync checkout path defaults to **`.onward/sync/`**; it is **gitignored** by `onward init` so nested checkouts do not dirty your main tree.
+
+What gets synchronized:
+
+- The **entire** `.onward/plans/` tree (plan folders, `index.yaml`, `recent.yaml`, `.archive/`, etc.) is **mirrored** file-by-file: extra files on the destination side are removed so the tree matches the source.
+- **`onward sync push`** — copy workspace → sync checkout → `git add` under `.onward/plans` → commit if needed → `git push -u origin HEAD`. Needs a configured **`origin`** on that checkout and a remote that accepts the push (e.g. **bare** remote, or a branch that is not the remote’s checked-out branch).
+- **`onward sync pull`** — `git pull --ff-only` in the sync checkout, then copy remote plans → workspace and **regenerate indexes**. If the remote has diverged, fix it in the sync checkout and retry.
+- **`onward sync status`** — Compares local vs remote plan files (content hashes). Does **not** create the worktree or clone until you have run **`onward sync push`** at least once; until then it reports that the sync target is not initialized.
+
+`onward doctor` checks `sync:` for consistency (e.g. `branch` mode without a git repo, missing `repo` in `repo` mode).
 
 | Command                  | What it does                                                |
 | ------------------------ | ----------------------------------------------------------- |
-| `onward sync status`     | Compare local `.onward/plans/` with the sync target         |
-| `onward sync push`       | Mirror local plans into the target, commit, and `git push`  |
-| `onward sync pull`       | `git pull --ff-only` in the target, then mirror plans here  |
+| `onward sync status`     | Clean / dirty vs sync target, or “not initialized”          |
+| `onward sync push`       | Mirror local → target, commit, `git push`                     |
+| `onward sync pull`       | Fast-forward target, mirror → workspace, reindex            |
 
 ### Moving Work Forward
 
@@ -244,7 +263,7 @@ When you run `onward init`, your project gets:
   notes/                         ← per-artifact scratch pad notes
   runs/                          ← execution records (gitignored)
   reviews/                       ← plan review artifacts (gitignored)
-  sync/                          ← sync workspace state
+  sync/                          ← optional sync git checkout (gitignored)
 ```
 
 Plans are the filesystem. The filesystem is the truth.
@@ -316,10 +335,10 @@ Bootstrap a consumer workspace that uses this repo as the source:
 
 | Doc                                                                        | What it covers                     |
 | -------------------------------------------------------------------------- | ---------------------------------- |
-| [INSTALLATION.md](INSTALLATION.md)                                         | Install + agent setup (start here) |
-| [docs/NOOB_GUIDE.md](docs/NOOB_GUIDE.md)                                   | First-time contributor walkthrough |
-| [docs/spec/onward_v1_product_spec.md](docs/spec/onward_v1_product_spec.md) | Full v1 product specification      |
-| [docs/architecture/work-handoff.md](docs/architecture/work-handoff.md)     | How execution handoff works        |
+| [INSTALLATION.md](INSTALLATION.md)                                         | Install + agent setup + sync semantics & troubleshooting |
+| [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md)                               | Contributor guide & local dev walkthrough |
+| [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md)                             | v1 roadmap (details in `.onward/plans/`)   |
+| [docs/architecture/work-handoff.md](docs/architecture/work-handoff.md)     | How execution handoff works                |
 | [docs/dogfood/README.md](docs/dogfood/README.md)                           | Dogfood workflow details           |
 
 ---

@@ -45,6 +45,9 @@ When the user describes a new initiative, feature, or project:
   metadata in the frontmatter as appropriate
 - Run `onward report` at the end of every work session to leave a clear picture for the
   next session or the next agent
+- If this workspace uses `sync.mode: branch` or `repo` in `.onward.config.yaml`, use
+  `onward sync status`, `onward sync push`, and `onward sync pull` as needed so plan
+  files stay aligned with the configured remote checkout (see README / INSTALLATION.md).
 
 ### Non-Negotiable
 
@@ -57,10 +60,11 @@ When the user describes a new initiative, feature, or project:
 
 ## Codebase Notes
 
-- Source lives in `src/onward/cli.py` (single-module CLI)
+- Source lives in `src/onward/` (`cli.py` plus modules such as `artifacts.py`, `sync.py`, …)
 - Tests are in `tests/` — run with `pytest` or `./scripts/test.sh`
 - The package is `onward-cli`, installed via `pip install -e .`
 - Entry point: `onward` command (maps to `onward.cli:main`)
 - Python 3.11+ required
 - Templates, hooks, and prompts live in `.onward/templates/`, `.onward/hooks/`, `.onward/prompts/`
-- Product spec: `docs/spec/onward_v1_product_spec.md`
+- Contributor guide: `docs/CONTRIBUTION.md`
+- Roadmap: `docs/plans/ROADMAP.md` (acceptance criteria in `.onward/plans/`)

@@ -12,15 +12,15 @@ updated_at: "2026-03-20T00:02:33Z"
 
 # Summary
 
-Add local/shared sync support and harden Trains for stable repeated use.
+Add local/shared sync support and harden Onward for stable repeated use.
 
 # Problem
 
-Without sync and hardening, Trains is constrained to one local environment and is fragile under real execution pressure.
+Without sync and hardening, Onward is constrained to one local environment and is fragile under real execution pressure.
 
 # Goals
 
-- Implement `sync push`, `sync pull`, `sync status`.
+- Implement `onward sync push`, `sync pull`, `sync status`.
 - Support same-repo branch sync and separate repo sync mode.
 - Improve diagnostics, error handling, and migration checks.
 
@@ -35,7 +35,7 @@ Sync is best-effort and file-based; artifacts remain canonical.
 
 # Proposed approach
 
-Add a sync service driven by `.train.config.yaml` that can stage `.train/plans/` and derived indexes to configured targets.
+Add a sync implementation driven by `.onward.config.yaml` that mirrors `.onward/plans/` (including derived indexes) to the configured sync checkout.
 
 # Risks
 
@@ -50,9 +50,9 @@ Add a sync service driven by `.train.config.yaml` that can stage `.train/plans/`
 
 # Acceptance criteria
 
-- `train sync status` reports dirty/clean state for local and configured target.
-- `train sync push` publishes `.train/plans/` to selected sync target.
-- `train sync pull` integrates remote plan changes into the local workspace.
+- `onward sync status` reports dirty/clean state for local and configured target (or uninitialized remote checkout).
+- `onward sync push` publishes `.onward/plans/` to the selected sync target.
+- `onward sync pull` integrates remote plan changes into the local workspace.
 - Doctor includes sync config validation and clear remediation guidance.
 - End-to-end smoke tests pass for local mode and one shared mode.
 

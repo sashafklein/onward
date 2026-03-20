@@ -30,7 +30,7 @@ Verify:
 onward --help
 ```
 
-You should see the full command list: `init`, `new`, `list`, `report`, `next`, `start`, `complete`, etc.
+You should see the full command list: `init`, `doctor`, `new`, `list`, `report`, `next`, `start`, `complete`, `sync`, `work`, etc.
 
 ### Initialize a Workspace
 
@@ -171,6 +171,11 @@ onward cancel <ID>
 onward show <ID>
 onward progress
 onward recent
+
+# Optional: shared plan state (configure sync.mode in .onward.config.yaml)
+onward sync status
+onward sync push
+onward sync pull
 ```
 
 ## The Operating Loop
@@ -214,7 +219,8 @@ MANDATORY BEHAVIORS:
 - NEVER maintain planning state in chat, scratch files, or memory alone
 
 KEY COMMANDS: onward report, onward next, onward new, onward start, onward complete,
-onward list, onward tree, onward show, onward split, onward review-plan, onward note
+onward list, onward tree, onward show, onward split, onward review-plan, onward note,
+onward sync (status|push|pull) when using branch/repo sync mode
 ```
 
 ---
@@ -233,6 +239,7 @@ ONWARD QUICK-REF:
   list     → filter artifacts         tree     → hierarchy view
   show     → inspect one artifact     progress → what's in flight
   recent   → what just finished       archive  → retire a plan
+  sync     → mirror .onward/plans to branch or second repo (optional)
 
 WORKFLOW: report → next → start → work → complete → report (repeat forever)
 FLAGS: --project <key>  --blocking  --human  --no-color
@@ -365,6 +372,13 @@ onward sync pull     # fast-forward sync checkout, copy plans → workspace, rei
 
 `onward doctor` validates the `sync:` section (for example, branch mode requires a git repo at the workspace root).
 
+### Plan sync semantics (branch and repo modes)
+
+- **Mirror** — After each push or pull direction, the destination `.onward/plans/` tree matches the source (files absent on the source are removed on the destination).
+- **First run** — `onward sync status` does not clone or add a worktree; it reports that the sync checkout is not initialized until the first successful **`onward sync push`**.
+- **Push** — Copies from your workspace into the sync checkout, commits under `.onward/plans` when there are changes, then runs **`git push -u origin HEAD`**. The sync checkout must have **`origin`** set; the remote should allow the update (a **bare** repository is the usual choice for `repo` mode).
+- **Pull** — Runs **`git pull --ff-only`** in the sync checkout (non-fast-forward updates fail with an error until you reconcile in that checkout), copies plans into the workspace, then regenerates **`index.yaml`** / **`recent.yaml`**.
+
 ### Model Aliases
 
 Onward supports short aliases so you don't have to remember full model identifiers.
@@ -392,6 +406,12 @@ at execution time, so updating Onward automatically picks up new model versions.
 **Plans feel too big** — Use `onward split` to AI-decompose plans into chunks and chunks into tasks. The goal is tasks small enough that one agent can finish in one session.
 
 **Lost track of what's happening** — `onward report` is your friend. Run it early, run it often, run it at the end of every session.
+
+**`onward sync push` fails at `git push`** — Ensure the sync worktree has `git remote -v` showing `origin`, and that the remote accepts pushes to that branch. For a local test remote, use **`git init --bare`**. Pushing to another machine’s **non-bare** repo often fails if that repo has the same branch checked out.
+
+**`onward sync pull` fails on `git pull --ff-only`** — Someone advanced the remote history in a non-fast-forward way. Open the sync checkout at `sync.worktree_path`, run `git status` / `git log`, merge or rebase as you prefer, then retry **`onward sync pull`**.
+
+**`Doctor found issues` mentioning `sync.`** — Fix `.onward.config.yaml`: in **`branch`** mode the workspace root must be a git working tree; in **`repo`** mode set `sync.repo` to your clone URL or path.
 
 ---
 

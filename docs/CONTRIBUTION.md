@@ -7,15 +7,20 @@ This guide is for first-time contributors who want to run Onward locally without
 Right now this repo supports:
 
 - workspace bootstrap (`onward init`)
-- structural validation (`onward doctor`)
+- structural validation (`onward doctor`, including `sync:` config checks)
 - artifact creation (`onward new plan|chunk|task`)
-- artifact discovery (`onward list`)
+- AI-assisted decomposition (`onward split` for plans and chunks)
+- adversarial plan review (`onward review-plan`)
+- artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
 - artifact inspection (`onward show <ID>`)
+- per-artifact notes (`onward note <ID> ["message"]`)
 - state transitions (`onward start|complete|cancel`)
+- task/chunk execution handoff (`onward work`)
 - active/completed views (`onward progress`, `onward recent`)
 - next-item suggestion (`onward next`)
 - consolidated status dashboard (`onward report`)
 - plan archival (`onward archive PLAN-###`)
+- optional plan sync (`onward sync status|push|pull` when `sync.mode` is `branch` or `repo`)
 
 Onward stores tracked planning state in `.onward/plans/` and runtime state in `.onward/`.
 
@@ -93,11 +98,12 @@ PYTHONPATH=src python3 -m pytest
 
 Test coverage currently includes:
 
-- init/doctor success and failure paths
+- init/doctor success and failure paths (including invalid `sync` settings)
 - plan/chunk/task creation flows
 - list/show behavior
 - duplicate ID detection
 - frontmatter parser/serializer round-trip behavior
+- sync: local status, branch push with bare `origin`, repo push/pull, doctor + branch mode without git
 
 Convenience runner:
 
@@ -147,6 +153,20 @@ Run `onward init --root <workspace>` once, then rerun doctor.
 
 If the issue mentions invalid JSON in `.onward/ongoing.json`, replace it with valid JSON or re-run init with `--force`.
 
+If the issue mentions **`sync.`** (for example branch mode without `.git`), fix `.onward.config.yaml` or initialize a git repository at the workspace root. See [INSTALLATION.md](../INSTALLATION.md) (Configuration Reference → sync).
+
+### Plan sync (`onward sync`)
+
+Only relevant when `sync.mode` is **`branch`** (git worktree on another branch in the same repo) or **`repo`** (clone of another repository). Default **`local`** mode does not use a sync target.
+
+```bash
+onward sync status   # clean/dirty vs remote tree, or "not initialized" until first push
+onward sync push     # mirror .onward/plans → sync checkout, commit, git push
+onward sync pull     # git pull --ff-only in checkout, mirror → workspace, reindex
+```
+
+The sync checkout lives under `sync.worktree_path` (default `.onward/sync/`, gitignored). See README and INSTALLATION for push/pull requirements (`origin`, bare remote, fast-forward pull).
+
 ## 7. Rules of thumb
 
 - Always pass `--root` when working outside repo root.
@@ -154,12 +174,7 @@ If the issue mentions invalid JSON in `.onward/ongoing.json`, replace it with va
 - Treat `.onward/plans/index.yaml` and `recent.yaml` as derived files.
 - Keep frontmatter simple; complex YAML nesting is intentionally unsupported right now.
 
-## 8. Upcoming workflow features (documented)
+## 8. Deeper reference
 
-The product spec includes planned additions for:
-
-- execution-time follow-up capture (workers adding blocker/refactor/for-later tasks)
-- `human: true|false` task metadata for explicit human-required work
-- optional `project` metadata for cross-plan filtering
-- blocking/human-focused list filters (for example `onward list --blocking --human`)
-- `onward report` for a unified colorized ASCII status dashboard
+- **[INSTALLATION.md](../INSTALLATION.md)** — agent setup, full config reference, sync semantics and troubleshooting
+- **[docs/plans/ROADMAP.md](plans/ROADMAP.md)** — v1 roadmap; detailed acceptance criteria live under **`.onward/plans/`**
