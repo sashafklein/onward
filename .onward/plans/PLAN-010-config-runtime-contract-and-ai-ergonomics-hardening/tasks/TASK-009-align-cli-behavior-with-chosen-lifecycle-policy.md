@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-004"
 project: ""
 title: "Align CLI behavior with chosen lifecycle policy"
-status: "open"
+status: "completed"
 description: "Make start/complete/cancel/work semantics consistent and testable"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:22Z"
-updated_at: "2026-03-20T00:22:22Z"
+updated_at: "2026-03-20T00:54:51Z"
 ---
 
 # Context
@@ -47,4 +47,8 @@ PLAN-010 phase 2 step 4 (implementation half): **`docs/LIFECYCLE.md`** is canoni
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- `_lifecycle_transition_error()` in `artifacts.py` — actionable messages for invalid `start` / `complete` / `cancel` (references `docs/LIFECYCLE.md`).
+- `_work_task()` in `execution.py` — clear error for `canceled` (and other non-runnable states).
+- `cmd_work` — after chunk task failure, prints hint that chunk usually stays `in_progress` + LIFECYCLE link.
+- Tests: `tests/test_cli_lifecycle.py` (invalid transitions, `work` without `start`, chunk failure hint).
+- `docs/LIFECYCLE.md` intro/follow-up tweaked to match shipped behavior.

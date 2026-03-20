@@ -330,7 +330,16 @@ def _work_task(root: Path, task: Artifact) -> tuple[bool, str]:
     if current == "completed":
         return True, ""
     if current not in {"open", "in_progress"}:
-        raise ValueError(f"cannot work task in state '{current}'")
+        if current == "canceled":
+            raise ValueError(
+                "cannot work task in state 'canceled' "
+                "(only open or in_progress tasks can run; edit status or add a follow-up task). "
+                "See docs/LIFECYCLE.md"
+            )
+        raise ValueError(
+            f"cannot work task in state {current!r} "
+            f"(expected open or in_progress). See docs/LIFECYCLE.md"
+        )
 
     _update_artifact_status(root, task, "in_progress")
     ok, run_id = _execute_task_run(root, task)

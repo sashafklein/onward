@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T00:50:44Z"
+generated_at: "2026-03-20T00:54:51Z"
 completed:
   -
     id: "PLAN-001"
@@ -105,6 +105,13 @@ completed:
     title: "Decide strict lifecycle policy"
     status: "completed"
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-008-decide-strict-lifecycle-policy.md"
+    plan: "PLAN-010"
+    chunk: "CHUNK-004"
+  -
+    id: "TASK-009"
+    title: "Align CLI behavior with chosen lifecycle policy"
+    status: "completed"
+    path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-009-align-cli-behavior-with-chosen-lifecycle-policy.md"
     plan: "PLAN-010"
     chunk: "CHUNK-004"
   -

@@ -1,6 +1,6 @@
 # Artifact lifecycle policy (PLAN-010)
 
-This document is the **authoritative** description of how Onward moves plans, chunks, and tasks through `open` → `in_progress` → `completed` / `canceled`. CLI behavior is defined here first; **TASK-009** aligns implementation edge cases and errors with this text.
+This document is the **authoritative** description of how Onward moves plans, chunks, and tasks through `open` → `in_progress` → `completed` / `canceled`. CLI errors and tests are written to match this text (see `onward start` / `complete` / `cancel` / `work`).
 
 ## Decision: work-owned execution, manual overlays
 
@@ -48,7 +48,7 @@ Applies to **any** artifact type (plan, chunk, task) that uses the shared status
 - Ready tasks are chosen in dependency order; each task is executed via the same path as `onward work TASK-*`.
 - After all tasks that can run have **completed** successfully, the **post_chunk** markdown hook runs; on success the chunk is set to **`completed`**.
 
-If a task fails, chunk processing stops with a non-zero exit; the chunk usually remains **`in_progress`** until you resolve tasks and run `work` again or adjust status manually. **TASK-009** may tighten messaging and validation.
+If a task fails, chunk processing stops with a non-zero exit; the chunk usually remains **`in_progress`** until you resolve tasks and run `work` again or adjust status manually. The CLI prints a short hint pointing here.
 
 ## Choosing a command (quick reference)
 
@@ -66,5 +66,4 @@ Repository **AGENTS.md** and **INSTALLATION.md** agent blocks should match this 
 
 ## Follow-up (other tasks)
 
-- **TASK-009** — Align error messages, any missing validation, and tests with this policy.
-- **TASK-010** — Propagate the same rules through README, INSTALLATION, CONTRIBUTION, and examples.
+- **TASK-010** — Propagate the same rules through README, INSTALLATION, CONTRIBUTION, and examples (if any drift remains).

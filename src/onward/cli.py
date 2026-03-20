@@ -546,6 +546,10 @@ def cmd_work(args: argparse.Namespace) -> int:
         print(f"Run {run_id}: {'completed' if ok else 'failed'}")
         if not ok:
             print(f"Stopping chunk work for {chunk_id} after task failure")
+            print(
+                f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
+                f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
+            )
             return 1
         if not sequential:
             ready_again, all_resolved_again = _ordered_ready_chunk_tasks(root, chunk_id)

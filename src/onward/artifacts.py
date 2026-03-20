@@ -149,6 +149,42 @@ def _validate_artifact(artifact: Artifact) -> list[str]:
     return issues
 
 
+def _lifecycle_transition_error(current: str, action: str) -> str:
+    """Human-oriented error when start/complete/cancel is invalid; keep in sync with docs/LIFECYCLE.md."""
+    if action == "start":
+        if current == "in_progress":
+            return (
+                "cannot start: artifact is already in_progress "
+                "(onward start only applies to open items; use onward work to execute, "
+                "or onward complete/cancel to close). See docs/LIFECYCLE.md"
+            )
+        if current in {"completed", "canceled"}:
+            return (
+                f"cannot start: artifact is already {current} (terminal state). See docs/LIFECYCLE.md"
+            )
+        return f"cannot start artifact in state {current!r}. See docs/LIFECYCLE.md"
+    if action == "complete":
+        if current == "completed":
+            return (
+                "cannot complete: artifact is already completed "
+                "(successful onward work marks tasks complete; no further complete is needed). "
+                "See docs/LIFECYCLE.md"
+            )
+        if current == "canceled":
+            return (
+                "cannot complete: artifact is canceled (not open or in_progress). "
+                "See docs/LIFECYCLE.md"
+            )
+        return f"cannot complete artifact in state {current!r}. See docs/LIFECYCLE.md"
+    if action == "cancel":
+        if current in {"completed", "canceled"}:
+            return (
+                f"cannot cancel: artifact is already {current} (terminal state). See docs/LIFECYCLE.md"
+            )
+        return f"cannot cancel artifact in state {current!r}. See docs/LIFECYCLE.md"
+    return f"cannot {action} artifact in state {current!r}. See docs/LIFECYCLE.md"
+
+
 def _transition_status(current: str, target: str) -> str:
     transitions = {
         "start": {"open": "in_progress"},
@@ -158,7 +194,7 @@ def _transition_status(current: str, target: str) -> str:
     if target not in transitions:
         raise ValueError(f"unknown transition target: {target}")
     if current not in transitions[target]:
-        raise ValueError(f"cannot {target} artifact in state '{current}'")
+        raise ValueError(_lifecycle_transition_error(current, target))
     return transitions[target][current]
 
 
