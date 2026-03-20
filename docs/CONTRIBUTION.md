@@ -131,7 +131,7 @@ This runs pytest when available, otherwise it runs dogfood e2e smoke checks.
 
 [`tests/test_docs_consistency.py`](../tests/test_docs_consistency.py) requires **README.md**, **INSTALLATION.md**, and **this guide** each to mention every leaf `onward …` subcommand from `build_parser()` (so `a|b|c` shorthand alone is not enough).
 
-Executor **preflight** (PATH / executable file for `ralph.command`) lives in [`src/onward/preflight.py`](../src/onward/preflight.py) and is covered by [`tests/test_preflight.py`](../tests/test_preflight.py).
+Executor **preflight** (PATH / executable file for `executor.command`) lives in [`src/onward/preflight.py`](../src/onward/preflight.py) and is covered by [`tests/test_preflight.py`](../tests/test_preflight.py).
 
 When you add config keys, new subcommands, or change executor stdin, update the allowlists / schema / payload module **and** extend or adjust these tests if the contract changes.
 

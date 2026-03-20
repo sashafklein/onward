@@ -16,7 +16,7 @@ Use this every session:
 4. **`onward work TASK-###`** — runs hooks + executor; on **success** the task is already **`completed`**.
 5. **`onward report`** again — hand off cleanly to the next session or agent.
 
-Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in dependency order, then runs the chunk post hook. Details: [LIFECYCLE.md](LIFECYCLE.md).
+Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in dependency order, then runs the chunk post hook. Plan-sized execution: **`onward work PLAN-###`** walks every non-terminal chunk in ID order (respecting chunk **`depends_on`**), same per-chunk behavior as above, then completes the plan. Details: [LIFECYCLE.md](LIFECYCLE.md).
 
 ---
 
@@ -122,7 +122,7 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ## Executor preflight
 
-When `ralph.enabled` is true, **`onward work`** and **`onward review-plan`** (and the **`post_chunk_markdown`** hook) verify that `ralph.command` exists on `PATH` or as an executable file path **before** starting a run. If it fails, fix `ralph.command`, install the binary, or for automated tests use command **`true`**. **`onward split`** does not use the executor today, so it does not run this check. Details: [CAPABILITIES.md](CAPABILITIES.md).
+When `executor.enabled` is true, **`onward work`**, **`onward review-plan`**, and the **`post_chunk_markdown`** hook verify that `executor.command` exists on `PATH` or as an executable file path **before** starting a run. If it fails, fix `executor.command`, install the binary, or for automated tests use command **`true`**. A reference router ships at **`scripts/onward-exec`**. **`onward split`** does not use the executor today, so it does not run this check. Details: [CAPABILITIES.md](CAPABILITIES.md).
 
 ## Related docs
 

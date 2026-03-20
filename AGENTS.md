@@ -22,7 +22,7 @@ This is your operating rhythm. Follow it relentlessly:
 onward report                 ← See the full picture
 onward next                   ← Pick the next thing
 onward start <ID>             ← Optional: mark in_progress (claim / visibility)
-onward work <TASK-ID>         ← Run executor; on success the task is completed
+onward work <TASK-ID|CHUNK-ID|PLAN-ID>  ← Run executor (task / chunk / whole plan); on success tasks complete
 onward report                 ← Hand off to the next session or agent
 ```
 
@@ -65,7 +65,7 @@ When the user describes a new initiative, feature, or project:
 
 ## Codebase Notes
 
-- Source lives in `src/onward/` (`cli.py` + `cli_commands.py` for handlers, plus `artifacts.py`, `sync.py`, …)
+- Source lives in `src/onward/` (`cli.py` + `cli_commands.py` for handlers, plus `artifacts.py`, `execution.py`, `sync.py`, `preflight.py`, `executor_ack.py`, `executor_payload.py`, …)
 - Tests are in `tests/` — run with `pytest` or `./scripts/test.sh`
 - The package is `onward-cli`, installed via `pip install -e .`
 - Entry point: `onward` command (maps to `onward.cli:main`)

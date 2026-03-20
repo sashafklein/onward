@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-008"
 project: ""
 title: "Add default commit-after-task hook"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -14,15 +14,15 @@ depends_on:
   - "TASK-029"
 blocked_by: []
 files:
-  - src/onward/scaffold.py
-  - src/onward/execution.py
-  - tests/test_cli_work.py
+  - "src/onward/scaffold.py"
+  - "src/onward/execution.py"
+  - "tests/test_cli_work.py"
 acceptance:
   - "onward init creates config with post_task_shell containing a git commit command"
   - "ONWARD_TASK_ID and ONWARD_TASK_TITLE env vars are set during hook execution"
   - "the default hook uses --allow-empty to avoid failure on clean worktrees"
 created_at: "2026-03-20T16:00:56Z"
-updated_at: "2026-03-20T16:00:56Z"
+updated_at: "2026-03-20T16:46:21Z"
 ---
 
 # Context

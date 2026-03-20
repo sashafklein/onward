@@ -351,8 +351,8 @@ sync:
   repo: null               # clone URL or path when mode is repo
   worktree_path: .onward/sync   # sync checkout directory (gitignored)
 
-ralph:
-  command: ralph
+executor:
+  command: onward-exec
   args: []
   # When false, shell hooks still run; the executor is not invoked for work, markdown hooks, or review-plan.
   enabled: true
@@ -375,6 +375,8 @@ hooks:
   post_chunk_markdown: .onward/hooks/post-chunk.md
 ```
 
+> **Migration:** If your older workspace still has a top-level `ralph:` key, it continues to work; Onward maps it to `executor` at load time. Rename to `executor:` to silence the deprecation warning from `onward doctor`.
+
 With `sync.mode` set to `branch` or `repo`, use:
 
 ```bash
@@ -383,7 +385,7 @@ onward sync push     # copy plans → sync checkout, commit, push
 onward sync pull     # fast-forward sync checkout, copy plans → workspace, reindex
 ```
 
-`onward doctor` checks `.onward.config.yaml` for unsupported keys (including removed legacy keys) and basic shape (for example, `ralph.args` and shell hook lists must be YAML lists). It also validates the `sync:` section (for example, branch mode requires a git repo at the workspace root) and flags ignored combinations such as `sync.mode: local` with a non-null `sync.repo`.
+`onward doctor` checks `.onward.config.yaml` for unsupported keys (including removed legacy keys) and basic shape (for example, `executor.args` and shell hook lists must be YAML lists). It also validates the `sync:` section (for example, branch mode requires a git repo at the workspace root) and flags ignored combinations such as `sync.mode: local` with a non-null `sync.repo`.
 
 ### Local sync mode (default): exit codes
 

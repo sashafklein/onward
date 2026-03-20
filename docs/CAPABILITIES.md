@@ -4,20 +4,21 @@ Short reference for **what is model-backed**, what is **local/heuristic**, and w
 
 ## Executor-backed (subprocess + stdin JSON)
 
-These invoke the command from `ralph.command` (and `ralph.args`) when `ralph.enabled` is true, subject to each command’s checks:
+These invoke the command from `executor.command` (and `executor.args`) when `executor.enabled` is true, subject to each command’s checks:
 
 **Strict task completion:** when `work.require_success_ack` is true, a successful **`onward work TASK-*`** requires a machine-readable JSON line on executor stdout/stderr (not exit 0 alone); see [WORK_HANDOFF.md](WORK_HANDOFF.md) and [schemas/onward-task-success-ack-v1.schema.json](schemas/onward-task-success-ack-v1.schema.json). The executor receives **`ONWARD_RUN_ID`** in its environment (matches stdin `run_id`).
 
-**Preflight:** before the first executor subprocess for `onward work`, `onward review-plan`, and `post_chunk_markdown`, Onward checks that the configured command is usable: a **bare name** must resolve via `PATH` (`shutil.which`); an **explicit path** must exist and be executable. Commands `true` and `false` skip the check so tests and minimal shells work without a real provider binary (including environments where `/usr/bin/true` is not how tests are configured). See [`preflight_ralph_command`](../src/onward/preflight.py).
+**Preflight:** before the first executor subprocess for `onward work`, `onward review-plan`, and `post_chunk_markdown`, Onward checks that the configured command is usable: a **bare name** must resolve via `PATH` (`shutil.which`); an **explicit path** must exist and be executable. Commands `true` and `false` skip the check so tests and minimal shells work without a real provider binary (including environments where `/usr/bin/true` is not how tests are configured). See [`preflight_executor_command`](../src/onward/preflight.py).
 
 | Feature | Notes |
 | ------- | ----- |
 | `onward work TASK-*` | Full task payload + hooks; see [WORK_HANDOFF.md](WORK_HANDOFF.md). |
 | `onward work CHUNK-*` | Same per ready task; `post_chunk_markdown` hook after all tasks succeed. |
+| `onward work PLAN-*` | Runs each chunk in the plan in order (see [LIFECYCLE.md](LIFECYCLE.md)); same per-task behavior as chunk work. |
 | `onward review-plan` | One or more reviewer runs: default uses `review.double_review` + `models.review_default` / `models.default`, or an explicit matrix in `review.reviewers` (per-slot model, optional `command` / `args`, ordered `fallback`). Use `--reviewer LABEL` to run matching slots only (exact label). |
 | Markdown hooks | `pre_task_markdown`, `post_task_markdown`, `post_chunk_markdown` (shell hooks are **not** the executor). |
 
-If `ralph.enabled` is false, executor-backed steps are skipped or fail with a clear message (shell hooks may still run).
+If `executor.enabled` is false, executor-backed steps are skipped or fail with a clear message (shell hooks may still run).
 
 ## Local / no model call
 
@@ -44,7 +45,7 @@ Artifact status rules are **orthogonal** to model usage: see [LIFECYCLE.md](LIFE
 
 ## Multi-provider routing (future)
 
-A design for optional **provider registry** routing (multiple CLIs/backends) lives in [PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md). Until implemented and enabled in config, behavior remains **single executor** (`ralph`) plus `resolve_model_alias`.
+A design for optional **provider registry** routing (multiple CLIs/backends) lives in [PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md). Until implemented and enabled in config, behavior remains **single configured executor** (`executor.command` / `executor.args`) plus `resolve_model_alias`.
 
 ### `review-plan` reviewer matrix (config)
 
@@ -54,13 +55,13 @@ When `review.reviewers` is a **non-empty** list, Onward ignores `double_review` 
 | ----- | -------- | ------- |
 | `label` | no | Stable name for logs and `--reviewer` (default `reviewer-1`, `reviewer-2`, …). |
 | `model` | yes | Logical model (aliases like `sonnet-latest` are resolved). |
-| `command` | no | Executor argv0 for this slot only; default is `ralph.command`. |
-| `args` | no | Extra argv for this slot (list); default `[]` if `command` is set, else `ralph.args`. |
+| `command` | no | Executor argv0 for this slot only; default is `executor.command`. |
+| `args` | no | Extra argv for this slot (list); default `[]` if `command` is set, else `executor.args`. |
 | `fallback` | no | Ordered list of alternates: string = model only (inherits this slot’s `command` / `args`), or a mapping with `model` and optional `command` / `args`. |
 
 On **preflight failure** or **non-zero executor exit**, Onward tries the next fallback and prints a single line with `fallback_reason=preflight_failed` or `fallback_reason=executor_failed` (stable for tooling).
 
-Example (OpenClaw-style primary, global `ralph` fallback — adjust binaries to your machine):
+Example (OpenClaw-style primary, global default executor fallback — adjust binaries to your machine):
 
 ```yaml
 review:

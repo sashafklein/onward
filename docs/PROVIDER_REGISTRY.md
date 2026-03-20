@@ -1,6 +1,6 @@
 # Provider registry (design)
 
-**Status:** design only — default behavior today is unchanged: a single executor (`ralph.command` + `ralph.args`) receives a resolved model string on stdin; [`config.py`](../src/onward/config.py) maps aliases like `sonnet-latest` via `MODEL_FAMILIES` / `resolve_model_alias`. This document specifies how **explicit multi-provider routing** could layer on without breaking that path.
+**Status:** design only — default behavior today is unchanged: a single executor (`executor.command` + `executor.args`) receives a resolved model string on stdin; [`config.py`](../src/onward/config.py) maps aliases like `sonnet-latest` via `MODEL_FAMILIES` / `resolve_model_alias`. This document specifies how **explicit multi-provider routing** could layer on without breaking that path.
 
 **Related:** [CAPABILITIES.md](CAPABILITIES.md) (`review.reviewers` matrix + fallbacks), [WORK_HANDOFF.md](WORK_HANDOFF.md), PLAN-010 CHUNK-007 (TASK-019 — preflight, TASK-021 — review-plan provider selection, TASK-020 — execution contract).
 
@@ -8,7 +8,7 @@
 
 ## Problem
 
-Model strings in artifacts and config (e.g. `opus-latest`, `claude-opus-4-6`, `gpt-5`) must eventually map to **different concrete backends**: OpenClaw, Claude CLI, Cursor agent CLI, Codex CLI, etc. Today everything is assumed to be handled by one `ralph` invocation; the executor is responsible for interpretation.
+Model strings in artifacts and config (e.g. `opus-latest`, `claude-opus-4-6`, `gpt-5`) must eventually map to **different concrete backends**: OpenClaw, Claude CLI, Cursor agent CLI, Codex CLI, etc. Today everything is assumed to be handled by one configured executor subprocess; the executor binary is responsible for interpretation.
 
 We want:
 
@@ -29,7 +29,7 @@ provider_registry:
 When `enabled` is false or the block is absent:
 
 - Ignore all `providers` / per-provider tables below.
-- Keep using `ralph` + `resolve_model_alias` only (current behavior).
+- Keep using the single `executor` command + `resolve_model_alias` only (current behavior).
 
 When `enabled` is true:
 
@@ -104,9 +104,9 @@ For a given **executor-backed** operation, resolve **logical model** `M` and **p
 2. **Per-command override** — `provider_registry.commands.<command>.provider` when non-null (does not replace `M`, only chooses backend if the design ties provider to command first; see note below).
 3. **Routing table** — if `models.routing` maps `M` (after normalizing case/`_`/`-`) to `{ provider, model }`, use that pair as the effective `(P, M_native)`.
 4. **`resolve_model_alias(M)`** — existing [`resolve_model_alias`](../src/onward/config.py) expands `-latest` and family shorthands to canonical strings (still logical, not necessarily native IDs).
-5. **Default provider** — `provider_registry.default_provider` when enabled; if still unset, fall back to legacy single-executor behavior: `ralph` only.
+5. **Default provider** — `provider_registry.default_provider` when enabled; if still unset, fall back to legacy single-executor behavior: the configured `executor` command only.
 
-**Note:** Step 2 vs 3 ordering is the main ambiguity. Implementation should choose **one** documented order; recommended: apply **routing table on logical name first** (steps 1 → 4), then **command default provider** only when routing did not set `P`, then **default_provider**, then **ralph** fallback.
+**Note:** Step 2 vs 3 ordering is the main ambiguity. Implementation should choose **one** documented order; recommended: apply **routing table on logical name first** (steps 1 → 4), then **command default provider** only when routing did not set `P`, then **default_provider**, then **single-executor** fallback.
 
 Document the final order in code comments and [CAPABILITIES.md](CAPABILITIES.md) when implemented.
 
@@ -125,7 +125,7 @@ When `provider_registry.enabled` is true:
 ## Non-goals (this design)
 
 - Implementing adapters or shipping provider-specific CLIs.
-- Changing default `ralph`-only behavior without `provider_registry.enabled: true`.
+- Changing default single-executor behavior without `provider_registry.enabled: true`.
 - Markdown / prose linting of provider docs.
 
 ---

@@ -281,7 +281,7 @@ Status flows: `open` → `in_progress` → `completed` (or `canceled`). **`onwar
 When you run `onward init`, your project gets:
 
 ```
-.onward.config.yaml              ← workspace config (models, hooks, sync, work, ralph, …)
+.onward.config.yaml              ← workspace config (models, hooks, sync, work, executor, …)
 .onward/
   plans/
     index.yaml                   ← derived index (regenerable)
