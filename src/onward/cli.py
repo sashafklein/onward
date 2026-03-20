@@ -53,6 +53,12 @@ from onward.scaffold import (
     _update_gitignore,
     _write_file,
 )
+from onward.sync import (
+    cmd_sync_pull as _cmd_sync_pull,
+    cmd_sync_push as _cmd_sync_push,
+    cmd_sync_status as _cmd_sync_status,
+    validate_sync_config,
+)
 from onward.split import (
     _assert_writes_safe,
     _normalize_chunk_candidates,
@@ -106,6 +112,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     issues: list[str] = []
 
+    config = _load_config(root)
+    issues.extend(validate_sync_config(root, config))
+
     for rel_path in REQUIRED_PATHS:
         path = root / rel_path
         if not path.exists():
@@ -152,6 +161,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     print("Doctor check passed")
     return 0
+
+
+def cmd_sync_status(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    code, lines = _cmd_sync_status(root)
+    for line in lines:
+        print(line)
+    return code
+
+
+def cmd_sync_push(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    code, lines = _cmd_sync_push(root)
+    for line in lines:
+        print(line)
+    return code
+
+
+def cmd_sync_pull(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    code, lines = _cmd_sync_pull(root)
+    for line in lines:
+        print(line)
+    return code
 
 
 def cmd_new_plan(args: argparse.Namespace) -> int:
@@ -809,6 +842,19 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Validate basic onward workspace structure")
     doctor_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    sync_parser = subparsers.add_parser("sync", help="Sync .onward/plans with a branch or remote repo")
+    sync_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    sync_sub = sync_parser.add_subparsers(dest="sync_command", required=True)
+
+    sync_status_parser = sync_sub.add_parser("status", help="Compare local plans with sync target")
+    sync_status_parser.set_defaults(func=cmd_sync_status)
+
+    sync_push_parser = sync_sub.add_parser("push", help="Copy local plans to sync target, commit, and push")
+    sync_push_parser.set_defaults(func=cmd_sync_push)
+
+    sync_pull_parser = sync_sub.add_parser("pull", help="Fast-forward sync target and copy plans locally")
+    sync_pull_parser.set_defaults(func=cmd_sync_pull)
 
     new_parser = subparsers.add_parser("new", help="Create new artifacts")
     new_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")

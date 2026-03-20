@@ -328,6 +328,9 @@ path: .onward
 
 sync:
   mode: local              # local | branch | repo
+  branch: onward           # used when mode is branch (git worktree on this branch)
+  repo: null               # clone URL or path when mode is repo
+  worktree_path: .onward/sync   # sync checkout directory (gitignored)
 
 ralph:
   command: ralph
@@ -351,6 +354,16 @@ hooks:
   post_task_markdown: .onward/hooks/post-task.md
   post_chunk_markdown: .onward/hooks/post-chunk.md
 ```
+
+With `sync.mode` set to `branch` or `repo`, use:
+
+```bash
+onward sync status   # clean/dirty vs remote (or “not initialized” until first push)
+onward sync push     # copy plans → sync checkout, commit, push
+onward sync pull     # fast-forward sync checkout, copy plans → workspace, reindex
+```
+
+`onward doctor` validates the `sync:` section (for example, branch mode requires a git repo at the workspace root).
 
 ### Model Aliases
 

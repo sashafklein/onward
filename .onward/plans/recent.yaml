@@ -1,4 +1,4 @@
-generated_at: "2026-03-19T23:54:28Z"
+generated_at: "2026-03-20T00:02:33Z"
 completed:
   -
     id: "PLAN-001"
@@ -20,6 +20,11 @@ completed:
     title: "Execution runtime, task handoff, and parent-agent oversight"
     status: "completed"
     path: ".onward/plans/PLAN-004-execution-runtime/plan.md"
+  -
+    id: "PLAN-005"
+    title: "Sync modes, reliability hardening, and release readiness"
+    status: "completed"
+    path: ".onward/plans/PLAN-005-sync-and-hardening/plan.md"
   -
     id: "PLAN-006"
     title: "review-plan CLI command"

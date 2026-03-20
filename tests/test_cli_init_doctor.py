@@ -20,6 +20,7 @@ def test_init_creates_expected_layout(tmp_path: Path, capsys):
 
     gitignore = (tmp_path / ".gitignore").read_text(encoding="utf-8")
     assert ".onward/plans/.archive/" in gitignore
+    assert ".onward/sync/" in gitignore
     assert ".onward/runs/" in gitignore
     assert ".onward/ongoing.json" in gitignore
     assert ".dogfood/" in gitignore

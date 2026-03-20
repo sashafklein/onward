@@ -110,6 +110,16 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward show TASK-001`        | Full detail on one artifact       |
 | `onward note TASK-001`        | View notes on an artifact         |
 
+### Syncing plan files (optional)
+
+Configure `sync` in `.onward.config.yaml` (`local`, `branch`, or `repo`). The sync checkout lives at `sync.worktree_path` (default `.onward/sync/`, gitignored).
+
+| Command                  | What it does                                                |
+| ------------------------ | ----------------------------------------------------------- |
+| `onward sync status`     | Compare local `.onward/plans/` with the sync target         |
+| `onward sync push`       | Mirror local plans into the target, commit, and `git push`  |
+| `onward sync pull`       | `git pull --ff-only` in the target, then mirror plans here  |
+
 ### Moving Work Forward
 
 | Command                    | What it does                              |

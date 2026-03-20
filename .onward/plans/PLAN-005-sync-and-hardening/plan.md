@@ -1,13 +1,13 @@
 ---
-id: PLAN-005
-type: plan
-title: Sync modes, reliability hardening, and release readiness
-status: open
-description: Add shared planning sync and tighten correctness for daily use
-priority: medium
-model: gpt-5
-created_at: 2026-03-19T00:00:00Z
-updated_at: 2026-03-19T00:00:00Z
+id: "PLAN-005"
+type: "plan"
+title: "Sync modes, reliability hardening, and release readiness"
+status: "completed"
+description: "Add shared planning sync and tighten correctness for daily use"
+priority: "medium"
+model: "gpt-5"
+created_at: "2026-03-19T00:00:00Z"
+updated_at: "2026-03-20T00:02:33Z"
 ---
 
 # Summary

@@ -333,6 +333,7 @@ completed: []
 
 GITIGNORE_LINES = [
     ".onward/plans/.archive/",
+    ".onward/sync/",
     ".onward/runs/",
     ".onward/reviews/",
     ".onward/ongoing.json",
