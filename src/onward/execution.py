@@ -14,7 +14,7 @@ from onward.artifacts import (
     _read_notes,
     _update_artifact_status,
 )
-from onward.config import _config_model, _load_config, _model_alias
+from onward.config import _config_model, _load_config, _model_alias, _ralph_enabled
 from onward.util import (
     _as_str_list,
     _clean_string,
@@ -257,6 +257,8 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     log_sections.append(pre_shell_log)
     if not pre_shell_ok:
         error = "pre_task_shell hook failed"
+    elif not _ralph_enabled(config):
+        error = "ralph.enabled is false in .onward.config.yaml (executor disabled)"
     else:
         pre_md_ok, pre_md_log = _run_markdown_hook(root, cmd, pre_md, "pre_task_markdown", model, task, run_id)
         log_sections.append(pre_md_log)
@@ -373,6 +375,9 @@ def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, st
     hook_path = root / hook_rel_path
     if not hook_path.exists():
         return False, f"hook file not found: {hook_rel_path}"
+
+    if not _ralph_enabled(config):
+        return False, "ralph.enabled is false in .onward.config.yaml (executor disabled)"
 
     ralph = config.get("ralph", {})
     if not isinstance(ralph, dict):
@@ -497,6 +502,10 @@ def _execute_plan_review(
     if env_override:
         review_path.write_text(env_override, encoding="utf-8")
         return True, review_path
+
+    if not _ralph_enabled(config):
+        print("Error: ralph.enabled is false in .onward.config.yaml (executor disabled)")
+        return False, review_path
 
     try:
         result = subprocess.run(

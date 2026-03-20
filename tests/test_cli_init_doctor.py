@@ -28,7 +28,7 @@ def test_init_creates_expected_layout(tmp_path: Path, capsys):
     config = (tmp_path / ".onward.config.yaml").read_text(encoding="utf-8")
     assert "# Onward workspace config." in config
     assert "# Schema version for future migrations." in config
-    assert "# Executor command to run for `onward work` task execution." in config
+    assert "# Executor command to run for `onward work`, markdown hooks, and `review-plan`." in config
     assert "# Default model used by `onward split` decomposition (blank = use default)." in config
 
 

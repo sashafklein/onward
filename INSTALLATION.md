@@ -112,7 +112,8 @@ When the user describes a new initiative, feature, or project:
 - `onward list --blocking --human` — what human actions are blocking agent work
 - `onward tree --project <key>` — hierarchical view of all plans/chunks/tasks
 - `onward next --project <key>` — the single best thing to work on next
-- `onward show <ID>` — full detail on any artifact
+- `onward show <ID>` — full detail on any artifact (includes latest run info for tasks)
+- `onward recent` — recently completed artifacts and run records
 
 ### Non-Negotiable
 
@@ -166,11 +167,13 @@ onward note <ID>
 onward start <ID>
 onward complete <ID>
 onward cancel <ID>
+onward work TASK-XXX          # execute a task (sends full context to executor)
+onward work CHUNK-XXX         # execute chunk tasks sequentially (dep-aware)
 
 # Inspect
-onward show <ID>
-onward progress
-onward recent
+onward show <ID>              # full detail; tasks include latest run info
+onward progress               # what's in flight
+onward recent                 # recently completed artifacts + run records
 
 # Optional: shared plan state (configure sync.mode in .onward.config.yaml)
 onward sync status
@@ -330,8 +333,7 @@ Onward's workspace config lives at `.onward.config.yaml` in your project root. K
 ```yaml
 version: 1
 
-# Root directory for all Onward artifacts.
-path: .onward
+# Plans, templates, runs, etc. live under .onward/ at the workspace root (not configurable).
 
 sync:
   mode: local              # local | branch | repo
@@ -341,6 +343,8 @@ sync:
 
 ralph:
   command: ralph
+  args: []
+  # When false, shell hooks still run; the executor is not invoked for work, markdown hooks, or review-plan.
   enabled: true
 
 models:
@@ -353,9 +357,8 @@ review:
   double_review: true            # two independent reviewers (review_default + default)
 
 work:
+  # true: one `onward work CHUNK` drains all ready tasks. false: at most one task per invocation.
   sequential_by_default: true
-  create_worktree: true
-  base_branch: main
 
 hooks:
   post_task_markdown: .onward/hooks/post-task.md

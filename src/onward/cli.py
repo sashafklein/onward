@@ -34,6 +34,7 @@ from onward.config import (
     _load_config,
     _load_template,
     _model_alias,
+    _work_sequential_by_default,
 )
 from onward.execution import (
     _collect_run_records,
@@ -526,6 +527,8 @@ def cmd_work(args: argparse.Namespace) -> int:
 
     chunk = artifact
     chunk_id = str(chunk.metadata.get("id", ""))
+    config = _load_config(root)
+    sequential = _work_sequential_by_default(config)
     if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
         _update_artifact_status(root, chunk, "in_progress")
 
@@ -542,6 +545,17 @@ def cmd_work(args: argparse.Namespace) -> int:
         if not ok:
             print(f"Stopping chunk work for {chunk_id} after task failure")
             return 1
+        if not sequential:
+            ready_again, all_resolved_again = _ordered_ready_chunk_tasks(root, chunk_id)
+            if ready_again:
+                print(
+                    f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
+                    "run onward work again to continue."
+                )
+                return 0
+            if not all_resolved_again:
+                print(f"Chunk {chunk_id} has unresolved task dependencies")
+                return 1
 
     refreshed_chunk = _must_find_by_id(root, chunk_id)
     hook_ok, hook_error = _run_chunk_post_markdown_hook(root, refreshed_chunk)

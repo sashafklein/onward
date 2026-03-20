@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from onward import cli
@@ -9,6 +10,16 @@ def _init_workspace(root: Path) -> None:
 
 def _create_plan(root: Path, title: str = "Test Plan") -> None:
     assert cli.main(["new", "--root", str(root), "plan", title]) == 0
+
+
+def _set_ralph_enabled(root: Path, value: str) -> None:
+    config_path = root / ".onward.config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    pos = text.find("ralph:")
+    assert pos >= 0
+    head, tail = text[:pos], text[pos:]
+    tail_new = re.sub(r"(?m)^(\s+enabled:\s*)\S+", rf"\g<1>{value}", tail, count=1)
+    config_path.write_text(head + tail_new, encoding="utf-8")
 
 
 SAMPLE_REVIEW = """## Review: Test Plan
@@ -88,6 +99,19 @@ def test_review_plan_rejects_non_plan(monkeypatch, tmp_path: Path, capsys):
 
     assert code == 1
     assert "not a plan" in out
+
+
+def test_review_plan_fails_when_ralph_disabled(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _create_plan(tmp_path)
+    _set_ralph_enabled(tmp_path, "false")
+    capsys.readouterr()
+
+    code = cli.main(["review-plan", "--root", str(tmp_path), "PLAN-001"])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "ralph.enabled is false" in out
 
 
 def test_review_plan_missing_plan_errors(tmp_path: Path, capsys):

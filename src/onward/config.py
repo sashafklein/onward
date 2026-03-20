@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from onward.util import _clean_string, _parse_simple_yaml
+from onward.util import _clean_string, _normalize_bool, _parse_simple_yaml
 
 MODEL_FAMILIES: dict[str, str] = {
     "opus": "claude-opus-4-6",
@@ -22,6 +22,26 @@ def _load_config(root: Path) -> dict[str, Any]:
     if isinstance(parsed, dict):
         return parsed
     return {}
+
+
+def _ralph_enabled(config: dict[str, Any]) -> bool:
+    """When false, task work, plan review, and markdown hooks must not invoke the executor."""
+    ralph = config.get("ralph", {})
+    if not isinstance(ralph, dict):
+        return True
+    if "enabled" not in ralph:
+        return True
+    return _normalize_bool(ralph.get("enabled"))
+
+
+def _work_sequential_by_default(config: dict[str, Any]) -> bool:
+    """When false, `onward work CHUNK` runs at most one ready task per invocation."""
+    work = config.get("work", {})
+    if not isinstance(work, dict):
+        return True
+    if "sequential_by_default" not in work:
+        return True
+    return _normalize_bool(work.get("sequential_by_default"))
 
 
 def _config_model(config: dict[str, Any], key: str, fallback: str) -> str:

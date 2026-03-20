@@ -21,8 +21,7 @@ DEFAULT_FILES = {
 # Schema version for future migrations.
 version: 1
 
-# Root directory for all Onward artifacts (plans, templates, hooks, runs, etc).
-path: .onward
+# Artifact directories (.onward/, etc.) are fixed relative to the workspace root.
 
 sync:
   # Sync mode: local (disabled), branch (same repo branch), repo (separate repo).
@@ -35,11 +34,11 @@ sync:
   worktree_path: .onward/sync
 
 ralph:
-  # Executor command to run for `onward work` task execution.
+  # Executor command to run for `onward work`, markdown hooks, and `review-plan`.
   command: ralph
   # Default arguments appended to the executor command.
   args: []
-  # Global on/off switch for executor usage.
+  # When false, the CLI still runs shell hooks but does not invoke the executor.
   enabled: true
 
 models:
@@ -58,14 +57,9 @@ review:
   double_review: true
 
 work:
-  # If true, chunk execution runs tasks sequentially unless explicitly overridden.
+  # If true (default), `onward work CHUNK` runs every ready task in one invocation.
+  # If false, each invocation runs at most one ready task; re-run until the chunk finishes.
   sequential_by_default: true
-  # If true, execution may create a dedicated git worktree for isolated work.
-  create_worktree: true
-  # Parent directory where execution worktrees are created.
-  worktree_root: .worktrees
-  # Base branch used when creating new worktrees.
-  base_branch: main
 
 hooks:
   # Shell commands run before each task (empty list means disabled).

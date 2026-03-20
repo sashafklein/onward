@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from onward import cli
@@ -71,6 +72,74 @@ def test_work_task_failure_records_failed_run_and_reopens_task(tmp_path: Path, c
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
     assert 'status: "failed"' in run_raw
+
+
+def _set_sequential_by_default(root: Path, value: str) -> None:
+    config_path = root / ".onward.config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    pos = text.find("work:")
+    assert pos >= 0
+    head, tail = text[:pos], text[pos:]
+    tail_new = re.sub(
+        r"(?m)^(\s+sequential_by_default:\s*)\S+",
+        rf"\g<1>{value}",
+        tail,
+        count=1,
+    )
+    config_path.write_text(head + tail_new, encoding="utf-8")
+
+
+def _set_ralph_enabled(root: Path, value: str) -> None:
+    config_path = root / ".onward.config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    pos = text.find("ralph:")
+    assert pos >= 0
+    head, tail = text[:pos], text[pos:]
+    tail_new = re.sub(r"(?m)^(\s+enabled:\s*)\S+", rf"\g<1>{value}", tail, count=1)
+    config_path.write_text(head + tail_new, encoding="utf-8")
+
+
+def test_work_task_fails_when_ralph_disabled(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    _set_ralph_enabled(tmp_path, "false")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "failed" in out
+
+    task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
+
+
+def test_work_chunk_sequential_false_stops_after_one_task(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    _set_sequential_by_default(tmp_path, "false")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "One"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Two"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "CHUNK-001"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.count("Run RUN-") == 1
+    assert "sequential_by_default is false" in out
+
+    chunk_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
+    assert 'status: "in_progress"' in chunk_raw
+
+    one = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-one.md").read_text(encoding="utf-8")
+    two = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-002-two.md").read_text(encoding="utf-8")
+    assert 'status: "completed"' in one
+    assert 'status: "open"' in two
 
 
 def test_work_chunk_executes_ready_tasks_in_dependency_order(tmp_path: Path, capsys):

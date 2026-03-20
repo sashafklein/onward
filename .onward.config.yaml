@@ -1,7 +1,5 @@
 version: 1
 
-path: .onward
-
 sync:
   mode: local
   branch: onward
@@ -21,9 +19,6 @@ models:
 
 work:
   sequential_by_default: true
-  create_worktree: true
-  worktree_root: .worktrees
-  base_branch: main
 
 hooks:
   pre_task_shell: []

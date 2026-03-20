@@ -106,8 +106,8 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward tree --project key`   | Hierarchical plan/chunk/task tree |
 | `onward next --project key`   | What should be worked on next     |
 | `onward progress`             | What's currently in flight        |
-| `onward recent`               | What just got done                |
-| `onward show TASK-001`        | Full detail on one artifact       |
+| `onward recent`               | What just got done (artifacts + runs) |
+| `onward show TASK-001`        | Full detail on one artifact (+ latest run for tasks) |
 | `onward note TASK-001`        | View notes on an artifact         |
 
 ### Syncing plan files (optional)
@@ -146,8 +146,8 @@ What gets synchronized:
 | `onward start TASK-001`    | Mark as in-progress                       |
 | `onward complete TASK-001` | Mark as done                              |
 | `onward cancel TASK-001`   | Mark as canceled                          |
-| `onward work TASK-001`     | Execute task                              |
-| `onward work CHUNK-001`    | Execute all tasks in a chunk sequentially |
+| `onward work TASK-001`     | Execute task (with full chunk/plan context)          |
+| `onward work CHUNK-001`    | Run ready chunk tasks (dep-aware; set `work.sequential_by_default: false` for one task per invocation) |
 | `onward archive PLAN-001`  | Archive a completed plan                  |
 | `onward note ID "message"` | Add a note to any artifact                |
 
@@ -202,6 +202,36 @@ todo: check edge case for empty input
 
 This ensures that scratch-pad thoughts, TODOs, and observations surface at exactly the moment they matter — when work is being closed out. During `onward work`, notes are also included in the executor payload so the agent has full context.
 
+### Execution Visibility
+
+When tasks are executed via `onward work`, Onward tracks every run:
+
+```bash
+# See what's in flight right now
+onward progress
+
+# See recently completed artifacts AND run records
+onward recent
+
+# Inspect a task — includes its latest run info
+onward show TASK-001
+```
+
+`onward show` on a task displays the latest run's ID, status, timestamps, log path, and error (if any):
+
+```
+Latest run:
+  id: RUN-2026-03-19T23-51-00Z-TASK-001
+  status: completed
+  started_at: 2026-03-19T23:51:00Z
+  finished_at: 2026-03-19T23:51:12Z
+  log: .onward/runs/RUN-2026-03-19T23-51-00Z-TASK-001.log
+```
+
+`onward recent` interleaves completed artifacts with terminal run records, giving a unified timeline of what just happened.
+
+The executor receives a rich context packet containing the task body, its parent chunk, and the parent plan — so the worker agent always knows the bigger picture without needing to read the filesystem.
+
 ---
 
 ## Artifact Anatomy
@@ -244,7 +274,7 @@ Status flows: `open` → `in_progress` → `completed` (or `canceled`)
 When you run `onward init`, your project gets:
 
 ```
-.onward.config.yaml              ← workspace config (path, models, hooks, sync)
+.onward.config.yaml              ← workspace config (models, hooks, sync, work, ralph, …)
 .onward/
   plans/
     index.yaml                   ← derived index (regenerable)
