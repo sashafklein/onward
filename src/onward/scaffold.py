@@ -347,7 +347,7 @@ REQUIRED_PATHS = [
 ]
 
 
-def _write_file(path: Path, content: str, force: bool) -> bool:
+def write_workspace_file(path: Path, content: str, force: bool) -> bool:
     if path.exists() and not force:
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -355,7 +355,7 @@ def _write_file(path: Path, content: str, force: bool) -> bool:
     return True
 
 
-def _update_gitignore(root: Path) -> bool:
+def update_gitignore(root: Path) -> bool:
     gitignore = root / ".gitignore"
     existing = []
     if gitignore.exists():
@@ -383,7 +383,7 @@ def _is_workspace_root(root: Path) -> bool:
     )
 
 
-def _require_workspace(root: Path) -> None:
+def require_workspace(root: Path) -> None:
     if _is_workspace_root(root):
         return
     raise ValueError(

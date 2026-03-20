@@ -296,3 +296,26 @@ def _extract_markdown_list_items(section: str) -> list[str]:
             if value:
                 items.append(value)
     return items
+
+
+# ---------------------------------------------------------------------------
+# Stable public names for cross-module use (PLAN-010 TASK-012).
+# ---------------------------------------------------------------------------
+
+clean_string = _clean_string
+normalize_bool = _normalize_bool
+parse_simple_yaml = _parse_simple_yaml
+colorize = _colorize
+dump_simple_yaml = _dump_simple_yaml
+now_iso = _now_iso
+slugify = _slugify
+split_frontmatter = _split_frontmatter
+status_color = _status_color
+as_str_list = _as_str_list
+dump_run_json_record = _dump_run_json_record
+read_run_json_record = _read_run_json_record
+run_timestamp = _run_timestamp
+extract_markdown_list_items = _extract_markdown_list_items
+markdown_section = _markdown_section
+normalize_acceptance = _normalize_acceptance
+normalize_priority = _normalize_priority

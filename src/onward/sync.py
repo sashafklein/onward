@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from onward.artifacts import _regenerate_indexes
-from onward.config import _clean_string, _load_config
+from onward.artifacts import regenerate_indexes
+from onward.config import clean_string, load_workspace_config
 
 
 @dataclass(frozen=True)
@@ -28,15 +28,15 @@ def _sync_section(config: dict[str, Any]) -> dict[str, Any]:
 
 def parse_sync_settings(config: dict[str, Any]) -> SyncSettings:
     sec = _sync_section(config)
-    mode = _clean_string(sec.get("mode", "local")).lower() or "local"
+    mode = clean_string(sec.get("mode", "local")).lower() or "local"
     if mode not in {"local", "branch", "repo"}:
         mode = "local"
-    branch = _clean_string(sec.get("branch", "onward"))
+    branch = clean_string(sec.get("branch", "onward"))
     repo_val = sec.get("repo")
     repo = ""
     if repo_val is not None and str(repo_val).strip().lower() not in {"", "null", "none", "~"}:
         repo = str(repo_val).strip()
-    worktree_rel = _clean_string(sec.get("worktree_path", ".onward/sync")) or ".onward/sync"
+    worktree_rel = clean_string(sec.get("worktree_path", ".onward/sync")) or ".onward/sync"
     return SyncSettings(mode=mode, branch=branch, repo=repo, worktree_rel=worktree_rel)
 
 
@@ -47,7 +47,7 @@ def validate_sync_config(root: Path, config: dict[str, Any]) -> list[str]:
         return []
 
     issues: list[str] = []
-    mode_raw = _clean_string(sec.get("mode", "local")).lower() or "local"
+    mode_raw = clean_string(sec.get("mode", "local")).lower() or "local"
     if mode_raw not in {"local", "branch", "repo"}:
         issues.append(f"sync.mode must be local, branch, or repo (got {mode_raw!r})")
 
@@ -293,7 +293,7 @@ def git_pull_ff_only(wt: Path) -> None:
 
 
 def cmd_sync_status(root: Path) -> tuple[int, list[str]]:
-    config = _load_config(root)
+    config = load_workspace_config(root)
     settings = parse_sync_settings(config)
     lines: list[str] = []
     local = plans_dir(root)
@@ -328,7 +328,7 @@ def cmd_sync_status(root: Path) -> tuple[int, list[str]]:
 
 
 def cmd_sync_push(root: Path) -> tuple[int, list[str]]:
-    config = _load_config(root)
+    config = load_workspace_config(root)
     settings = parse_sync_settings(config)
     if settings.mode == "local":
         return 1, ["sync push skipped: sync.mode is local. Set sync.mode to branch or repo in .onward.config.yaml"]
@@ -363,7 +363,7 @@ def cmd_sync_push(root: Path) -> tuple[int, list[str]]:
 
 
 def cmd_sync_pull(root: Path) -> tuple[int, list[str]]:
-    config = _load_config(root)
+    config = load_workspace_config(root)
     settings = parse_sync_settings(config)
     if settings.mode == "local":
         return 1, ["sync pull skipped: sync.mode is local. Set sync.mode to branch or repo in .onward.config.yaml"]
@@ -388,6 +388,6 @@ def cmd_sync_pull(root: Path) -> tuple[int, list[str]]:
 
     mirror_plans(remote_plans, local)
     lines.append(f"Copied remote plans -> {local.relative_to(root)}")
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
     lines.append("Regenerated plan indexes")
     return 0, lines

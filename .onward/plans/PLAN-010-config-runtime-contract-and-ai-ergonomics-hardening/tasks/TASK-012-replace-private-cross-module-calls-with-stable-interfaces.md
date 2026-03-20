@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-005"
 project: ""
 title: "Replace private cross-module calls with stable interfaces"
-status: "open"
+status: "completed"
 description: "Reduce underscore-internal imports and hardcoded wiring"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:22Z"
-updated_at: "2026-03-20T00:22:22Z"
+updated_at: "2026-03-20T01:06:27Z"
 ---
 
 # Context
@@ -47,4 +47,9 @@ PLAN-010 phase 3: modules call **`_private`** helpers across package boundaries 
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Renamed or aliased cross-module `onward.*` entrypoints so no package-internal import uses a leading-underscore symbol from another `onward` module.
+- `util`: public aliases (`clean_string`, `parse_simple_yaml`, `now_iso`, `dump_run_json_record`, …) point at existing `_`-prefixed implementations.
+- `config`: `load_workspace_config`, `is_ralph_enabled`, `model_setting`, `resolve_model_alias`, `load_artifact_template`, `work_sequential_by_default`.
+- `artifacts`, `execution`, `split`, `scaffold`: former `_foo` APIs used across modules are now public `foo` names; truly internal helpers stay `_`-prefixed within the owning module.
+- Tests updated to import public names where they previously reached for `_find_by_id` / util helpers.
+- Full `pytest tests/` passes (Python 3.11).

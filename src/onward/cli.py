@@ -29,7 +29,7 @@ from onward.cli_commands import (
     cmd_tree,
     cmd_work,
 )
-from onward.scaffold import _require_workspace
+from onward.scaffold import require_workspace
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if getattr(args, "command", "") != "init":
             root_value = getattr(args, "root", ".")
-            _require_workspace(Path(root_value).resolve())
+            require_workspace(Path(root_value).resolve())
         return args.func(args)
     except ValueError as exc:
         print(f"Error: {exc}")

@@ -8,22 +8,22 @@ from typing import Any
 
 from onward.artifacts import (
     Artifact,
-    _collect_artifacts,
-    _find_by_id,
-    _must_find_by_id,
-    _read_notes,
-    _update_artifact_status,
+    collect_artifacts,
+    find_by_id,
+    must_find_by_id,
+    read_notes,
+    update_artifact_status,
 )
-from onward.config import _config_model, _load_config, _model_alias, _ralph_enabled
+from onward.config import is_ralph_enabled, load_workspace_config, model_setting, resolve_model_alias
 from onward.executor_payload import with_schema_version
 from onward.util import (
-    _as_str_list,
-    _clean_string,
-    _dump_run_json_record,
-    _dump_simple_yaml,
-    _now_iso,
-    _read_run_json_record,
-    _run_timestamp,
+    as_str_list,
+    clean_string,
+    dump_run_json_record,
+    dump_simple_yaml,
+    now_iso,
+    read_run_json_record,
+    run_timestamp,
 )
 
 
@@ -140,23 +140,23 @@ def _run_markdown_hook(
 # ---------------------------------------------------------------------------
 
 
-def _load_ongoing(root: Path) -> dict[str, Any]:
+def load_ongoing(root: Path) -> dict[str, Any]:
     path = root / ".onward/ongoing.json"
     if not path.exists():
-        return {"version": 1, "updated_at": _now_iso(), "active_runs": []}
+        return {"version": 1, "updated_at": now_iso(), "active_runs": []}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        payload = {"version": 1, "updated_at": _now_iso(), "active_runs": []}
+        payload = {"version": 1, "updated_at": now_iso(), "active_runs": []}
     if not isinstance(payload, dict):
-        payload = {"version": 1, "updated_at": _now_iso(), "active_runs": []}
+        payload = {"version": 1, "updated_at": now_iso(), "active_runs": []}
     if not isinstance(payload.get("active_runs"), list):
         payload["active_runs"] = []
     return payload
 
 
 def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
-    payload["updated_at"] = _now_iso()
+    payload["updated_at"] = now_iso()
     path = root / ".onward/ongoing.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -168,28 +168,28 @@ def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
 
 
 def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
-    config = _load_config(root)
+    config = load_workspace_config(root)
     ralph = config.get("ralph", {})
     if not isinstance(ralph, dict):
         ralph = {}
-    command = _clean_string(ralph.get("command")) or "ralph"
+    command = clean_string(ralph.get("command")) or "ralph"
     command_args = ralph.get("args", [])
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
 
-    default_model = _config_model(config, "default", "opus-latest")
-    task_model = _clean_string(task.metadata.get("model")) or default_model
-    model = _model_alias(task_model)
+    default_model = model_setting(config, "default", "opus-latest")
+    task_model = clean_string(task.metadata.get("model")) or default_model
+    model = resolve_model_alias(task_model)
 
     task_id = str(task.metadata.get("id", ""))
-    run_id = f"RUN-{_run_timestamp()}-{task_id}"
+    run_id = f"RUN-{run_timestamp()}-{task_id}"
     run_dir = root / ".onward/runs"
     run_dir.mkdir(parents=True, exist_ok=True)
     run_json = run_dir / f"{run_id}.json"
     run_log = run_dir / f"{run_id}.log"
 
-    started_at = _now_iso()
+    started_at = now_iso()
     run_record: dict[str, Any] = {
         "id": run_id,
         "type": "run",
@@ -204,9 +204,9 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
         "log_path": str(run_log.relative_to(root)),
         "error": "",
     }
-    run_json.write_text(_dump_run_json_record(run_record), encoding="utf-8")
+    run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
-    ongoing = _load_ongoing(root)
+    ongoing = load_ongoing(root)
     active_runs = list(ongoing.get("active_runs", []))
     active_runs.append(
         {
@@ -221,17 +221,17 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     ongoing["active_runs"] = active_runs
     _write_ongoing(root, ongoing)
 
-    notes = _read_notes(root, task_id)
+    notes = read_notes(root, task_id)
     chunk_context: dict[str, Any] | None = None
     plan_context: dict[str, Any] | None = None
-    chunk_id = _clean_string(task.metadata.get("chunk"))
-    plan_id = _clean_string(task.metadata.get("plan"))
+    chunk_id = clean_string(task.metadata.get("chunk"))
+    plan_id = clean_string(task.metadata.get("plan"))
     if chunk_id:
-        chunk_art = _find_by_id(root, chunk_id)
+        chunk_art = find_by_id(root, chunk_id)
         if chunk_art:
             chunk_context = {"metadata": chunk_art.metadata, "body": chunk_art.body}
     if plan_id:
-        plan_art = _find_by_id(root, plan_id)
+        plan_art = find_by_id(root, plan_id)
         if plan_art:
             plan_context = {"metadata": plan_art.metadata, "body": plan_art.body}
     payload: dict[str, Any] = {
@@ -259,7 +259,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     log_sections.append(pre_shell_log)
     if not pre_shell_ok:
         error = "pre_task_shell hook failed"
-    elif not _ralph_enabled(config):
+    elif not is_ralph_enabled(config):
         error = "ralph.enabled is false in .onward.config.yaml (executor disabled)"
     else:
         pre_md_ok, pre_md_log = _run_markdown_hook(root, cmd, pre_md, "pre_task_markdown", model, task, run_id)
@@ -306,13 +306,13 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
         log_sections.append(f"[error] {error}")
     run_log.write_text("\n\n".join(section.rstrip() for section in log_sections if section).rstrip() + "\n", encoding="utf-8")
 
-    finished_at = _now_iso()
+    finished_at = now_iso()
     run_record["status"] = "completed" if ok else "failed"
     run_record["finished_at"] = finished_at
     run_record["error"] = error
-    run_json.write_text(_dump_run_json_record(run_record), encoding="utf-8")
+    run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
-    ongoing = _load_ongoing(root)
+    ongoing = load_ongoing(root)
     remaining = [
         item
         for item in ongoing.get("active_runs", [])
@@ -323,7 +323,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     return ok, run_id
 
 
-def _work_task(root: Path, task: Artifact) -> tuple[bool, str]:
+def work_task(root: Path, task: Artifact) -> tuple[bool, str]:
     if str(task.metadata.get("type", "")) != "task":
         raise ValueError(f"{task.metadata.get('id')} is not a task")
     current = str(task.metadata.get("status", ""))
@@ -341,15 +341,15 @@ def _work_task(root: Path, task: Artifact) -> tuple[bool, str]:
             f"(expected open or in_progress). See docs/LIFECYCLE.md"
         )
 
-    _update_artifact_status(root, task, "in_progress")
+    update_artifact_status(root, task, "in_progress")
     ok, run_id = _execute_task_run(root, task)
-    refreshed = _must_find_by_id(root, str(task.metadata.get("id", "")))
-    _update_artifact_status(root, refreshed, "completed" if ok else "open")
+    refreshed = must_find_by_id(root, str(task.metadata.get("id", "")))
+    update_artifact_status(root, refreshed, "completed" if ok else "open")
     return ok, run_id
 
 
-def _ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact], bool]:
-    artifacts = _collect_artifacts(root)
+def ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact], bool]:
+    artifacts = collect_artifacts(root)
     tasks = [
         a
         for a in artifacts
@@ -368,7 +368,7 @@ def _ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact
     ready: list[Artifact] = []
     blocked_exists = False
     for task in tasks:
-        deps = _as_str_list(task.metadata.get("depends_on"))
+        deps = as_str_list(task.metadata.get("depends_on"))
         unmet = [dep for dep in deps if status_by_id.get(dep) != "completed"]
         if unmet:
             blocked_exists = True
@@ -377,8 +377,8 @@ def _ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact
     return ready, not blocked_exists
 
 
-def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str]:
-    config = _load_config(root)
+def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str]:
+    config = load_workspace_config(root)
     hook_rel_path = _hook_markdown_path(config, "post_chunk_markdown")
     if not hook_rel_path:
         return True, "(no hook)"
@@ -387,18 +387,18 @@ def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, st
     if not hook_path.exists():
         return False, f"hook file not found: {hook_rel_path}"
 
-    if not _ralph_enabled(config):
+    if not is_ralph_enabled(config):
         return False, "ralph.enabled is false in .onward.config.yaml (executor disabled)"
 
     ralph = config.get("ralph", {})
     if not isinstance(ralph, dict):
         ralph = {}
-    command = _clean_string(ralph.get("command")) or "ralph"
+    command = clean_string(ralph.get("command")) or "ralph"
     command_args = ralph.get("args", [])
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
-    model = _model_alias(_config_model(config, "review_default", _config_model(config, "default", "opus-latest")))
+    model = resolve_model_alias(model_setting(config, "review_default", model_setting(config, "default", "opus-latest")))
     payload = {
         "type": "hook",
         "phase": "post_chunk_markdown",
@@ -432,7 +432,7 @@ def _run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, st
 # ---------------------------------------------------------------------------
 
 
-def _latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
+def latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
     run_dir = root / ".onward/runs"
     if not run_dir.exists():
         return None
@@ -441,19 +441,19 @@ def _latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
     if not matches:
         return None
     try:
-        return _read_run_json_record(matches[0].read_text(encoding="utf-8"))
+        return read_run_json_record(matches[0].read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return None
 
 
-def _collect_run_records(root: Path) -> list[dict[str, Any]]:
+def collect_run_records(root: Path) -> list[dict[str, Any]]:
     run_dir = root / ".onward/runs"
     if not run_dir.exists():
         return []
     records: list[dict[str, Any]] = []
     for path in sorted(run_dir.glob("RUN-*.json")):
         try:
-            records.append(_read_run_json_record(path.read_text(encoding="utf-8")))
+            records.append(read_run_json_record(path.read_text(encoding="utf-8")))
         except Exception:  # noqa: BLE001
             continue
     return records
@@ -464,25 +464,25 @@ def _collect_run_records(root: Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def _execute_plan_review(
+def execute_plan_review(
     root: Path,
     plan: Artifact,
     model: str,
     label: str,
     prompt: str,
 ) -> tuple[bool, Path]:
-    config = _load_config(root)
+    config = load_workspace_config(root)
     ralph = config.get("ralph", {})
     if not isinstance(ralph, dict):
         ralph = {}
-    command = _clean_string(ralph.get("command")) or "ralph"
+    command = clean_string(ralph.get("command")) or "ralph"
     command_args = ralph.get("args", [])
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
 
     plan_id = str(plan.metadata.get("id", ""))
-    timestamp = _run_timestamp()
+    timestamp = run_timestamp()
 
     review_dir = root / ".onward/reviews"
     review_dir.mkdir(parents=True, exist_ok=True)
@@ -494,7 +494,7 @@ def _execute_plan_review(
         "---",
         "",
         "Plan metadata:",
-        _dump_simple_yaml(plan.metadata).rstrip(),
+        dump_simple_yaml(plan.metadata).rstrip(),
         "",
         "Plan body:",
         plan.body.strip(),
@@ -514,7 +514,7 @@ def _execute_plan_review(
         review_path.write_text(env_override, encoding="utf-8")
         return True, review_path
 
-    if not _ralph_enabled(config):
+    if not is_ralph_enabled(config):
         print("Error: ralph.enabled is false in .onward.config.yaml (executor disabled)")
         return False, review_path
 

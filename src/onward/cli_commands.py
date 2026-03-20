@@ -6,53 +6,53 @@ import json
 from pathlib import Path
 
 from onward.artifacts import (
-    _append_note,
-    _artifact_glob,
-    _artifact_project,
-    _blocking_ids,
-    _collect_artifacts,
-    _find_by_id,
-    _find_plan_dir,
-    _format_artifact,
-    _is_human_task,
-    _must_find_by_id,
-    _next_id,
-    _parse_artifact,
-    _read_notes,
-    _regenerate_indexes,
-    _render_open_tree_lines,
-    _report_rows,
-    _select_next_artifact,
-    _transition_status,
-    _update_artifact_status,
-    _validate_artifact,
-    _write_artifact,
+    append_note,
+    artifact_glob,
+    artifact_project,
+    blocking_ids,
+    collect_artifacts,
+    find_by_id,
+    find_plan_dir,
+    format_artifact,
+    is_human_task,
+    must_find_by_id,
+    next_id,
+    parse_artifact,
+    read_notes,
+    regenerate_indexes,
+    render_open_tree_lines,
+    report_rows,
+    select_next_artifact,
+    transition_status,
+    update_artifact_status,
+    validate_artifact,
+    write_artifact,
 )
 from onward.config import (
-    _config_model,
-    _load_config,
-    _load_template,
-    _model_alias,
-    _work_sequential_by_default,
+    load_artifact_template,
+    load_workspace_config,
+    model_setting,
+    resolve_model_alias,
     validate_config_contract_issues,
+    work_sequential_by_default,
 )
 from onward.execution import (
-    _collect_run_records,
-    _execute_plan_review,
-    _latest_run_for,
-    _load_ongoing,
-    _ordered_ready_chunk_tasks,
-    _run_chunk_post_markdown_hook,
-    _work_task,
+    collect_run_records,
+    execute_plan_review,
+    latest_run_for,
+    load_ongoing,
+    ordered_ready_chunk_tasks,
+    run_chunk_post_markdown_hook,
+    work_task,
 )
 from onward.scaffold import (
     DEFAULT_DIRECTORIES,
     DEFAULT_FILES,
     GITIGNORE_LINES,
     REQUIRED_PATHS,
-    _require_workspace,
-    _update_gitignore,
-    _write_file,
+    require_workspace,
+    update_gitignore,
+    write_workspace_file,
 )
 from onward.sync import (
     cmd_sync_pull as _cmd_sync_pull,
@@ -61,23 +61,23 @@ from onward.sync import (
     validate_sync_config,
 )
 from onward.split import (
-    _assert_writes_safe,
-    _normalize_chunk_candidates,
-    _normalize_task_candidates,
-    _parse_split_payload,
-    _prepare_chunk_writes,
-    _prepare_task_writes,
-    _run_split_model,
+    assert_writes_safe,
+    normalize_chunk_candidates,
+    normalize_task_candidates,
+    parse_split_payload,
+    prepare_chunk_writes,
+    prepare_task_writes,
+    run_split_model,
 )
 from onward.util import (
-    _clean_string,
-    _colorize,
-    _dump_simple_yaml,
-    _now_iso,
-    _parse_simple_yaml,
-    _slugify,
-    _split_frontmatter,
-    _status_color,
+    clean_string,
+    colorize,
+    dump_simple_yaml,
+    now_iso,
+    parse_simple_yaml,
+    slugify,
+    split_frontmatter,
+    status_color,
 )
 
 
@@ -94,12 +94,12 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     created = 0
     for rel_path, content in DEFAULT_FILES.items():
-        wrote = _write_file(root / rel_path, content, force=args.force)
+        wrote = write_workspace_file(root / rel_path, content, force=args.force)
         if wrote:
             created += 1
 
-    gitignore_updated = _update_gitignore(root)
-    _regenerate_indexes(root)
+    gitignore_updated = update_gitignore(root)
+    regenerate_indexes(root)
 
     print(f"Initialized Onward workspace in {root}")
     print(f"Created/updated files: {created}")
@@ -113,7 +113,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     issues: list[str] = []
 
-    config = _load_config(root)
+    config = load_workspace_config(root)
     issues.extend(validate_config_contract_issues(config))
     issues.extend(validate_sync_config(root, config))
 
@@ -139,14 +139,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 issues.append(f"missing .gitignore entry: {entry}")
 
     seen_ids: set[str] = set()
-    for path in _artifact_glob(root):
+    for path in artifact_glob(root):
         try:
-            artifact = _parse_artifact(path)
+            artifact = parse_artifact(path)
         except Exception as exc:  # noqa: BLE001
             issues.append(str(exc))
             continue
 
-        artifact_issues = _validate_artifact(artifact)
+        artifact_issues = validate_artifact(artifact)
         issues.extend(artifact_issues)
 
         artifact_id = str(artifact.metadata.get("id", ""))
@@ -191,9 +191,9 @@ def cmd_sync_pull(args: argparse.Namespace) -> int:
 
 def cmd_new_plan(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    plan_id = _next_id(root, "PLAN")
-    now = _now_iso()
-    slug = _slugify(args.title)
+    plan_id = next_id(root, "PLAN")
+    now = now_iso()
+    slug = slugify(args.title)
 
     plan_dir = root / ".onward/plans" / f"{plan_id}-{slug}"
     plan_dir.mkdir(parents=True, exist_ok=False)
@@ -213,11 +213,11 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
         "updated_at": now,
     }
 
-    body = _load_template(root, "plan")
+    body = load_artifact_template(root, "plan")
     target = plan_dir / "plan.md"
-    target.write_text(_format_artifact(metadata, body), encoding="utf-8")
+    target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
     target_rel = str(target.relative_to(root))
     print(f"Created {plan_id} at {target_rel}")
     print(
@@ -230,10 +230,10 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     plan_id = args.plan_id
 
-    plan_dir = _find_plan_dir(root, plan_id)
-    chunk_id = _next_id(root, "CHUNK")
-    now = _now_iso()
-    slug = _slugify(args.title)
+    plan_dir = find_plan_dir(root, plan_id)
+    chunk_id = next_id(root, "CHUNK")
+    now = now_iso()
+    slug = slugify(args.title)
 
     metadata = {
         "id": chunk_id,
@@ -249,18 +249,18 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
         "updated_at": now,
     }
 
-    body = _load_template(root, "chunk")
+    body = load_artifact_template(root, "chunk")
     target = plan_dir / "chunks" / f"{chunk_id}-{slug}.md"
-    target.write_text(_format_artifact(metadata, body), encoding="utf-8")
+    target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
     print(f"Created {chunk_id} at {target.relative_to(root)}")
     return 0
 
 
 def cmd_new_task(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    chunk = _find_by_id(root, args.chunk_id)
+    chunk = find_by_id(root, args.chunk_id)
     if not chunk:
         raise ValueError(f"chunk not found: {args.chunk_id}")
     if chunk.metadata.get("type") != "chunk":
@@ -268,11 +268,11 @@ def cmd_new_task(args: argparse.Namespace) -> int:
 
     plan_id = str(chunk.metadata["plan"])
     chunk_id = str(chunk.metadata["id"])
-    task_id = _next_id(root, "TASK")
-    now = _now_iso()
-    slug = _slugify(args.title)
+    task_id = next_id(root, "TASK")
+    now = now_iso()
+    slug = slugify(args.title)
 
-    plan_dir = _find_plan_dir(root, plan_id)
+    plan_dir = find_plan_dir(root, plan_id)
     metadata = {
         "id": task_id,
         "type": "task",
@@ -293,11 +293,11 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         "updated_at": now,
     }
 
-    body = _load_template(root, "task")
+    body = load_artifact_template(root, "task")
     target = plan_dir / "tasks" / f"{task_id}-{slug}.md"
-    target.write_text(_format_artifact(metadata, body), encoding="utf-8")
+    target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
     print(f"Created {task_id} at {target.relative_to(root)}")
     return 0
 
@@ -308,8 +308,8 @@ def cmd_list(args: argparse.Namespace) -> int:
     project_filter = (args.project or "").strip()
     blockers_only = bool(args.blocking)
     human_only = bool(args.human)
-    artifacts = _collect_artifacts(root)
-    blocker_ids = _blocking_ids(artifacts) if blockers_only else set()
+    artifacts = collect_artifacts(root)
+    blocker_ids = blocking_ids(artifacts) if blockers_only else set()
 
     rows: list[dict[str, str]] = []
     for artifact in artifacts:
@@ -317,19 +317,19 @@ def cmd_list(args: argparse.Namespace) -> int:
         row_type = str(m.get("type", ""))
         if artifact_type != "all" and row_type != artifact_type:
             continue
-        if project_filter and _artifact_project(artifact) != project_filter:
+        if project_filter and artifact_project(artifact) != project_filter:
             continue
         if blockers_only and str(m.get("id", "")) not in blocker_ids:
             continue
-        if human_only and not _is_human_task(artifact):
+        if human_only and not is_human_task(artifact):
             continue
         rows.append(
             {
                 "id": str(m.get("id", "")),
                 "type": row_type,
                 "status": str(m.get("status", "")),
-                "project": _artifact_project(artifact),
-                "human": "true" if _is_human_task(artifact) else "false",
+                "project": artifact_project(artifact),
+                "human": "true" if is_human_task(artifact) else "false",
                 "title": str(m.get("title", "")),
                 "path": str(artifact.file_path.relative_to(root)),
             }
@@ -351,7 +351,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 def cmd_show(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = _find_by_id(root, args.id)
+    artifact = find_by_id(root, args.id)
     if not artifact:
         print(f"Artifact not found: {args.id}")
         return 1
@@ -361,13 +361,13 @@ def cmd_show(args: argparse.Namespace) -> int:
     print(f"status: {artifact.metadata.get('status')}")
     print(f"path: {artifact.file_path.relative_to(root)}")
     print()
-    print(_dump_simple_yaml(artifact.metadata).rstrip())
+    print(dump_simple_yaml(artifact.metadata).rstrip())
     print("---")
     print(artifact.body.rstrip())
 
     artifact_id = str(artifact.metadata.get("id", ""))
     if str(artifact.metadata.get("type", "")) == "task":
-        run = _latest_run_for(root, artifact_id)
+        run = latest_run_for(root, artifact_id)
         if run:
             print()
             print("Latest run:")
@@ -383,16 +383,16 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 def cmd_note(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
+    artifact = must_find_by_id(root, args.id)
     artifact_id = str(artifact.metadata.get("id", ""))
 
     message = getattr(args, "message", None)
     if message:
-        path = _append_note(root, artifact, message)
+        path = append_note(root, artifact, message)
         print(f"Note added to {artifact_id} at {path.relative_to(root)}")
         return 0
 
-    notes = _read_notes(root, artifact_id)
+    notes = read_notes(root, artifact_id)
     if not notes.strip():
         print(f"No notes for {artifact_id}.")
         return 0
@@ -404,19 +404,19 @@ def cmd_note(args: argparse.Namespace) -> int:
 
 def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
+    artifact = must_find_by_id(root, args.id)
 
     current = str(artifact.metadata.get("status", ""))
-    artifact.metadata["status"] = _transition_status(current, action)
-    artifact.metadata["updated_at"] = _now_iso()
-    _write_artifact(artifact)
+    artifact.metadata["status"] = transition_status(current, action)
+    artifact.metadata["updated_at"] = now_iso()
+    write_artifact(artifact)
 
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
     artifact_id = str(artifact.metadata.get("id", ""))
     print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
 
     if action in {"complete", "cancel"}:
-        notes = _read_notes(root, artifact_id)
+        notes = read_notes(root, artifact_id)
         if notes.strip():
             print(f"\nRelated notes for {artifact_id}:\n")
             print(notes.rstrip())
@@ -438,11 +438,11 @@ def cmd_cancel(args: argparse.Namespace) -> int:
 
 def cmd_archive(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.plan_id)
+    artifact = must_find_by_id(root, args.plan_id)
     if artifact.metadata.get("type") != "plan":
         raise ValueError(f"{args.plan_id} is not a plan")
 
-    plan_dir = _find_plan_dir(root, str(artifact.metadata["id"]))
+    plan_dir = find_plan_dir(root, str(artifact.metadata["id"]))
     archive_dir = root / ".onward/plans/.archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
     target = archive_dir / plan_dir.name
@@ -451,22 +451,22 @@ def cmd_archive(args: argparse.Namespace) -> int:
         raise ValueError(f"archive target already exists: {target.relative_to(root)}")
 
     plan_dir.rename(target)
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
     print(f"Archived {args.plan_id} -> {target.relative_to(root)}")
     return 0
 
 
 def cmd_review_plan(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    _require_workspace(root)
-    plan = _must_find_by_id(root, args.plan_id)
+    require_workspace(root)
+    plan = must_find_by_id(root, args.plan_id)
     plan_type = str(plan.metadata.get("type", ""))
     if plan_type != "plan":
         raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
 
-    config = _load_config(root)
-    default_model = _config_model(config, "default", "opus-latest")
-    review_model = _config_model(config, "review_default", default_model)
+    config = load_workspace_config(root)
+    default_model = model_setting(config, "default", "opus-latest")
+    review_model = model_setting(config, "review_default", default_model)
 
     review_cfg = config.get("review", {})
     if not isinstance(review_cfg, dict):
@@ -476,9 +476,9 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
         double = double.strip().lower() in {"1", "true", "yes", "y"}
 
     models: list[tuple[str, str]] = []
-    models.append((_model_alias(review_model), "reviewer-1"))
+    models.append((resolve_model_alias(review_model), "reviewer-1"))
     if double:
-        models.append((_model_alias(default_model), "reviewer-2"))
+        models.append((resolve_model_alias(default_model), "reviewer-2"))
 
     prompt_path = root / ".onward/prompts/review-plan.md"
     if prompt_path.exists():
@@ -491,7 +491,7 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
 
     for model, label in models:
         print(f"Running review: {label} (model={model})...")
-        ok, review_path = _execute_plan_review(root, plan, model, label, prompt)
+        ok, review_path = execute_plan_review(root, plan, model, label, prompt)
         if ok:
             review_paths.append(review_path)
             print(f"  -> {review_path.relative_to(root)}")
@@ -514,10 +514,10 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
 
 def cmd_work(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
+    artifact = must_find_by_id(root, args.id)
     artifact_type = str(artifact.metadata.get("type", ""))
     if artifact_type == "task":
-        ok, run_id = _work_task(root, artifact)
+        ok, run_id = work_task(root, artifact)
         if run_id:
             print(f"Run {run_id}: {'completed' if ok else 'failed'}")
         else:
@@ -528,20 +528,20 @@ def cmd_work(args: argparse.Namespace) -> int:
 
     chunk = artifact
     chunk_id = str(chunk.metadata.get("id", ""))
-    config = _load_config(root)
-    sequential = _work_sequential_by_default(config)
+    config = load_workspace_config(root)
+    sequential = work_sequential_by_default(config)
     if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        _update_artifact_status(root, chunk, "in_progress")
+        update_artifact_status(root, chunk, "in_progress")
 
     while True:
-        ready_tasks, all_resolved = _ordered_ready_chunk_tasks(root, chunk_id)
+        ready_tasks, all_resolved = ordered_ready_chunk_tasks(root, chunk_id)
         if not ready_tasks:
             if not all_resolved:
                 print(f"Chunk {chunk_id} has unresolved task dependencies")
                 return 1
             break
         next_task = ready_tasks[0]
-        ok, run_id = _work_task(root, next_task)
+        ok, run_id = work_task(root, next_task)
         print(f"Run {run_id}: {'completed' if ok else 'failed'}")
         if not ok:
             print(f"Stopping chunk work for {chunk_id} after task failure")
@@ -551,7 +551,7 @@ def cmd_work(args: argparse.Namespace) -> int:
             )
             return 1
         if not sequential:
-            ready_again, all_resolved_again = _ordered_ready_chunk_tasks(root, chunk_id)
+            ready_again, all_resolved_again = ordered_ready_chunk_tasks(root, chunk_id)
             if ready_again:
                 print(
                     f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
@@ -562,42 +562,42 @@ def cmd_work(args: argparse.Namespace) -> int:
                 print(f"Chunk {chunk_id} has unresolved task dependencies")
                 return 1
 
-    refreshed_chunk = _must_find_by_id(root, chunk_id)
-    hook_ok, hook_error = _run_chunk_post_markdown_hook(root, refreshed_chunk)
+    refreshed_chunk = must_find_by_id(root, chunk_id)
+    hook_ok, hook_error = run_chunk_post_markdown_hook(root, refreshed_chunk)
     if not hook_ok:
         print(f"Chunk {chunk_id} post hook failed: {hook_error}")
         return 1
     if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        _update_artifact_status(root, refreshed_chunk, "completed")
+        update_artifact_status(root, refreshed_chunk, "completed")
     print(f"Chunk {chunk_id} completed")
     return 0
 
 
 def cmd_split(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = _must_find_by_id(root, args.id)
+    artifact = must_find_by_id(root, args.id)
     artifact_type = str(artifact.metadata.get("type", ""))
     if artifact_type not in {"plan", "chunk"}:
         raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
 
-    config = _load_config(root)
-    default_model = _config_model(config, "default", "opus-latest")
-    split_model = _clean_string(args.model) or _config_model(config, "split_default", "") or default_model
-    task_default_model = _config_model(config, "task_default", "sonnet-latest")
+    config = load_workspace_config(root)
+    default_model = model_setting(config, "default", "opus-latest")
+    split_model = clean_string(args.model) or model_setting(config, "split_default", "") or default_model
+    task_default_model = model_setting(config, "task_default", "sonnet-latest")
 
     prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
-    raw = _run_split_model(artifact, prompt_name, split_model, task_default_model)
+    raw = run_split_model(artifact, prompt_name, split_model, task_default_model)
 
     if artifact_type == "plan":
-        parsed = _parse_split_payload(raw, "chunks")
-        normalized = _normalize_chunk_candidates(parsed, default_model)
-        writes = _prepare_chunk_writes(root, artifact, normalized)
+        parsed = parse_split_payload(raw, "chunks")
+        normalized = normalize_chunk_candidates(parsed, default_model)
+        writes = prepare_chunk_writes(root, artifact, normalized)
     else:
-        parsed = _parse_split_payload(raw, "tasks")
-        normalized = _normalize_task_candidates(parsed, task_default_model)
-        writes = _prepare_task_writes(root, artifact, normalized)
+        parsed = parse_split_payload(raw, "tasks")
+        normalized = normalize_task_candidates(parsed, task_default_model)
+        writes = prepare_task_writes(root, artifact, normalized)
 
-    _assert_writes_safe(root, writes)
+    assert_writes_safe(root, writes)
 
     if args.dry_run:
         print(f"Split dry-run for {args.id} using model={split_model}")
@@ -609,7 +609,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     for _artifact_id, path, content in writes:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    _regenerate_indexes(root)
+    regenerate_indexes(root)
 
     for artifact_id, path, _content in writes:
         print(f"Created {artifact_id} at {path.relative_to(root)}")
@@ -620,7 +620,7 @@ def cmd_progress(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     rows: list[str] = []
 
-    for artifact in _collect_artifacts(root):
+    for artifact in collect_artifacts(root):
         status = str(artifact.metadata.get("status", ""))
         if status != "in_progress":
             continue
@@ -637,7 +637,7 @@ def cmd_progress(args: argparse.Namespace) -> int:
         )
 
     if not rows:
-        ongoing = _load_ongoing(root)
+        ongoing = load_ongoing(root)
         active = ongoing.get("active_runs", [])
         if not isinstance(active, list) or not active:
             print("No in-progress artifacts")
@@ -646,7 +646,7 @@ def cmd_progress(args: argparse.Namespace) -> int:
         for row in sorted(rows):
             print(row)
 
-    ongoing = _load_ongoing(root)
+    ongoing = load_ongoing(root)
     active = ongoing.get("active_runs", [])
     if isinstance(active, list):
         for run in active:
@@ -668,7 +668,7 @@ def cmd_recent(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     rows: list[tuple[str, str, str, str, str, str]] = []
 
-    for artifact in _collect_artifacts(root):
+    for artifact in collect_artifacts(root):
         status = str(artifact.metadata.get("status", ""))
         if status != "completed":
             continue
@@ -683,7 +683,7 @@ def cmd_recent(args: argparse.Namespace) -> int:
             )
         )
 
-    for rec in _collect_run_records(root):
+    for rec in collect_run_records(root):
         finished = str(rec.get("finished_at") or rec.get("started_at", ""))
         status = str(rec.get("status", ""))
         if status not in {"completed", "failed"}:
@@ -712,8 +712,8 @@ def cmd_recent(args: argparse.Namespace) -> int:
 
 def cmd_next(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifacts = _collect_artifacts(root)
-    chosen = _select_next_artifact(artifacts, project=(args.project or "").strip() or None)
+    artifacts = collect_artifacts(root)
+    chosen = select_next_artifact(artifacts, project=(args.project or "").strip() or None)
     if chosen:
         print(
             f"{chosen.metadata.get('id')}\t{chosen.metadata.get('type')}\t{chosen.metadata.get('status')}\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
@@ -726,9 +726,9 @@ def cmd_next(args: argparse.Namespace) -> int:
 
 def cmd_tree(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifacts = _collect_artifacts(root)
+    artifacts = collect_artifacts(root)
     project = (args.project or "").strip() or None
-    lines = _render_open_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
+    lines = render_open_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
     if not lines:
         print("No open plan tree found")
         return 0
@@ -741,28 +741,28 @@ def cmd_report(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     color_enabled = not args.no_color
     project = (args.project or "").strip() or None
-    artifacts = _collect_artifacts(root)
-    blockers = _blocking_ids(artifacts)
+    artifacts = collect_artifacts(root)
+    blockers = blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
 
-    print(_colorize("== Onward Report ==", "bold", color_enabled))
+    print(colorize("== Onward Report ==", "bold", color_enabled))
     if project:
         print(f"project: {project}")
     print()
 
-    print(_colorize("[In Progress]", "cyan", color_enabled))
-    in_progress = _report_rows(artifacts, root, status="in_progress", project=project)
+    print(colorize("[In Progress]", "cyan", color_enabled))
+    in_progress = report_rows(artifacts, root, status="in_progress", project=project)
     if in_progress:
         for row in in_progress:
             parts = row.split("\t")
-            parts[2] = _colorize(parts[2], _status_color(parts[2]), color_enabled)
+            parts[2] = colorize(parts[2], status_color(parts[2]), color_enabled)
             print("\t".join(parts))
     else:
         print("none")
     print()
 
-    print(_colorize("[Next]", "cyan", color_enabled))
-    nxt = _select_next_artifact(artifacts, project=project)
+    print(colorize("[Next]", "cyan", color_enabled))
+    nxt = select_next_artifact(artifacts, project=project)
     if nxt:
         status = str(nxt.metadata.get("status", ""))
         print(
@@ -770,7 +770,7 @@ def cmd_report(args: argparse.Namespace) -> int:
                 [
                     str(nxt.metadata.get("id", "")),
                     str(nxt.metadata.get("type", "")),
-                    _colorize(status, _status_color(status), color_enabled),
+                    colorize(status, status_color(status), color_enabled),
                     str(nxt.metadata.get("title", "")),
                     str(nxt.file_path.relative_to(root)),
                 ]
@@ -780,15 +780,15 @@ def cmd_report(args: argparse.Namespace) -> int:
         print("none")
     print()
 
-    print(_colorize("[Blocking Human Tasks]", "cyan", color_enabled))
+    print(colorize("[Blocking Human Tasks]", "cyan", color_enabled))
     human_blockers: list[str] = []
     for blocker_id in sorted(blockers):
         artifact = by_id.get(blocker_id)
         if not artifact:
             continue
-        if project and _artifact_project(artifact) != project:
+        if project and artifact_project(artifact) != project:
             continue
-        if not _is_human_task(artifact):
+        if not is_human_task(artifact):
             continue
         human_blockers.append(
             "\t".join(
@@ -808,12 +808,12 @@ def cmd_report(args: argparse.Namespace) -> int:
         print("none")
     print()
 
-    print(_colorize("[Recent Completed]", "cyan", color_enabled))
+    print(colorize("[Recent Completed]", "cyan", color_enabled))
     completed = [
         a
         for a in artifacts
         if str(a.metadata.get("status", "")) == "completed"
-        and (not project or _artifact_project(a) == project)
+        and (not project or artifact_project(a) == project)
     ]
     completed.sort(key=lambda a: str(a.metadata.get("updated_at", "")), reverse=True)
     if completed:
@@ -825,7 +825,7 @@ def cmd_report(args: argparse.Namespace) -> int:
                         str(artifact.metadata.get("updated_at", "")),
                         str(artifact.metadata.get("id", "")),
                         str(artifact.metadata.get("type", "")),
-                        _colorize(status, _status_color(status), color_enabled),
+                        colorize(status, status_color(status), color_enabled),
                         str(artifact.metadata.get("title", "")),
                     ]
                 )
@@ -834,8 +834,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         print("none")
     print()
 
-    print(_colorize("[Open Plan Tree]", "cyan", color_enabled))
-    tree_lines = _render_open_tree_lines(artifacts, root, project=project, color_enabled=color_enabled)
+    print(colorize("[Open Plan Tree]", "cyan", color_enabled))
+    tree_lines = render_open_tree_lines(artifacts, root, project=project, color_enabled=color_enabled)
     if not tree_lines:
         print("none")
         return 0

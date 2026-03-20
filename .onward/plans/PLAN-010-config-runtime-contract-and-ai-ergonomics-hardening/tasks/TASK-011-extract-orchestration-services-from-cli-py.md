@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-005"
 project: ""
 title: "Extract orchestration services from cli.py"
-status: "in_progress"
+status: "completed"
 description: "Move command policy into cohesive modules with explicit APIs"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:22Z"
-updated_at: "2026-03-20T00:57:42Z"
+updated_at: "2026-03-20T01:12:15Z"
 ---
 
 # Context

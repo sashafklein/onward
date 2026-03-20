@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from onward.util import _dump_run_json_record, _read_run_json_record
+from onward.util import dump_run_json_record, read_run_json_record
 
 
 def test_dump_run_record_is_valid_json_round_trip():
@@ -21,7 +21,7 @@ def test_dump_run_record_is_valid_json_round_trip():
         "log_path": ".onward/runs/RUN-2026-03-20T12-00-00Z-TASK-001.log",
         "error": "",
     }
-    text = _dump_run_json_record(rec)
+    text = dump_run_json_record(rec)
     parsed = json.loads(text)
     assert parsed == rec
     assert text.strip().startswith("{")
@@ -40,7 +40,7 @@ finished_at: "2026-01-01T00:01:00Z"
 log_path: ".onward/runs/x.log"
 error: "oops"
 """
-    parsed = _read_run_json_record(legacy)
+    parsed = read_run_json_record(legacy)
     assert parsed["id"] == "RUN-old-TASK-001"
     assert parsed["status"] == "failed"
     assert parsed["error"] == "oops"
@@ -54,7 +54,7 @@ model: "opus"
 started_at: "2026-01-01T00:00:00Z"
 log_path: ".onward/runs/x.log"
 """
-    parsed = _read_run_json_record(sparse)
+    parsed = read_run_json_record(sparse)
     assert parsed["type"] == "run"
     assert parsed["plan"] is None
     assert parsed["chunk"] is None

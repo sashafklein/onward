@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from onward import cli
-from onward.artifacts import _find_by_id
+from onward.artifacts import find_by_id
 
 
 def _init_workspace(root: Path) -> None:
@@ -65,12 +65,12 @@ def test_note_sets_has_notes_frontmatter(tmp_path: Path):
     _init_workspace(tmp_path)
     _create_plan_and_task(tmp_path)
 
-    artifact_before = _find_by_id(tmp_path, "TASK-001")
+    artifact_before = find_by_id(tmp_path, "TASK-001")
     assert not artifact_before.metadata.get("has_notes")
 
     cli.main(["note", "--root", str(tmp_path), "TASK-001", "a note"])
 
-    artifact_after = _find_by_id(tmp_path, "TASK-001")
+    artifact_after = find_by_id(tmp_path, "TASK-001")
     assert artifact_after.metadata.get("has_notes") is True
 
 

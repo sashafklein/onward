@@ -118,6 +118,17 @@ Convenience runner:
 
 This runs pytest when available, otherwise it runs dogfood e2e smoke checks.
 
+### Architecture / seam tests
+
+[`tests/test_architecture_seams.py`](../tests/test_architecture_seams.py) encodes boundaries that are easy to regress:
+
+- Default `.onward.config.yaml` in [`src/onward/scaffold.py`](../src/onward/scaffold.py) must parse and pass `validate_config_contract_issues` (same rules as `onward doctor`), and every key must appear in `CONFIG_TOP_LEVEL_KEYS` / `CONFIG_SECTION_KEYS` in [`src/onward/config.py`](../src/onward/config.py).
+- [`src/onward/cli.py`](../src/onward/cli.py) may only import from `onward.cli_commands` and `onward.scaffold` (thin entrypoint).
+- No `from onward… import _leading_underscore` anywhere under `src/onward/` (public cross-module APIs only; see PLAN-010 TASK-012).
+- [`docs/schemas/onward-executor-stdin-v1.schema.json`](../docs/schemas/onward-executor-stdin-v1.schema.json) must stay valid JSON, keep `schema_version` consts aligned with `EXECUTOR_PAYLOAD_SCHEMA_VERSION`, and keep `required` arrays in sync with the frozensets in [`src/onward/executor_payload.py`](../src/onward/executor_payload.py).
+
+When you add config keys, new subcommands, or change executor stdin, update the allowlists / schema / payload module **and** extend or adjust these tests if the contract changes.
+
 ## 6. Common errors and fixes
 
 ### `No module named onward`
