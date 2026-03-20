@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T16:01:10Z"
+generated_at: "2026-03-20T16:42:44Z"
 completed:
   -
     id: "PLAN-001"
@@ -288,3 +288,17 @@ completed:
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-028-re-evaluate-local-sync-exit-semantics.md"
     plan: "PLAN-010"
     chunk: "CHUNK-002"
+  -
+    id: "TASK-029"
+    title: "Rename ralph to executor throughout codebase"
+    status: "completed"
+    path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-029-rename-ralph-to-executor-throughout-codebase.md"
+    plan: "PLAN-011"
+    chunk: "CHUNK-008"
+  -
+    id: "TASK-030"
+    title: "Create reference executor script"
+    status: "completed"
+    path: ".onward/plans/PLAN-011-onward-v2-executor-driven-orchestration-and-ai-ergonomics-overhaul/tasks/TASK-030-create-reference-executor-script.md"
+    plan: "PLAN-011"
+    chunk: "CHUNK-008"

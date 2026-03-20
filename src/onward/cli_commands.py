@@ -4,8 +4,10 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 from onward.artifacts import (
+    Artifact,
     append_note,
     artifact_glob,
     artifact_project,
@@ -74,6 +76,7 @@ from onward.split import (
     run_split_model,
 )
 from onward.util import (
+    as_str_list,
     clean_string,
     colorize,
     dump_simple_yaml,
@@ -561,30 +564,35 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_work(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.id)
-    artifact_type = str(artifact.metadata.get("type", ""))
-    if artifact_type == "task":
-        ok, run_id = work_task(root, artifact)
-        if run_id:
-            print(f"Run {run_id}: {'completed' if ok else 'failed'}")
-        else:
-            print(f"{args.id} already completed")
-        if ok:
-            _, warnings = finalize_chunks_all_tasks_terminal(root)
-            for w in warnings:
-                print(w)
-        return 0 if ok else 1
-    if artifact_type != "chunk":
-        raise ValueError(f"{args.id} is not a task or chunk")
+def _status_by_id(root: Path) -> dict[str, str]:
+    return {
+        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
+        for a in collect_artifacts(root)
+        if str(a.metadata.get("id", ""))
+    }
 
-    chunk = artifact
+
+def _chunk_depends_satisfied(chunk: Artifact, status_by_id: dict[str, str]) -> bool:
+    for dep in as_str_list(chunk.metadata.get("depends_on")):
+        if status_by_id.get(dep) != "completed":
+            return False
+    return True
+
+
+def _plan_chunks(root: Path, plan_id: str) -> list[Artifact]:
+    chunks = [
+        a
+        for a in collect_artifacts(root)
+        if str(a.metadata.get("type", "")) == "chunk"
+        and str(a.metadata.get("plan", "")) == plan_id
+    ]
+    return sorted(chunks, key=lambda a: str(a.metadata.get("id", "")))
+
+
+def _work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
     chunk_id = str(chunk.metadata.get("id", ""))
     if str(chunk.metadata.get("status", "")) == "completed":
-        print(f"Chunk {chunk_id} already completed")
         return 0
-    config = load_workspace_config(root)
     sequential = work_sequential_by_default(config)
     if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
         update_artifact_status(root, chunk, "in_progress")
@@ -630,6 +638,101 @@ def cmd_work(args: argparse.Namespace) -> int:
         update_artifact_status(root, refreshed_chunk, "completed")
     print(f"Chunk {chunk_id} completed")
     return 0
+
+
+def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
+    plan_id = str(plan.metadata.get("id", ""))
+    st = str(plan.metadata.get("status", ""))
+    if st == "completed":
+        print(f"Plan {plan_id} already completed")
+        return 0
+
+    chunks = _plan_chunks(root, plan_id)
+    if not chunks:
+        print(f"Plan {plan_id} has no chunks")
+        return 0
+
+    if st in {"open", "in_progress"}:
+        update_artifact_status(root, plan, "in_progress")
+
+    pending = [
+        str(c.metadata.get("id", ""))
+        for c in chunks
+        if str(c.metadata.get("status", "")) not in {"completed", "canceled"}
+    ]
+    if not pending:
+        refreshed_plan = must_find_by_id(root, plan_id)
+        update_artifact_status(root, refreshed_plan, "completed")
+        _, warnings = finalize_chunks_all_tasks_terminal(root)
+        for w in warnings:
+            print(w)
+        n_tasks = sum(
+            1
+            for a in collect_artifacts(root)
+            if str(a.metadata.get("type", "")) == "task"
+            and str(a.metadata.get("plan", "")) == plan_id
+            and str(a.metadata.get("status", "")) == "completed"
+        )
+        print(f"Plan {plan_id} completed ({len(chunks)} chunks, {n_tasks} tasks)")
+        return 0
+
+    while pending:
+        status_by_id = _status_by_id(root)
+        ready = [
+            cid
+            for cid in pending
+            if _chunk_depends_satisfied(must_find_by_id(root, cid), status_by_id)
+        ]
+        if not ready:
+            print(
+                f"Plan {plan_id}: no chunk is ready to run (check chunk depends_on / ordering)"
+            )
+            return 1
+        cid = min(ready)
+        chunk_art = must_find_by_id(root, cid)
+        code = _work_chunk(root, chunk_art, config)
+        if code != 0:
+            print(f"Stopping plan work for {plan_id} after chunk {cid} failure")
+            return 1
+        pending.remove(cid)
+
+    refreshed_plan = must_find_by_id(root, plan_id)
+    update_artifact_status(root, refreshed_plan, "completed")
+    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    for w in warnings:
+        print(w)
+    n_tasks = sum(
+        1
+        for a in collect_artifacts(root)
+        if str(a.metadata.get("type", "")) == "task"
+        and str(a.metadata.get("plan", "")) == plan_id
+        and str(a.metadata.get("status", "")) == "completed"
+    )
+    print(f"Plan {plan_id} completed ({len(chunks)} chunks, {n_tasks} tasks)")
+    return 0
+
+
+def cmd_work(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = must_find_by_id(root, args.id)
+    artifact_type = str(artifact.metadata.get("type", ""))
+    if artifact_type == "task":
+        ok, run_id = work_task(root, artifact)
+        if run_id:
+            print(f"Run {run_id}: {'completed' if ok else 'failed'}")
+        else:
+            print(f"{args.id} already completed")
+        if ok:
+            _, warnings = finalize_chunks_all_tasks_terminal(root)
+            for w in warnings:
+                print(w)
+        return 0 if ok else 1
+    config = load_workspace_config(root)
+    if artifact_type == "plan":
+        return _work_plan(root, artifact, config)
+    if artifact_type != "chunk":
+        raise ValueError(f"{args.id} is not a task, chunk, or plan")
+    return _work_chunk(root, artifact, config)
 
 
 def cmd_split(args: argparse.Namespace) -> int:

@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-008"
 project: ""
 title: "Create reference executor script"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -14,13 +14,13 @@ depends_on:
   - "TASK-029"
 blocked_by: []
 files:
-  - scripts/onward-exec
+  - "scripts/onward-exec"
 acceptance:
   - "scripts/onward-exec exists and is executable"
   - "scripts/onward-exec --help prints usage"
   - "echo valid JSON payload | scripts/onward-exec processes without crash"
 created_at: "2026-03-20T16:00:56Z"
-updated_at: "2026-03-20T16:00:56Z"
+updated_at: "2026-03-20T16:42:44Z"
 ---
 
 # Context

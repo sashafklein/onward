@@ -384,3 +384,100 @@ def test_work_chunk_fails_when_post_chunk_markdown_hook_missing(tmp_path: Path, 
     assert "post hook failed" in out
     chunk_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
     assert 'status: "in_progress"' in chunk_raw
+
+
+def test_work_plan_drains_all_chunks_and_completes_plan(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "One"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "A1"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "A2"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Two"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-002", "B1"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-002", "B2"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "PLAN-001"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Plan PLAN-001 completed" in out
+    assert "(2 chunks," in out
+    plan_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/plan.md").read_text(encoding="utf-8")
+    assert 'status: "completed"' in plan_raw
+
+
+def test_work_plan_stops_after_chunk_task_failure(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "false")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "One"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Fail"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Two"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-002", "Later"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "PLAN-001"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "Stopping plan work" in out
+    plan_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/plan.md").read_text(encoding="utf-8")
+    assert 'status: "in_progress"' in plan_raw
+    chunk2 = next((tmp_path / ".onward/plans/PLAN-001-alpha/chunks").glob("CHUNK-002-*.md"))
+    assert 'status: "open"' in chunk2.read_text(encoding="utf-8")
+
+
+def test_work_plan_skips_completed_chunks(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "One"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Only"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Two"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-002", "Later"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["work", "--root", str(tmp_path), "CHUNK-001"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "PLAN-001"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.count("Run RUN-") == 1
+
+
+def test_work_plan_already_completed(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    plan_path = next((tmp_path / ".onward/plans").glob("PLAN-001-*/plan.md"))
+    text = plan_path.read_text(encoding="utf-8")
+    plan_path.write_text(text.replace('status: "open"', 'status: "completed"'), encoding="utf-8")
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "PLAN-001"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "already completed" in out
+
+
+def test_work_rejects_non_task_chunk_plan(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    note = tmp_path / ".onward/plans/NOTE-001-test.md"
+    note.write_text(
+        '---\n'
+        'id: "NOTE-001"\n'
+        'type: "note"\n'
+        'title: "n"\n'
+        'status: "open"\n'
+        'created_at: "2026-01-01T00:00:00Z"\n'
+        'updated_at: "2026-01-01T00:00:00Z"\n'
+        "---\n\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "NOTE-001"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "task, chunk, or plan" in out
