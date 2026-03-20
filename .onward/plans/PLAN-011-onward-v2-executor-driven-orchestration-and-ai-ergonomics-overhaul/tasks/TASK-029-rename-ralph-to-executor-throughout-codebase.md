@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-008"
 project: ""
 title: "Rename ralph to executor throughout codebase"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -13,22 +13,22 @@ executor: "ralph"
 depends_on: []
 blocked_by: []
 files:
-  - src/onward/config.py
-  - src/onward/execution.py
-  - src/onward/preflight.py
-  - src/onward/cli_commands.py
-  - src/onward/scaffold.py
-  - tests/test_cli_work.py
-  - tests/test_cli_review.py
-  - tests/test_cli_split.py
-  - tests/test_preflight.py
-  - tests/test_architecture_seams.py
+  - "src/onward/config.py"
+  - "src/onward/execution.py"
+  - "src/onward/preflight.py"
+  - "src/onward/cli_commands.py"
+  - "src/onward/scaffold.py"
+  - "tests/test_cli_work.py"
+  - "tests/test_cli_review.py"
+  - "tests/test_cli_split.py"
+  - "tests/test_preflight.py"
+  - "tests/test_architecture_seams.py"
 acceptance:
   - "grep -r 'ralph' src/onward/ returns zero hits outside backward-compat alias code"
   - "all existing tests pass after rename"
-  - "onward doctor validates both executor: and ralph: config keys"
+  - "onward doctor validates both executor and ralph config keys"
 created_at: "2026-03-20T16:00:56Z"
-updated_at: "2026-03-20T16:00:56Z"
+updated_at: "2026-03-20T16:41:42Z"
 ---
 
 # Context
