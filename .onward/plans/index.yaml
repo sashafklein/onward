@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T00:54:51Z"
+generated_at: "2026-03-20T00:55:49Z"
 plans:
   -
     id: "PLAN-001"
@@ -160,7 +160,7 @@ tasks:
   -
     id: "TASK-010"
     title: "Update docs to remove lifecycle ambiguity"
-    status: "open"
+    status: "completed"
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-010-update-docs-to-remove-lifecycle-ambiguity.md"
     plan: "PLAN-010"
     chunk: "CHUNK-004"

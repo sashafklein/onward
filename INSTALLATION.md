@@ -241,7 +241,7 @@ If you need a minimal, dense reference to paste anywhere:
 ONWARD QUICK-REF:
   report   → see everything          next     → what to do now
   new plan → start initiative         new chunk/task → decompose
-  split    → AI-decompose             review-plan → adversarial review
+  split    → heuristic decompose      review-plan → model-backed review
   note     → scratch pad               start    → mark in_progress (optional)
   work     → executor + status        complete → close without work / manual done
   cancel   → abandon work
@@ -412,7 +412,7 @@ at execution time, so updating Onward automatically picks up new model versions.
 
 **Commands work but agent isn't using Onward** — Your agent configuration (AGENTS.md, SKILL.md, system prompt) is missing or the Onward instructions aren't prominent enough. Move them to the TOP of the file. Agents read top-down and prioritize early instructions.
 
-**Plans feel too big** — Use `onward split` to AI-decompose plans into chunks and chunks into tasks. The goal is tasks small enough that one agent can finish in one session.
+**Plans feel too big** — Use `onward split` to break plans into chunks and chunks into tasks (**heuristic** from your markdown sections today — not an LLM call; see **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)**). The goal is tasks small enough that one agent can finish in one session.
 
 **Lost track of what's happening** — `onward report` is your friend. Run it early, run it often, run it at the end of every session.
 

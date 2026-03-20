@@ -62,8 +62,8 @@ If a task fails, chunk processing stops with a non-zero exit; the chunk usually 
 
 ## Relationship to agent docs
 
-Repository **AGENTS.md** and **INSTALLATION.md** agent blocks should match this policy. If they disagree, **this file and the CLI win** until docs are updated (see PLAN-010 **TASK-010**).
+Repository **AGENTS.md** and **INSTALLATION.md** agent blocks should match this policy. If they disagree, **this file and the CLI win**.
 
-## Follow-up (other tasks)
+## Related docs
 
-- **TASK-010** — Propagate the same rules through README, INSTALLATION, CONTRIBUTION, and examples (if any drift remains).
+- **[CAPABILITIES.md](CAPABILITIES.md)** — model-backed vs heuristic commands (orthogonal to lifecycle).

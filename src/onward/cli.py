@@ -950,7 +950,10 @@ def build_parser() -> argparse.ArgumentParser:
     archive_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     archive_parser.set_defaults(func=cmd_archive)
 
-    split_parser = subparsers.add_parser("split", help="Split a plan into chunks or a chunk into tasks")
+    split_parser = subparsers.add_parser(
+        "split",
+        help="Heuristic split: plan→chunks or chunk→tasks (markdown-derived; see docs/CAPABILITIES.md)",
+    )
     split_parser.add_argument("id", help="Artifact ID (PLAN-### or CHUNK-###)")
     split_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     split_parser.add_argument("--dry-run", action="store_true", help="Print planned artifacts without writing files")

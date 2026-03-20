@@ -9,7 +9,7 @@ Right now this repo supports:
 - workspace bootstrap (`onward init`)
 - structural validation (`onward doctor`, including `sync:` config checks)
 - artifact creation (`onward new plan|chunk|task`)
-- AI-assisted decomposition (`onward split` for plans and chunks, with heuristic fallback and `TRAIN_SPLIT_RESPONSE` override for testing)
+- decomposition via `onward split` (**heuristic** from markdown sections; `TRAIN_SPLIT_RESPONSE` env for tests — see [CAPABILITIES.md](CAPABILITIES.md))
 - adversarial plan review (`onward review-plan` with configurable single/double reviewer)
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
 - artifact inspection (`onward show <ID>` — tasks include latest run info)
@@ -183,4 +183,6 @@ The sync checkout lives under `sync.worktree_path` (default `.onward/sync/`, git
 
 - **[INSTALLATION.md](../INSTALLATION.md)** — agent setup, full config reference, sync semantics and troubleshooting
 - **`.onward/plans/`** — active plans and tasks; use `onward report` for orientation
+- **[LIFECYCLE.md](LIFECYCLE.md)** — `start` / `work` / `complete` / `cancel` rules
+- **[CAPABILITIES.md](CAPABILITIES.md)** — model-backed vs local commands
 - **[WORK_HANDOFF.md](WORK_HANDOFF.md)** — how `onward work` and executor handoff fit together

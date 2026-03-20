@@ -2,7 +2,7 @@
 
 This is the key design stance for passing work from parent agents to worker agents.
 
-Artifact **status** transitions (`start` / `complete` / `cancel` vs `work`) are specified in **[LIFECYCLE.md](LIFECYCLE.md)**.
+Artifact **status** transitions (`start` / `complete` / `cancel` vs `work`) are specified in **[LIFECYCLE.md](LIFECYCLE.md)**. Which commands invoke the executor vs run locally is summarized in **[CAPABILITIES.md](CAPABILITIES.md)**.
 
 ## Decision
 

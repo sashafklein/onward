@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-004"
 project: ""
 title: "Update docs to remove lifecycle ambiguity"
-status: "open"
+status: "completed"
 description: "Synchronize README, INSTALLATION, CONTRIBUTION with actual state machine"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:22Z"
-updated_at: "2026-03-20T00:22:22Z"
+updated_at: "2026-03-20T00:55:49Z"
 ---
 
 # Context
@@ -47,4 +47,10 @@ PLAN-010 acceptance: **README / INSTALLATION / CONTRIBUTION** show the **same** 
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- New **`docs/CAPABILITIES.md`** — truth table (executor vs heuristic vs `TRAIN_SPLIT_RESPONSE`).
+- **README**: split rows corrected; “Moving Work Forward” + “Model vs local behavior” link LIFECYCLE/CAPABILITIES; docs table expanded.
+- **INSTALLATION**: quick-ref + troubleshooting no longer claim “AI-decompose” for split.
+- **CONTRIBUTION** §1 + §8 links: LIFECYCLE, CAPABILITIES.
+- **WORK_HANDOFF**: link to CAPABILITIES.
+- **LIFECYCLE**: removed stale TASK-010 follow-up; “Related docs” points to CAPABILITIES.
+- **CLI**: `split` `--help` one-liner mentions heuristics + CAPABILITIES.
