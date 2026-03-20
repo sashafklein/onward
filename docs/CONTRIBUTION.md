@@ -109,6 +109,7 @@ Test coverage currently includes:
 - review-plan: single and double reviewer flows
 - notes: add, view, surfacing on completion
 - sync: local status, branch push with bare `origin`, repo push/pull, doctor + branch mode without git
+- onboarding simulation: fresh `init` → `doctor` → `new plan/chunk/task` → `next` / `report` → `work` with executor `true` ([`tests/test_onboarding_simulation.py`](../tests/test_onboarding_simulation.py))
 
 Convenience runner:
 

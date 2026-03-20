@@ -1,4 +1,4 @@
-generated_at: "2026-03-20T01:13:24Z"
+generated_at: "2026-03-20T01:14:14Z"
 completed:
   -
     id: "PLAN-001"
@@ -142,6 +142,13 @@ completed:
     path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-013-add-architecture-tests-for-module-seams.md"
     plan: "PLAN-010"
     chunk: "CHUNK-005"
+  -
+    id: "TASK-014"
+    title: "Run end-to-end AI onboarding simulation"
+    status: "completed"
+    path: ".onward/plans/PLAN-010-config-runtime-contract-and-ai-ergonomics-hardening/tasks/TASK-014-run-end-to-end-ai-onboarding-simulation.md"
+    plan: "PLAN-010"
+    chunk: "CHUNK-006"
   -
     id: "TASK-017"
     title: "Draft brutal hardening blueprint"
