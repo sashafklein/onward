@@ -56,6 +56,87 @@ def test_doctor_fails_on_invalid_ongoing_json(tmp_path: Path, capsys):
     assert "invalid json in .onward/ongoing.json" in out
 
 
+def test_doctor_fails_on_unknown_config_key(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8") + "\nunknown_top_level: true\n", encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "unknown_top_level" in out
+
+
+def test_doctor_fails_on_unknown_nested_config_key(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    raw = cfg.read_text(encoding="utf-8")
+    raw = raw.replace("  review_default: codex-latest\n", "  review_default: codex-latest\n  typo_key: x\n")
+    cfg.write_text(raw, encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "models.typo_key" in out
+
+
+def test_doctor_fails_on_removed_path_key(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8") + "\npath: elsewhere\n", encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "unsupported config key 'path'" in out
+
+
+def test_doctor_fails_on_removed_work_worktree_keys(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    raw = cfg.read_text(encoding="utf-8")
+    cfg.write_text(raw.replace("work:\n", "work:\n  create_worktree: true\n", 1), encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "work.create_worktree" in out
+
+
+def test_doctor_fails_on_sync_local_with_repo_url(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("repo: null", "repo: https://example.com/r.git"), encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert 'sync.mode is "local"' in out
+
+
+def test_doctor_fails_when_ralph_args_not_list(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("args: []", "args: not-a-list"), encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "ralph.args must be a list" in out
+
+
 def test_doctor_detects_duplicate_ids(tmp_path: Path, capsys):
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0

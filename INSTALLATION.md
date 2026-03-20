@@ -373,7 +373,7 @@ onward sync push     # copy plans → sync checkout, commit, push
 onward sync pull     # fast-forward sync checkout, copy plans → workspace, reindex
 ```
 
-`onward doctor` validates the `sync:` section (for example, branch mode requires a git repo at the workspace root).
+`onward doctor` checks `.onward.config.yaml` for unsupported keys (including removed legacy keys) and basic shape (for example, `ralph.args` and shell hook lists must be YAML lists). It also validates the `sync:` section (for example, branch mode requires a git repo at the workspace root) and flags ignored combinations such as `sync.mode: local` with a non-null `sync.repo`.
 
 ### Plan sync semantics (branch and repo modes)
 

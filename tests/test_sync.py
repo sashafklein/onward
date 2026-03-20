@@ -13,8 +13,6 @@ def _write_config_sync(main: Path, **sync_keys: str) -> None:
     lines = [
         "version: 1",
         "",
-        "path: .onward",
-        "",
         "sync:",
     ]
     for k, v in sync_keys.items():

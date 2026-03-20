@@ -35,6 +35,7 @@ from onward.config import (
     _load_template,
     _model_alias,
     _work_sequential_by_default,
+    validate_config_contract_issues,
 )
 from onward.execution import (
     _collect_run_records,
@@ -114,6 +115,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     issues: list[str] = []
 
     config = _load_config(root)
+    issues.extend(validate_config_contract_issues(config))
     issues.extend(validate_sync_config(root, config))
 
     for rel_path in REQUIRED_PATHS:
