@@ -9,14 +9,14 @@ Right now this repo supports:
 - workspace bootstrap (`onward init`)
 - structural validation (`onward doctor`, including `sync:` config checks)
 - artifact creation (`onward new plan|chunk|task`)
-- AI-assisted decomposition (`onward split` for plans and chunks)
-- adversarial plan review (`onward review-plan`)
+- AI-assisted decomposition (`onward split` for plans and chunks, with heuristic fallback and `TRAIN_SPLIT_RESPONSE` override for testing)
+- adversarial plan review (`onward review-plan` with configurable single/double reviewer)
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
-- artifact inspection (`onward show <ID>`)
+- artifact inspection (`onward show <ID>` — tasks include latest run info)
 - per-artifact notes (`onward note <ID> ["message"]`)
 - state transitions (`onward start|complete|cancel`)
-- task/chunk execution handoff (`onward work`)
-- active/completed views (`onward progress`, `onward recent`)
+- task/chunk execution handoff (`onward work` — passes full chunk/plan context to executor, dependency-aware chunk execution, pre/post hooks)
+- active/completed views (`onward progress`, `onward recent` — recent includes run records)
 - next-item suggestion (`onward next`)
 - consolidated status dashboard (`onward report`)
 - plan archival (`onward archive PLAN-###`)
@@ -100,9 +100,14 @@ Test coverage currently includes:
 
 - init/doctor success and failure paths (including invalid `sync` settings)
 - plan/chunk/task creation flows
-- list/show behavior
+- list/show behavior (including latest run info for tasks)
 - duplicate ID detection
 - frontmatter parser/serializer round-trip behavior
+- split: dry-run, plan-to-chunks, chunk-to-tasks, invalid JSON, validation errors, collision detection, deterministic IDs
+- work: task success/failure lifecycle, chunk sequential execution with dependency ordering, shell/markdown hooks, executor payload enrichment (chunk + plan context)
+- recent: includes both completed artifacts and terminal run records
+- review-plan: single and double reviewer flows
+- notes: add, view, surfacing on completion
 - sync: local status, branch push with bare `origin`, repo push/pull, doctor + branch mode without git
 
 Convenience runner:
@@ -177,4 +182,5 @@ The sync checkout lives under `sync.worktree_path` (default `.onward/sync/`, git
 ## 8. Deeper reference
 
 - **[INSTALLATION.md](../INSTALLATION.md)** — agent setup, full config reference, sync semantics and troubleshooting
-- **[docs/plans/ROADMAP.md](plans/ROADMAP.md)** — v1 roadmap; detailed acceptance criteria live under **`.onward/plans/`**
+- **`.onward/plans/`** — active plans and tasks; use `onward report` for orientation
+- **[WORK_HANDOFF.md](WORK_HANDOFF.md)** — how `onward work` and executor handoff fit together

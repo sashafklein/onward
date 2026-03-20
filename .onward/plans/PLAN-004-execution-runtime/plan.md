@@ -60,7 +60,7 @@ Create a run manager that writes `.train/ongoing.json`, emits immutable run snap
 
 # Notes
 
-See `docs/architecture/work-handoff.md` for handoff design decisions.
+See `docs/WORK_HANDOFF.md` for handoff design decisions.
 
 Current progress (2026-03-19):
 

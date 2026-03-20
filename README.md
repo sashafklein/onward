@@ -367,9 +367,9 @@ Bootstrap a consumer workspace that uses this repo as the source:
 | -------------------------------------------------------------------------- | ---------------------------------- |
 | [INSTALLATION.md](INSTALLATION.md)                                         | Install + agent setup + sync semantics & troubleshooting |
 | [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md)                               | Contributor guide & local dev walkthrough |
-| [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md)                             | v1 roadmap (details in `.onward/plans/`)   |
-| [docs/architecture/work-handoff.md](docs/architecture/work-handoff.md)     | How execution handoff works                |
-| [docs/dogfood/README.md](docs/dogfood/README.md)                           | Dogfood workflow details           |
+| **`.onward/plans/`**                                                      | Plans, chunks, tasks, acceptance criteria (source of truth) |
+| [docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)                               | Execution handoff design                    |
+| [docs/DOGFOOD.md](docs/DOGFOOD.md)                                         | Dogfood workflow                            |
 
 ---
 

@@ -67,4 +67,4 @@ When the user describes a new initiative, feature, or project:
 - Python 3.11+ required
 - Templates, hooks, and prompts live in `.onward/templates/`, `.onward/hooks/`, `.onward/prompts/`
 - Contributor guide: `docs/CONTRIBUTION.md`
-- Roadmap: `docs/plans/ROADMAP.md` (acceptance criteria in `.onward/plans/`)
+- Planning / roadmap: `.onward/plans/` (run `onward report` for current work)
