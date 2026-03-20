@@ -50,6 +50,8 @@ Applies to **any** artifact type (plan, chunk, task) that uses the shared status
 
 If a task fails, chunk processing stops with a non-zero exit; the chunk usually remains **`in_progress`** until you resolve tasks and run `work` again or adjust status manually. The CLI prints a short hint pointing here.
 
+When **every** task in a chunk reaches a **terminal** state (`completed` or `canceled`) — including via `onward complete` rather than `onward work` — Onward will run the **post_chunk** hook (when configured) and set the chunk to **`completed`** on success. This runs when you next run **`onward next`**, **`onward report`**, or **`onward complete`** on a task, and after a successful **`onward work TASK-*`** that finishes the last non-terminal task in the chunk.
+
 ## Choosing a command (quick reference)
 
 | Goal | Command |
@@ -62,8 +64,9 @@ If a task fails, chunk processing stops with a non-zero exit; the chunk usually 
 
 ## Relationship to agent docs
 
-Repository **AGENTS.md** and **INSTALLATION.md** agent blocks should match this policy. If they disagree, **this file and the CLI win**.
+Repository **AGENTS.md** and **INSTALLATION.md** agent blocks should match this policy. If they disagree, **this file and the CLI win**. **[AI_OPERATOR.md](AI_OPERATOR.md)** is a shorter operator-facing summary (loop, pitfalls, recovery); it should not contradict this file.
 
 ## Related docs
 
+- **[AI_OPERATOR.md](AI_OPERATOR.md)** — quickstart and anti-patterns for agents/operators.
 - **[CAPABILITIES.md](CAPABILITIES.md)** — model-backed vs heuristic commands (orthogonal to lifecycle).

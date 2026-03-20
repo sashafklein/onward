@@ -15,11 +15,33 @@ def test_split_plan_dry_run_does_not_write_files(tmp_path: Path, capsys):
     code = cli.main(["split", "--root", str(tmp_path), "PLAN-001", "--dry-run"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "Split dry-run for PLAN-001" in out
-    assert "PLAN: create CHUNK-" in out
+    assert "Split dry-run (plan→chunks) for PLAN-001" in out
+    assert "CHUNK: create CHUNK-" in out
 
     chunk_files = list((tmp_path / ".onward/plans/PLAN-001-decompose-me/chunks").glob("*.md"))
     assert chunk_files == []
+
+
+def test_split_chunk_dry_run_labels_tasks(monkeypatch, tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build API"]) == 0
+    capsys.readouterr()
+
+    monkeypatch.setenv(
+        "TRAIN_SPLIT_RESPONSE",
+        '{"tasks":[{"title":"Add endpoint","description":"Implement","acceptance":["done"],"model":"gpt-5-mini","human":false}]}',
+    )
+    code = cli.main(["split", "--root", str(tmp_path), "CHUNK-001", "--dry-run"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Split dry-run (chunk→tasks) for CHUNK-001" in out
+    assert "TASK: create TASK-001" in out
+    assert "PLAN: create" not in out
+    assert "CHUNK: create" not in out
+
+    task_files = list((tmp_path / ".onward/plans/PLAN-001-alpha/tasks").glob("*.md"))
+    assert task_files == []
 
 
 def test_split_chunk_creates_task_with_acceptance(monkeypatch, tmp_path: Path, capsys):

@@ -4,12 +4,12 @@ type: "chunk"
 plan: "PLAN-010"
 project: ""
 title: "Validate AI-first onboarding and guardrails"
-status: "open"
+status: "completed"
 description: "Prove an installed agent will follow intended workflow end-to-end"
 priority: "medium"
 model: "opus-latest"
 created_at: "2026-03-20T00:22:11Z"
-updated_at: "2026-03-20T00:22:11Z"
+updated_at: "2026-03-20T14:12:41Z"
 ---
 
 # Summary

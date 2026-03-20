@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-007"
 project: ""
 title: "Support review-plan provider selection and fallback"
-status: "open"
+status: "completed"
 description: "Allow reviewer matrix across multiple providers with clear config"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:46Z"
-updated_at: "2026-03-20T00:28:46Z"
+updated_at: "2026-03-20T06:11:56Z"
 ---
 
 # Context
@@ -45,4 +45,7 @@ PLAN-010 problem + acceptance: **`review-plan`** needs explicit **multi-provider
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- `review.reviewers` matrix + ordered `fallback`; per-slot `command` / `args`; CLI `--reviewer LABEL` (exact).
+- Deterministic log lines: `review-plan: slot=… try=…`, `fallback_reason=preflight_failed|executor_failed`.
+- Extended `_parse_simple_yaml` for mapping list items so nested reviewer YAML parses (no PyYAML).
+- Docs: `docs/CAPABILITIES.md`, `README.md`, `docs/PROVIDER_REGISTRY.md`; tests in `tests/test_cli_review.py`.

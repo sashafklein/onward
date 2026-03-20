@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-004"
 project: ""
 title: "Document tree task markers and CLI legend"
-status: "open"
+status: "completed"
 description: "Document (A)/(H) markers in help/docs"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:52Z"
-updated_at: "2026-03-20T00:28:52Z"
+updated_at: "2026-03-20T14:37:08Z"
 ---
 
 # Context
@@ -45,4 +45,5 @@ PLAN-010 phase 2 **§5**: document **`(A)`** and **`(H)`** markers (and any simi
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Shared epilog `TASK_MARKER_LEGEND_EPILOG` on `onward tree` / `onward report` (`RawDescriptionHelpFormatter`); aligned with `render_active_work_tree_lines` + `is_human_task` in `artifacts.py` and `[Blocking Human Tasks]` in `cmd_report`.
+- README (Seeing What’s Happening), INSTALLATION (Phase 1), CONTRIBUTION (feature list) updated.

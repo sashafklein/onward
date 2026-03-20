@@ -33,9 +33,9 @@ sync:
   # Local worktree path used for sync staging operations.
   worktree_path: .onward/sync
 
-ralph:
+executor:
   # Executor command to run for `onward work`, markdown hooks, and `review-plan`.
-  command: ralph
+  command: onward-exec
   # Default arguments appended to the executor command.
   args: []
   # When false, the CLI still runs shell hooks but does not invoke the executor.
@@ -55,11 +55,16 @@ models:
 review:
   # If true, plan reviews spawn two independent reviewers (review_default + default).
   double_review: true
+  # Optional: explicit reviewer slots with ordered fallbacks (see docs/CAPABILITIES.md).
+  # When review.reviewers is a non-empty list, double_review is ignored for slot count.
 
 work:
   # If true (default), `onward work CHUNK` runs every ready task in one invocation.
   # If false, each invocation runs at most one ready task; re-run until the chunk finishes.
   sequential_by_default: true
+  # When true, exit code 0 is not enough: the executor must print a JSON success ack line
+  # (see docs/WORK_HANDOFF.md). Default false for backward compatibility.
+  require_success_ack: false
 
 hooks:
   # Shell commands run before each task (empty list means disabled).
@@ -263,7 +268,7 @@ id: HOOK-post-task
 type: hook
 trigger: task.completed
 model: opus-latest
-executor: ralph
+executor: onward-exec
 scope: repo
 ---
 
@@ -288,7 +293,7 @@ id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
 model: opus-latest
-executor: ralph
+executor: onward-exec
 scope: repo
 ---
 

@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-006"
 project: ""
 title: "Fix dogfood venv/runtime version parity"
-status: "open"
+status: "completed"
 description: "Ensure dogfood uses supported Python and generated entrypoint is executable on target shells"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:51Z"
-updated_at: "2026-03-20T00:28:51Z"
+updated_at: "2026-03-20T05:30:24Z"
 ---
 
 # Context
@@ -45,4 +45,5 @@ PLAN-010 problem + phase 4: **dogfood** stress — venv / **Python version** mus
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- **`scripts/dogfood/bootstrap.sh`:** resolve Python via `python3.13` / `python3.12` / `python3.11` / `python3` (first with `sys.version_info >= (3, 11)`); recreate venv if missing or below Python 3.11; **`onward` wrapper** uses `dirname` + `exec …/python -m onward.cli` so the venv interpreter is always used.
+- **`docs/DOGFOOD.md`:** requirements, interpreter order, wrapper behavior, idempotence.

@@ -3,7 +3,7 @@ id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
 model: opus-latest
-executor: ralph
+executor: onward-exec
 scope: repo
 ---
 

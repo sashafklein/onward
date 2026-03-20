@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+import onward.executor_ack as executor_ack_mod
 import onward.executor_payload as executor_payload_mod
 from onward.config import (
     CONFIG_SECTION_KEYS,
@@ -26,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ONWARD_PKG = REPO_ROOT / "src" / "onward"
 CLI_PY = ONWARD_PKG / "cli.py"
 EXECUTOR_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "onward-executor-stdin-v1.schema.json"
+SUCCESS_ACK_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "onward-task-success-ack-v1.schema.json"
 
 
 def _iter_onward_importfrom_aliases(tree: ast.AST) -> list[tuple[int, str | None, str, str | None]]:
@@ -104,6 +106,13 @@ def test_no_cross_module_private_onward_imports() -> None:
             if name.startswith("_"):
                 bad.append(f"{path.name}:{lineno}: from {mod} import {name}" + (f" as {asname}" if asname else ""))
     assert not bad, "leading-underscore imports from onward.*:\n" + "\n".join(bad)
+
+
+def test_task_success_ack_schema_version_matches_code() -> None:
+    assert SUCCESS_ACK_SCHEMA_PATH.is_file()
+    schema = json.loads(SUCCESS_ACK_SCHEMA_PATH.read_text(encoding="utf-8"))
+    ver = schema["properties"]["onward_task_result"]["properties"]["schema_version"]["const"]
+    assert ver == executor_ack_mod.SUCCESS_ACK_SCHEMA_VERSION
 
 
 def test_executor_stdin_json_schema_is_valid_and_version_matches_code() -> None:

@@ -8,19 +8,20 @@ Right now this repo supports:
 
 - workspace bootstrap (`onward init`)
 - structural validation (`onward doctor`, including `sync:` config checks)
-- artifact creation (`onward new plan|chunk|task`)
+- artifact creation (`onward new plan`, `onward new chunk`, `onward new task`)
 - decomposition via `onward split` (**heuristic** from markdown sections; `TRAIN_SPLIT_RESPONSE` env for tests — see [CAPABILITIES.md](CAPABILITIES.md))
 - adversarial plan review (`onward review-plan` with configurable single/double reviewer)
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
+- active work tree (`onward tree` with `--project`; omits completed/canceled chunks and tasks; task lines show `(A)` agent vs `(H)` human — see `onward tree --help`)
+- consolidated status (`onward report`; same task markers plus `[Blocking Human Tasks]` — see `onward report --help`)
 - artifact inspection (`onward show <ID>` — tasks include latest run info)
 - per-artifact notes (`onward note <ID> ["message"]`)
-- state transitions (`onward start|complete|cancel`) and executor-driven status from `onward work` — see [LIFECYCLE.md](LIFECYCLE.md)
+- state transitions (`onward start`, `onward complete`, `onward cancel`) and executor-driven status from `onward work` — see [LIFECYCLE.md](LIFECYCLE.md)
 - task/chunk execution handoff (`onward work` — passes full chunk/plan context to executor, dependency-aware chunk execution, pre/post hooks)
 - active/completed views (`onward progress`, `onward recent` — recent includes run records)
 - next-item suggestion (`onward next`)
-- consolidated status dashboard (`onward report`)
 - plan archival (`onward archive PLAN-###`)
-- optional plan sync (`onward sync status|push|pull` when `sync.mode` is `branch` or `repo`)
+- optional plan sync (`onward sync status`, `onward sync push`, `onward sync pull` when `sync.mode` is `branch` or `repo`)
 
 Onward stores tracked planning state in `.onward/plans/` and runtime state in `.onward/`.
 
@@ -128,7 +129,28 @@ This runs pytest when available, otherwise it runs dogfood e2e smoke checks.
 - No `from onward… import _leading_underscore` anywhere under `src/onward/` (public cross-module APIs only; see PLAN-010 TASK-012).
 - [`docs/schemas/onward-executor-stdin-v1.schema.json`](../docs/schemas/onward-executor-stdin-v1.schema.json) must stay valid JSON, keep `schema_version` consts aligned with `EXECUTOR_PAYLOAD_SCHEMA_VERSION`, and keep `required` arrays in sync with the frozensets in [`src/onward/executor_payload.py`](../src/onward/executor_payload.py).
 
+[`tests/test_docs_consistency.py`](../tests/test_docs_consistency.py) requires **README.md**, **INSTALLATION.md**, and **this guide** each to mention every leaf `onward …` subcommand from `build_parser()` (so `a|b|c` shorthand alone is not enough).
+
+Executor **preflight** (PATH / executable file for `ralph.command`) lives in [`src/onward/preflight.py`](../src/onward/preflight.py) and is covered by [`tests/test_preflight.py`](../tests/test_preflight.py).
+
 When you add config keys, new subcommands, or change executor stdin, update the allowlists / schema / payload module **and** extend or adjust these tests if the contract changes.
+
+### Docs consistency (local)
+
+```bash
+PYTHONPATH=src python3 -m pytest tests/test_docs_consistency.py -v
+```
+
+This is included in the full suite (`./scripts/test.sh` / `pytest`).
+
+### Manual checklist (releases & deep doc drift)
+
+Automation does not cover everything. Before a release or large doc reshuffle, skim:
+
+- **[CAPABILITIES.md](CAPABILITIES.md)** — model-backed vs local commands still match [`build_parser()`](../../src/onward/cli.py) and executor behavior.
+- **INSTALLATION.md** — pasted agent blocks (e.g. `AGENTS.md` excerpt) stay aligned with this repo’s **AGENTS.md** where they are meant to match.
+- **[FORMAT_MIGRATION.md](FORMAT_MIGRATION.md)** / executor schema — if `EXECUTOR_PAYLOAD_SCHEMA_VERSION` or `docs/schemas/onward-executor-stdin-v1.schema.json` changed, migration notes and consumers are updated.
+- **Version** — `pyproject.toml` / tag / changelog if you publish a release artifact.
 
 ## 6. Common errors and fixes
 
@@ -194,7 +216,9 @@ The sync checkout lives under `sync.worktree_path` (default `.onward/sync/`, git
 ## 8. Deeper reference
 
 - **[INSTALLATION.md](../INSTALLATION.md)** — agent setup, full config reference, sync semantics and troubleshooting
+- **[AI_OPERATOR.md](AI_OPERATOR.md)** — operator quickstart, anti-patterns, recovery playbooks
 - **`.onward/plans/`** — active plans and tasks; use `onward report` for orientation
 - **[LIFECYCLE.md](LIFECYCLE.md)** — `start` / `work` / `complete` / `cancel` rules
 - **[CAPABILITIES.md](CAPABILITIES.md)** — model-backed vs local commands
 - **[WORK_HANDOFF.md](WORK_HANDOFF.md)** — how `onward work` and executor handoff fit together
+- **[PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md)** — multi-provider routing design (not implemented by default)

@@ -124,7 +124,7 @@ def test_doctor_fails_on_sync_local_with_repo_url(tmp_path: Path, capsys):
     assert 'sync.mode is "local"' in out
 
 
-def test_doctor_fails_when_ralph_args_not_list(tmp_path: Path, capsys):
+def test_doctor_fails_when_executor_args_not_list(tmp_path: Path, capsys):
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
     cfg = tmp_path / ".onward.config.yaml"
     cfg.write_text(cfg.read_text(encoding="utf-8").replace("args: []", "args: not-a-list"), encoding="utf-8")
@@ -134,7 +134,39 @@ def test_doctor_fails_when_ralph_args_not_list(tmp_path: Path, capsys):
     out = capsys.readouterr().out
 
     assert exit_code == 1
-    assert "ralph.args must be a list" in out
+    assert "executor.args must be a list" in out
+
+
+def test_doctor_warns_on_legacy_ralph_key_only(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    text = cfg.read_text(encoding="utf-8")
+    text = text.replace("executor:", "ralph:", 1)
+    cfg.write_text(text, encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "deprecated" in out
+    assert "ralph" in out
+
+
+def test_doctor_warns_when_both_ralph_and_executor(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = tmp_path / ".onward.config.yaml"
+    text = cfg.read_text(encoding="utf-8")
+    insert = "\nralph:\n  command: onward-exec\n  args: []\n  enabled: true\n"
+    text = text.replace("\nmodels:", insert + "\nmodels:", 1)
+    cfg.write_text(text, encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "ignored" in out or "deprecated" in out
 
 
 def test_doctor_detects_duplicate_ids(tmp_path: Path, capsys):

@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-006"
 project: ""
 title: "Publish AI operator quickstart and anti-patterns"
-status: "open"
+status: "completed"
 description: "Document common failure modes and exact recovery playbooks"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:23Z"
-updated_at: "2026-03-20T00:22:23Z"
+updated_at: "2026-03-20T05:24:31Z"
 ---
 
 # Context
@@ -45,4 +45,5 @@ PLAN-010 goal: agents operate from **docs alone**. A dedicated **operator quicks
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Added **`docs/AI_OPERATOR.md`** — minimal session loop, `work` vs `complete`, `--project` / `--blocking` / `--human`, `human` / `blocked_by` frontmatter, sync summary, eight anti-patterns with recovery steps; links to LIFECYCLE, CAPABILITIES, WORK_HANDOFF, INSTALLATION.
+- Linked from **README** (Agent Integration + Documentation table), **INSTALLATION** Phase 2 (before paste blocks), **docs/LIFECYCLE.md** (relationship + related), **docs/CONTRIBUTION.md** §8.

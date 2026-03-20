@@ -15,7 +15,7 @@ def test_dump_run_record_is_valid_json_round_trip():
         "chunk": "CHUNK-001",
         "status": "completed",
         "model": "claude-sonnet-4-6",
-        "executor": "ralph",
+        "executor": "true",
         "started_at": "2026-03-20T12:00:00Z",
         "finished_at": "2026-03-20T12:01:00Z",
         "log_path": ".onward/runs/RUN-2026-03-20T12-00-00Z-TASK-001.log",
@@ -34,7 +34,7 @@ type: "run"
 target: "TASK-001"
 status: "failed"
 model: "opus"
-executor: "ralph"
+executor: "true"
 started_at: "2026-01-01T00:00:00Z"
 finished_at: "2026-01-01T00:01:00Z"
 log_path: ".onward/runs/x.log"
@@ -58,7 +58,7 @@ log_path: ".onward/runs/x.log"
     assert parsed["type"] == "run"
     assert parsed["plan"] is None
     assert parsed["chunk"] is None
-    assert parsed["executor"] == "ralph"
+    assert parsed["executor"] == "onward-exec"
     assert parsed["error"] == ""
     assert parsed["finished_at"] is None
 
@@ -69,7 +69,7 @@ def test_new_writes_are_json_files(tmp_path: Path, capsys):
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: ralph", '  command: "true"'), encoding="utf-8")
+    config_path.write_text(raw.replace("  command: onward-exec", '  command: "true"'), encoding="utf-8")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
@@ -97,7 +97,7 @@ type: "run"
 target: "TASK-001"
 status: "completed"
 model: "opus"
-executor: "ralph"
+executor: "true"
 started_at: "2026-01-01T00:00:00Z"
 finished_at: "2026-01-01T00:01:00Z"
 log_path: ".onward/runs/x.log"

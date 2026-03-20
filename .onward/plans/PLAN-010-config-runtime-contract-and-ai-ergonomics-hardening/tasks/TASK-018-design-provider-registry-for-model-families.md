@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-007"
 project: ""
 title: "Design provider registry for model families"
-status: "open"
+status: "completed"
 description: "Route models across OpenClaw, Claude CLI, Cursor agent CLI with explicit provider mapping"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:46Z"
-updated_at: "2026-03-20T00:28:46Z"
+updated_at: "2026-03-20T05:30:24Z"
 ---
 
 # Context
@@ -46,4 +46,5 @@ PLAN-010 phase 2.5 **§5b**: explicit **provider routing** — map model familie
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Added **`docs/PROVIDER_REGISTRY.md`** — opt-in `provider_registry.enabled`, proposed `providers` / `models.routing` / per-command defaults, resolution order (artifact → routing → alias → defaults), doctor/contract notes, explicit non-goals.
+- Linked from **README** (Documentation table), **docs/CAPABILITIES.md** (future section), **docs/CONTRIBUTION.md** §8.

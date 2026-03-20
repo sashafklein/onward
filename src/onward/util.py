@@ -110,6 +110,109 @@ def _parse_scalar(raw: str) -> Any:
     return value
 
 
+def _read_dash_sequence(lines: list[str], j: int, min_indent: int) -> tuple[list[Any], int]:
+    """Read ``- item`` lines strictly deeper than ``min_indent`` (list under a key)."""
+    seq: list[Any] = []
+    while j < len(lines):
+        row = lines[j]
+        if not row.strip():
+            j += 1
+            continue
+        ri = len(row) - len(row.lstrip())
+        if ri <= min_indent:
+            break
+        ls = row.lstrip()
+        if not ls.startswith("- "):
+            break
+        frag = ls[2:].strip()
+        entry_indent = ri
+        if ":" in frag:
+            sk, sv = frag.split(":", 1)
+            sk, sv = sk.strip(), sv.strip()
+            entry: dict[str, Any] = {sk: (_parse_scalar(sv) if sv else "")}
+            j += 1
+            if not sv:
+                while j < len(lines):
+                    r2 = lines[j]
+                    if not r2.strip():
+                        j += 1
+                        continue
+                    r2i = len(r2) - len(r2.lstrip())
+                    if r2i <= entry_indent:
+                        break
+                    if r2.lstrip().startswith("- "):
+                        break
+                    if ":" not in r2.strip():
+                        break
+                    tk, tv = r2.strip().split(":", 1)
+                    entry[tk.strip()] = _parse_scalar(tv.strip()) if tv.strip() else ""
+                    j += 1
+            else:
+                while j < len(lines):
+                    r2 = lines[j]
+                    if not r2.strip():
+                        j += 1
+                        continue
+                    r2i = len(r2) - len(r2.lstrip())
+                    if r2i <= entry_indent:
+                        break
+                    if r2.lstrip().startswith("- "):
+                        break
+                    if ":" not in r2.strip():
+                        break
+                    tk, tv = r2.strip().split(":", 1)
+                    if not tv.strip():
+                        break
+                    entry[tk.strip()] = _parse_scalar(tv.strip())
+                    j += 1
+            seq.append(entry)
+            continue
+        seq.append(_parse_scalar(frag))
+        j += 1
+    return seq, j
+
+
+def _mapping_yaml_list_item(lines: list[str], j: int) -> tuple[dict[str, Any], int]:
+    """Parse one ``  - key: val`` mapping item and optional ``    more:`` / nested lists."""
+    line = lines[j]
+    if not line.startswith("  -"):
+        raise ValueError(f"expected indented list item: {line!r}")
+    rest = line[4:].strip() if line.startswith("  - ") else line[3:].strip()
+    if not rest or ":" not in rest:
+        raise ValueError(f"expected mapping list item (key: value): {line!r}")
+    k, v = rest.split(":", 1)
+    k, v = k.strip(), v.strip()
+    obj: dict[str, Any] = {}
+    j += 1
+    if not v:
+        seq, j = _read_dash_sequence(lines, j, min_indent=3)
+        obj[k] = seq
+        return obj, j
+    obj[k] = _parse_scalar(v)
+    while j < len(lines):
+        row = lines[j]
+        if not row.strip():
+            j += 1
+            continue
+        ri = len(row) - len(row.lstrip())
+        if ri < 4:
+            break
+        if ri == 2 and row.lstrip().startswith("-"):
+            break
+        inner = row.strip()
+        if ":" not in inner:
+            raise ValueError(f"expected key: value, got {row!r}")
+        nk, nv = inner.split(":", 1)
+        nk, nv = nk.strip(), nv.strip()
+        if not nv:
+            seq, j = _read_dash_sequence(lines, j + 1, min_indent=ri)
+            obj[nk] = seq
+            continue
+        obj[nk] = _parse_scalar(nv)
+        j += 1
+    return obj, j
+
+
 def _parse_simple_yaml(text: str) -> dict[str, Any]:
     lines = text.splitlines()
     i = 0
@@ -149,9 +252,15 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
                 break
 
             if child.startswith("  - "):
-                list_items.append(_parse_scalar(child[4:].strip()))
-            else:
-                nested_lines.append(child[2:])
+                tail = child[4:].strip()
+                if ":" in tail:
+                    item, j = _mapping_yaml_list_item(lines, j)
+                    list_items.append(item)
+                    continue
+                list_items.append(_parse_scalar(tail))
+                j += 1
+                continue
+            nested_lines.append(child[2:])
             j += 1
 
         if list_items and nested_lines:
@@ -223,7 +332,7 @@ _RUN_RECORD_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "type": "run",
     "plan": None,
     "chunk": None,
-    "executor": "ralph",
+    "executor": "onward-exec",
     "error": "",
     "finished_at": None,
 }

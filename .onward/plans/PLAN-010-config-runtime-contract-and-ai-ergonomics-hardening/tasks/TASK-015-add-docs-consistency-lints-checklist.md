@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-006"
 project: ""
 title: "Add docs consistency lints/checklist"
-status: "open"
+status: "completed"
 description: "Catch drift between docs, defaults, and runtime in CI"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:22:23Z"
-updated_at: "2026-03-20T00:22:23Z"
+updated_at: "2026-03-20T05:15:01Z"
 ---
 
 # Context
@@ -45,4 +45,7 @@ PLAN-010 phase 4 §9: **CI-visible drift checks** — stale doc command lists, t
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Added `tests/test_docs_consistency.py`: each of README.md, INSTALLATION.md, docs/CONTRIBUTION.md must contain an explicit `onward …` mention for every leaf subcommand from `build_parser()`; frozen expected leaf list catches parser restructuring.
+- CONTRIBUTION: expanded `a|b|c` shorthand into full command spellings where needed; documented `onward tree`; added “Docs consistency (local)” + manual release checklist; cross-linked architecture section.
+- INSTALLATION quick-ref: `onward archive` spelling for the consistency check.
+- README Development: pointer to the test + CONTRIBUTION checklist.

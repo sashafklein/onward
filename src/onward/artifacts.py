@@ -229,6 +229,38 @@ def blocking_ids(artifacts: list[Artifact]) -> set[str]:
     return {item for item in blockers if item}
 
 
+def task_is_next_actionable(artifact: Artifact, status_by_id: dict[str, str]) -> bool:
+    """True when ``onward work`` could run this task next (not human-only, deps satisfied)."""
+    if str(artifact.metadata.get("type", "")) != "task":
+        return False
+    status = str(artifact.metadata.get("status", ""))
+    if status not in {"open", "in_progress"}:
+        return False
+    if is_human_task(artifact):
+        return False
+    if as_str_list(artifact.metadata.get("blocked_by")):
+        return False
+    depends_on = as_str_list(artifact.metadata.get("depends_on"))
+    unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
+    if unmet:
+        return False
+    return True
+
+
+def chunk_has_actionable_executor_task(
+    artifacts: list[Artifact], chunk_id: str, status_by_id: dict[str, str]
+) -> bool:
+    """Chunk has at least one non-human task that ``onward work`` can run."""
+    for a in artifacts:
+        if str(a.metadata.get("type", "")) != "task":
+            continue
+        if str(a.metadata.get("chunk", "")) != chunk_id:
+            continue
+        if task_is_next_actionable(a, status_by_id):
+            return True
+    return False
+
+
 def select_next_artifact(artifacts: list[Artifact], project: str | None = None) -> Artifact | None:
     status_by_id = {
         str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
@@ -247,15 +279,7 @@ def select_next_artifact(artifacts: list[Artifact], project: str | None = None) 
         if project and artifact_project(artifact) != project:
             continue
 
-        if artifact_type == "task" and status == "open":
-            depends_on = as_str_list(artifact.metadata.get("depends_on"))
-            blocked_by = as_str_list(artifact.metadata.get("blocked_by"))
-            if blocked_by:
-                continue
-            unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
-            if unmet:
-                continue
-
+        if artifact_type == "task" and task_is_next_actionable(artifact, status_by_id):
             chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
             plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
             rank = (
@@ -266,7 +290,9 @@ def select_next_artifact(artifacts: list[Artifact], project: str | None = None) 
             ready_tasks.append((rank, artifact))
 
         elif artifact_type == "chunk" and status == "open":
-            open_chunks.append(artifact)
+            cid = str(artifact.metadata.get("id", ""))
+            if chunk_has_actionable_executor_task(artifacts, cid, status_by_id):
+                open_chunks.append(artifact)
         elif artifact_type == "plan" and status == "open":
             open_plans.append(artifact)
 
@@ -425,12 +451,16 @@ def report_rows(artifacts: list[Artifact], root: Path, status: str | None = None
     return sorted(rows)
 
 
-def render_open_tree_lines(
+def render_active_work_tree_lines(
     artifacts: list[Artifact],
     root: Path,
     project: str | None = None,
     color_enabled: bool = False,
 ) -> list[str]:
+    """Lines for ``onward tree`` / report: **open** plans, **open/in_progress** chunks and tasks only.
+
+    Terminal chunks/tasks (``completed`` / ``canceled``) are omitted so the view matches *active* work.
+    """
     plans = [
         a
         for a in artifacts
@@ -444,16 +474,28 @@ def render_open_tree_lines(
 
     chunks = [a for a in artifacts if str(a.metadata.get("type", "")) == "chunk"]
     tasks = [a for a in artifacts if str(a.metadata.get("type", "")) == "task"]
+    active_chunk_status = frozenset({"open", "in_progress"})
+    active_task_status = frozenset({"open", "in_progress"})
     lines: list[str] = []
     for plan in plans:
         lines.append(f"{plan.metadata.get('id')} {plan.metadata.get('title')}")
-        plan_chunks = [c for c in chunks if str(c.metadata.get("plan", "")) == str(plan.metadata.get("id", ""))]
+        plan_chunks = [
+            c
+            for c in chunks
+            if str(c.metadata.get("plan", "")) == str(plan.metadata.get("id", ""))
+            and str(c.metadata.get("status", "")) in active_chunk_status
+        ]
         plan_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
         for chunk in plan_chunks:
             status = str(chunk.metadata.get("status", ""))
             status_text = colorize(status, status_color(status), color_enabled)
             lines.append(f"  |- {chunk.metadata.get('id')} [{status_text}] {chunk.metadata.get('title')}")
-            chunk_tasks = [t for t in tasks if str(t.metadata.get('chunk', '')) == str(chunk.metadata.get("id", ""))]
+            chunk_tasks = [
+                t
+                for t in tasks
+                if str(t.metadata.get("chunk", "")) == str(chunk.metadata.get("id", ""))
+                and str(t.metadata.get("status", "")) in active_task_status
+            ]
             chunk_tasks.sort(key=lambda a: str(a.metadata.get("id", "")))
             for task in chunk_tasks:
                 t_status = str(task.metadata.get("status", ""))

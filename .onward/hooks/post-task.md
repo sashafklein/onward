@@ -3,7 +3,7 @@ id: HOOK-post-task
 type: hook
 trigger: task.completed
 model: opus-latest
-executor: ralph
+executor: onward-exec
 scope: repo
 ---
 

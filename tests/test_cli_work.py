@@ -1,5 +1,6 @@
-import re
 import json
+import re
+import sys
 from pathlib import Path
 
 from onward import cli
@@ -12,8 +13,34 @@ def _init_workspace(root: Path) -> None:
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    raw = raw.replace("  command: ralph", f'  command: "{command}"')
+    raw = raw.replace("  command: onward-exec", f'  command: "{command}"')
     config_path.write_text(raw, encoding="utf-8")
+
+
+def _set_require_success_ack(root: Path, value: str) -> None:
+    config_path = root / ".onward.config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    text = text.replace("  require_success_ack: false", f"  require_success_ack: {value}")
+    config_path.write_text(text, encoding="utf-8")
+
+
+def _set_python_ack_executor(root: Path) -> None:
+    script = root / ".onward" / "ack_exec.py"
+    script.write_text(
+        'import json, os\n'
+        'print(json.dumps({"onward_task_result": {"status": "completed", "schema_version": 1, '
+        '"run_id": os.environ["ONWARD_RUN_ID"]}}))\n',
+        encoding="utf-8",
+    )
+    config_path = root / ".onward.config.yaml"
+    text = config_path.read_text(encoding="utf-8")
+    text = text.replace("  command: onward-exec", f"  command: {json.dumps(sys.executable)}", 1)
+    text = text.replace(
+        "  args: []",
+        "  args:\n    - .onward/ack_exec.py\n",
+        1,
+    )
+    config_path.write_text(text, encoding="utf-8")
 
 
 def _set_hook_value(root: Path, key: str, replacement: str) -> None:
@@ -24,6 +51,53 @@ def _set_hook_value(root: Path, key: str, replacement: str) -> None:
     raw = raw.replace(f"  {key}: .onward/hooks/post-task.md", replacement)
     raw = raw.replace(f"  {key}: .onward/hooks/post-chunk.md", replacement)
     config_path.write_text(raw, encoding="utf-8")
+
+
+def test_work_require_success_ack_fails_when_exit_0_without_ack(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_require_success_ack(tmp_path, "true")
+    _set_hook_value(tmp_path, "post_task_markdown", "  post_task_markdown: null")
+    _set_executor(tmp_path, "true")
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+
+    assert code == 1
+    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    assert len(run_jsons) == 1
+    rec = json.loads(run_jsons[0].read_text(encoding="utf-8"))
+    assert rec["status"] == "failed"
+    assert "missing onward_task_result" in rec["error"]
+
+    task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
+
+
+def test_work_require_success_ack_succeeds_with_executor_ack_line(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _set_require_success_ack(tmp_path, "true")
+    _set_hook_value(tmp_path, "post_task_markdown", "  post_task_markdown: null")
+    _set_python_ack_executor(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "completed" in out
+
+    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    assert len(run_jsons) == 1
+    rec = json.loads(run_jsons[0].read_text(encoding="utf-8"))
+    assert rec["status"] == "completed"
+    assert "success_ack" in rec
+    assert rec["success_ack"]["onward_task_result"]["status"] == "completed"
 
 
 def test_work_task_success_creates_run_and_completes_task(tmp_path: Path, capsys):
@@ -46,7 +120,9 @@ def test_work_task_success_creates_run_and_completes_task(tmp_path: Path, capsys
     run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
-    assert json.loads(run_raw)["status"] == "completed"
+    parsed_run = json.loads(run_raw)
+    assert parsed_run["status"] == "completed"
+    assert parsed_run["executor"] == "true"
 
     ongoing = (tmp_path / ".onward/ongoing.json").read_text(encoding="utf-8")
     assert '"active_runs": []' in ongoing
@@ -90,20 +166,20 @@ def _set_sequential_by_default(root: Path, value: str) -> None:
     config_path.write_text(head + tail_new, encoding="utf-8")
 
 
-def _set_ralph_enabled(root: Path, value: str) -> None:
+def _set_executor_block_enabled(root: Path, value: str) -> None:
     config_path = root / ".onward.config.yaml"
     text = config_path.read_text(encoding="utf-8")
-    pos = text.find("ralph:")
+    pos = text.find("executor:")
     assert pos >= 0
     head, tail = text[:pos], text[pos:]
     tail_new = re.sub(r"(?m)^(\s+enabled:\s*)\S+", rf"\g<1>{value}", tail, count=1)
     config_path.write_text(head + tail_new, encoding="utf-8")
 
 
-def test_work_task_fails_when_ralph_disabled(tmp_path: Path, capsys):
+def test_work_task_fails_when_executor_disabled(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _set_executor(tmp_path, "true")
-    _set_ralph_enabled(tmp_path, "false")
+    _set_executor_block_enabled(tmp_path, "false")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0

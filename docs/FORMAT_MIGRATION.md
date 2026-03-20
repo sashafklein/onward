@@ -7,6 +7,7 @@ Onward keeps **read paths** tolerant of older workspace data while **new writes*
 - **Current write format:** strict JSON (UTF-8), one object per file, as produced by `onward work` and related paths.
 - **Legacy read format:** files may contain **simple-YAML-shaped** text (subset parser, not full YAML). Readers try JSON first, then that legacy shape.
 - **Sparse records:** snapshots from before optional fields were added may omit `plan`, `chunk`, `executor`, `error`, or `finished_at`. Readers merge defaults from `_RUN_RECORD_OPTIONAL_DEFAULTS` in `src/onward/util.py` (real values from the file always win) so CLI and index generation see a consistent key set. Stored files are not rewritten automatically.
+- **`success_ack`:** optional object written when the executor prints a valid acknowledgment line and Onward parses it (including when `work.require_success_ack` is false but the line is present). Older snapshots omit this key.
 
 **Future removal:** dropping YAML fallback or changing required run fields would be a **breaking major** change; workspaces would need a one-shot migration (re-save runs as JSON or regenerate from logs — policy TBD).
 

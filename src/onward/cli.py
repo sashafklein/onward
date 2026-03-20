@@ -36,6 +36,17 @@ from onward.scaffold import require_workspace
 # Parser & entry point
 # ---------------------------------------------------------------------------
 
+# Shown on `onward tree` / `onward report --help`; matches render_active_work_tree_lines()
+# in artifacts.py (markers from is_human_task).
+TASK_MARKER_LEGEND_EPILOG = """
+Task markers (each task line in report’s [Active work tree] and in `onward tree`):
+  (A)  Agent task — frontmatter human: false (default). Eligible for `onward next` when
+       dependencies are satisfied.
+  (H)  Human task — human: true; not suggested by `onward next`.
+`onward report` also prints [Blocking Human Tasks]: human tasks whose IDs appear in
+another open/in-progress artifact’s depends_on or blocked_by lists.
+"""
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="onward", description="Onward CLI")
@@ -150,6 +161,13 @@ def build_parser() -> argparse.ArgumentParser:
     review_plan_parser = subparsers.add_parser("review-plan", help="Run adversarial review(s) of a plan")
     review_plan_parser.add_argument("plan_id", help="Plan ID (PLAN-###)")
     review_plan_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    review_plan_parser.add_argument(
+        "--reviewer",
+        action="append",
+        dest="reviewer_labels",
+        metavar="LABEL",
+        help="Run only reviewer slot(s) with this label (exact match; repeat flag for multiple)",
+    )
     review_plan_parser.set_defaults(func=cmd_review_plan)
 
     work_parser = subparsers.add_parser("work", help="Execute a task or sequentially execute a chunk")
@@ -171,13 +189,23 @@ def build_parser() -> argparse.ArgumentParser:
     next_parser.add_argument("--project", default="", help="Filter by project key")
     next_parser.set_defaults(func=cmd_next)
 
-    tree_parser = subparsers.add_parser("tree", help="Show open plan/chunk/task tree")
+    tree_parser = subparsers.add_parser(
+        "tree",
+        help="Show open plans with chunks/tasks in open or in_progress (excludes completed/canceled)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=TASK_MARKER_LEGEND_EPILOG,
+    )
     tree_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     tree_parser.add_argument("--project", default="", help="Filter by project key")
     tree_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
     tree_parser.set_defaults(func=cmd_tree)
 
-    report_parser = subparsers.add_parser("report", help="Show consolidated colored status report")
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Show consolidated colored status report",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=TASK_MARKER_LEGEND_EPILOG,
+    )
     report_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     report_parser.add_argument("--project", default="", help="Filter by project key")
     report_parser.add_argument("--limit", type=int, default=10, help="Max recent items to show")

@@ -98,7 +98,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward new task CHUNK-001 "Title"`     | Add a task to a chunk           |
 | `onward split PLAN-001`                 | Heuristic plan→chunks (markdown-derived; [capabilities](docs/CAPABILITIES.md)) |
 | `onward split CHUNK-001`                | Heuristic chunk→tasks (same) |
-| `onward review-plan PLAN-001`           | Run adversarial review(s) of a plan |
+| `onward review-plan PLAN-001`           | Run adversarial review(s); optional per-slot providers/fallbacks via `review.reviewers` ([CAPABILITIES.md](docs/CAPABILITIES.md)) |
 
 ### Seeing What's Happening
 
@@ -106,12 +106,14 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | ----------------------------- | --------------------------------- |
 | `onward report --project key` | Full status dashboard             |
 | `onward list --project key`   | List all artifacts                |
-| `onward tree --project key`   | Hierarchical plan/chunk/task tree |
+| `onward tree --project key`   | Open plans with **active** chunks/tasks (`open` / `in_progress` only) |
 | `onward next --project key`   | What should be worked on next     |
 | `onward progress`             | What's currently in flight        |
 | `onward recent`               | What just got done (artifacts + runs) |
 | `onward show TASK-001`        | Full detail on one artifact (+ latest run for tasks) |
 | `onward note TASK-001`        | View notes on an artifact         |
+
+In **`onward tree`** and the **[Active work tree]** section of **`onward report`**, each task line includes **`(A)`** or **`(H)`**: **(A)** agent task (`human: false` in frontmatter, the default); **(H)** human task (`human: true`). `onward next` suggests only agent tasks when dependencies allow. **`[Blocking Human Tasks]`** in `onward report` lists human tasks whose IDs appear in another open or in-progress artifact’s `depends_on` or `blocked_by`. See `onward tree --help` and `onward report --help` for the same legend.
 
 ### Syncing plan files (optional)
 
@@ -121,7 +123,7 @@ Configure `sync` in `.onward.config.yaml`:
 
 | `sync.mode` | Behavior |
 | ----------- | -------- |
-| `local` | Default. No remote target; `onward sync push` / `pull` are rejected with a hint. |
+| `local` | Default. No remote target. **`onward sync status`** exits **0** and describes local-only plans. **`onward sync push`** / **`pull`** exit **1** with a stable message (not a no-op success) so scripts and CI do not assume a mirror ran. |
 | `branch` | Creates or uses a [git worktree](https://git-scm.com/docs/git-worktree) at `sync.worktree_path` on `sync.branch` inside the **same** repository. Requires a `.git` directory at the workspace root. |
 | `repo` | `git clone` of `sync.repo` (URL or path) into `sync.worktree_path`. |
 
@@ -134,7 +136,7 @@ What gets synchronized:
 - **`onward sync pull`** — `git pull --ff-only` in the sync checkout, then copy remote plans → workspace and **regenerate indexes**. If the remote has diverged, fix it in the sync checkout and retry.
 - **`onward sync status`** — Compares local vs remote plan files (content hashes). Does **not** create the worktree or clone until you have run **`onward sync push`** at least once; until then it reports that the sync target is not initialized.
 
-`onward doctor` checks `sync:` for consistency (e.g. `branch` mode without a git repo, missing `repo` in `repo` mode).
+`onward doctor` checks `sync:` for consistency (e.g. `branch` mode without a git repo, missing `repo` in `repo` mode, **`sync.repo` set while `sync.mode` is `local`**).
 
 | Command                  | What it does                                                |
 | ------------------------ | ----------------------------------------------------------- |
@@ -316,6 +318,8 @@ Onward is built to be used **by AI agents** as their primary planning and tracki
 - The agent operating policy
 - First-run walkthrough
 
+For a **short operator playbook** (daily loop, `work` vs `complete`, flags, sync basics, anti-patterns and recovery), use **[docs/AI_OPERATOR.md](docs/AI_OPERATOR.md)**.
+
 If you skip agent setup, you have a nice CLI. If you do it, you have **structured, persistent, git-tracked AI development with full context continuity across sessions.**
 
 ---
@@ -353,6 +357,8 @@ pip install -e '.[dev]'
 pytest
 ```
 
+CLI vs doc drift for top-level commands is guarded by `tests/test_docs_consistency.py` (see [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md) for the manual checklist).
+
 Or use the convenience script:
 
 ```bash
@@ -375,12 +381,14 @@ Bootstrap a consumer workspace that uses this repo as the source:
 | Doc                                                                        | What it covers                     |
 | -------------------------------------------------------------------------- | ---------------------------------- |
 | [INSTALLATION.md](INSTALLATION.md)                                         | Install + agent setup + sync semantics & troubleshooting |
+| [docs/AI_OPERATOR.md](docs/AI_OPERATOR.md)                                 | Agent/operator quickstart, anti-patterns, recovery |
 | [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md)                               | Contributor guide & local dev walkthrough |
 | [docs/LIFECYCLE.md](docs/LIFECYCLE.md)                                     | Artifact status: `start` / `work` / `complete` / `cancel` |
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md)                             | Model-backed vs local/heuristic commands   |
 | **`.onward/plans/`**                                                      | Plans, chunks, tasks, acceptance criteria (source of truth) |
 | [docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)                               | Execution handoff design                    |
 | [docs/schemas/onward-executor-stdin-v1.schema.json](docs/schemas/onward-executor-stdin-v1.schema.json) | Executor stdin JSON (versioned)             |
+| [docs/PROVIDER_REGISTRY.md](docs/PROVIDER_REGISTRY.md)                     | Multi-provider routing design (opt-in; not implemented) |
 | [docs/DOGFOOD.md](docs/DOGFOOD.md)                                         | Dogfood workflow                            |
 
 ---

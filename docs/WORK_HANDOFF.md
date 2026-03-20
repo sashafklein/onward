@@ -98,11 +98,35 @@ The bridge stays narrow in v1:
 
 - Build executor command from config (`ralph.command` + `ralph.args`).
 - Pass the full handoff packet via stdin as JSON.
+- Set environment variable **`ONWARD_RUN_ID`** to the current run id (same value as `run_id` in the stdin payload) so executors can echo it back in acknowledgments.
 - Capture stdout/stderr to `.onward/runs/<run>.log`.
 - Update `.ongoing.json` on lifecycle transitions (add on start, remove on finish).
 - Write final run snapshot with `completed` or `failed` status.
 
 This gives parent agents reliable oversight without coupling Onward to Ralph internals.
+
+### Task success acknowledgment (optional strict contract)
+
+By default, a **successful** task run is **`exit code 0`** from the main executor subprocess (after hooks). For stricter **execution truthfulness**, set in `.onward.config.yaml`:
+
+```yaml
+work:
+  require_success_ack: true
+```
+
+When **true**, exit code **0 alone is not enough**. The executor must also print a **single-line JSON object** (on stdout or stderr) that Onward can parse, containing a completed status. Onward scans **non-empty lines from bottom to top** in stdout, then stderr, and uses the **first** line that is valid JSON with an `onward_task_result` object.
+
+Required shape (version **`1`**): see [`schemas/onward-task-success-ack-v1.schema.json`](schemas/onward-task-success-ack-v1.schema.json).
+
+Minimal example line:
+
+```json
+{"onward_task_result":{"status":"completed","schema_version":1}}
+```
+
+If `onward_task_result.run_id` is present, it **must** equal `ONWARD_RUN_ID` (and the stdin `run_id`) or the run fails.
+
+When an acknowledgment is present and valid, Onward stores the **parsed JSON object** on the run record under **`success_ack`** for auditing. Markdown hooks (`pre_task_markdown`, `post_task_markdown`) and `onward review-plan` are **not** subject to this contract—only the **main task** executor invocation.
 
 ## Parent-agent oversight surface
 

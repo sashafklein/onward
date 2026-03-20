@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-006"
 project: ""
 title: "Initialize dogfood workspace deterministically"
-status: "open"
+status: "completed"
 description: "Ensure fixture includes required gitignore/workspace init state or docs mandate init step"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:52Z"
-updated_at: "2026-03-20T00:28:52Z"
+updated_at: "2026-03-20T05:30:25Z"
 ---
 
 # Context
@@ -45,4 +45,5 @@ PLAN-010 acceptance **dogfood reliability**: fresh dogfood run must not need **u
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Bootstrap always runs **`onward init --root`** then **`onward doctor --root`** and exits non-zero if doctor fails — no undocumented manual init.
+- **DOGFOOD.md** documents clone → `./scripts/dogfood/e2e.sh` (which bootstraps) with no extra init; idempotent re-runs described.

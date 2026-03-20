@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-007"
 project: ""
 title: "Add credential and availability preflight for review/split/work"
-status: "open"
+status: "completed"
 description: "Detect missing provider keys/tools early and provide actionable errors"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:46Z"
-updated_at: "2026-03-20T00:28:46Z"
+updated_at: "2026-03-20T05:33:19Z"
 ---
 
 # Context
@@ -45,4 +45,6 @@ PLAN-010 **§5c**: **preflight** before expensive model work — verify required
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Added **`src/onward/preflight.py`** — `preflight_ralph_command()` when `ralph.enabled`: resolve first token of `ralph.command`; skip for `true`/`false`; explicit path → exists + executable; else `shutil.which`.
+- Wired into `work_task`, `execute_plan_review`, `run_chunk_post_markdown_hook` (not `onward split` — still heuristic-only).
+- Tests: **`tests/test_preflight.py`**. Docs: **CAPABILITIES.md**, **AI_OPERATOR.md**, **CONTRIBUTION.md** (seam pointer).

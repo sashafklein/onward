@@ -20,7 +20,7 @@ from onward.artifacts import (
     parse_artifact,
     read_notes,
     regenerate_indexes,
-    render_open_tree_lines,
+    render_active_work_tree_lines,
     report_rows,
     select_next_artifact,
     transition_status,
@@ -29,6 +29,8 @@ from onward.artifacts import (
     write_artifact,
 )
 from onward.config import (
+    build_plan_review_slots,
+    config_raw_deprecation_warnings,
     load_artifact_template,
     load_workspace_config,
     model_setting,
@@ -36,9 +38,11 @@ from onward.config import (
     validate_config_contract_issues,
     work_sequential_by_default,
 )
+from onward.preflight import preflight_shell_invocation
 from onward.execution import (
     collect_run_records,
     execute_plan_review,
+    finalize_chunks_all_tasks_terminal,
     latest_run_for,
     load_ongoing,
     ordered_ready_chunk_tasks,
@@ -112,6 +116,15 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     issues: list[str] = []
+
+    config_path = root / ".onward.config.yaml"
+    raw_config: dict = {}
+    if config_path.exists():
+        raw_parsed = parse_simple_yaml(config_path.read_text(encoding="utf-8"))
+        if isinstance(raw_parsed, dict):
+            raw_config = raw_parsed
+    for w in config_raw_deprecation_warnings(raw_config):
+        print(f"Warning: {w}")
 
     config = load_workspace_config(root)
     issues.extend(validate_config_contract_issues(config))
@@ -284,7 +297,7 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         "description": args.description or "",
         "human": bool(args.human),
         "model": args.model,
-        "executor": "ralph",
+        "executor": "onward-exec",
         "depends_on": [],
         "blocked_by": [],
         "files": [],
@@ -415,6 +428,11 @@ def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     artifact_id = str(artifact.metadata.get("id", ""))
     print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
 
+    if action == "complete":
+        _, warnings = finalize_chunks_all_tasks_terminal(root)
+        for w in warnings:
+            print(w)
+
     if action in {"complete", "cancel"}:
         notes = read_notes(root, artifact_id)
         if notes.strip():
@@ -465,20 +483,18 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
         raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
 
     config = load_workspace_config(root)
-    default_model = model_setting(config, "default", "opus-latest")
-    review_model = model_setting(config, "review_default", default_model)
+    slots, slot_err = build_plan_review_slots(config)
+    if slot_err:
+        raise ValueError(slot_err)
 
-    review_cfg = config.get("review", {})
-    if not isinstance(review_cfg, dict):
-        review_cfg = {}
-    double = review_cfg.get("double_review", True)
-    if isinstance(double, str):
-        double = double.strip().lower() in {"1", "true", "yes", "y"}
-
-    models: list[tuple[str, str]] = []
-    models.append((resolve_model_alias(review_model), "reviewer-1"))
-    if double:
-        models.append((resolve_model_alias(default_model), "reviewer-2"))
+    reviewer_labels = getattr(args, "reviewer_labels", None)
+    if reviewer_labels:
+        wanted = frozenset(reviewer_labels)
+        slots = [s for s in slots if s.label in wanted]
+        if not slots:
+            raise ValueError(
+                "no reviewers match --reviewer (labels are exact): " + ", ".join(sorted(wanted))
+            )
 
     prompt_path = root / ".onward/prompts/review-plan.md"
     if prompt_path.exists():
@@ -489,14 +505,47 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
     plan_id = str(plan.metadata.get("id", ""))
     review_paths: list[Path] = []
 
-    for model, label in models:
-        print(f"Running review: {label} (model={model})...")
-        ok, review_path = execute_plan_review(root, plan, model, label, prompt)
-        if ok:
+    for slot in slots:
+        n_tries = len(slot.tries)
+        print(f"Running review: {slot.label}...")
+        ok_slot = False
+        review_path: Path | None = None
+        for try_idx, tri in enumerate(slot.tries, start=1):
+            print(
+                f"review-plan: slot={slot.label} try={try_idx}/{n_tries} "
+                f"model={tri.model_resolved} executor={tri.executor}"
+            )
+            pre_err = preflight_shell_invocation(tri.executor)
+            if pre_err:
+                print(
+                    f"review-plan: slot={slot.label} fallback_reason=preflight_failed "
+                    f"try={try_idx}/{n_tries} model={tri.model_resolved} executor={tri.executor} "
+                    f"detail={pre_err}"
+                )
+                continue
+            is_last = try_idx == n_tries
+            ok, review_path = execute_plan_review(
+                root,
+                plan,
+                tri.model_resolved,
+                slot.label,
+                prompt,
+                executor_command=tri.executor,
+                executor_args=list(tri.executor_args),
+                emit_errors=is_last,
+            )
+            if ok:
+                ok_slot = True
+                break
+            print(
+                f"review-plan: slot={slot.label} fallback_reason=executor_failed "
+                f"try={try_idx}/{n_tries} model={tri.model_resolved} executor={tri.executor}"
+            )
+        if ok_slot and review_path is not None:
             review_paths.append(review_path)
             print(f"  -> {review_path.relative_to(root)}")
         else:
-            print(f"  -> Review {label} failed.")
+            print(f"  -> Review {slot.label} failed.")
 
     if not review_paths:
         print(f"\nNo reviews completed for {plan_id}.")
@@ -522,12 +571,19 @@ def cmd_work(args: argparse.Namespace) -> int:
             print(f"Run {run_id}: {'completed' if ok else 'failed'}")
         else:
             print(f"{args.id} already completed")
+        if ok:
+            _, warnings = finalize_chunks_all_tasks_terminal(root)
+            for w in warnings:
+                print(w)
         return 0 if ok else 1
     if artifact_type != "chunk":
         raise ValueError(f"{args.id} is not a task or chunk")
 
     chunk = artifact
     chunk_id = str(chunk.metadata.get("id", ""))
+    if str(chunk.metadata.get("status", "")) == "completed":
+        print(f"Chunk {chunk_id} already completed")
+        return 0
     config = load_workspace_config(root)
     sequential = work_sequential_by_default(config)
     if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
@@ -563,6 +619,9 @@ def cmd_work(args: argparse.Namespace) -> int:
                 return 1
 
     refreshed_chunk = must_find_by_id(root, chunk_id)
+    if str(refreshed_chunk.metadata.get("status", "")) == "completed":
+        print(f"Chunk {chunk_id} completed")
+        return 0
     hook_ok, hook_error = run_chunk_post_markdown_hook(root, refreshed_chunk)
     if not hook_ok:
         print(f"Chunk {chunk_id} post hook failed: {hook_error}")
@@ -600,10 +659,12 @@ def cmd_split(args: argparse.Namespace) -> int:
     assert_writes_safe(root, writes)
 
     if args.dry_run:
-        print(f"Split dry-run for {args.id} using model={split_model}")
+        split_kind = "plan→chunks" if artifact_type == "plan" else "chunk→tasks"
+        child_type = "CHUNK" if artifact_type == "plan" else "TASK"
+        print(f"Split dry-run ({split_kind}) for {args.id} using model={split_model}")
         print(f"Prompt: .onward/prompts/{prompt_name}")
         for artifact_id, path, _content in writes:
-            print(f"PLAN: create {artifact_id}\t{path.relative_to(root)}")
+            print(f"{child_type}: create {artifact_id}\t{path.relative_to(root)}")
         return 0
 
     for _artifact_id, path, content in writes:
@@ -712,6 +773,9 @@ def cmd_recent(args: argparse.Namespace) -> int:
 
 def cmd_next(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    for w in warnings:
+        print(w)
     artifacts = collect_artifacts(root)
     chosen = select_next_artifact(artifacts, project=(args.project or "").strip() or None)
     if chosen:
@@ -728,9 +792,9 @@ def cmd_tree(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     artifacts = collect_artifacts(root)
     project = (args.project or "").strip() or None
-    lines = render_open_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
+    lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
     if not lines:
-        print("No open plan tree found")
+        print("No active work tree (no open plans)")
         return 0
     for line in lines:
         print(line)
@@ -741,6 +805,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     color_enabled = not args.no_color
     project = (args.project or "").strip() or None
+    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    for w in warnings:
+        print(w)
     artifacts = collect_artifacts(root)
     blockers = blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
@@ -834,8 +901,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         print("none")
     print()
 
-    print(colorize("[Open Plan Tree]", "cyan", color_enabled))
-    tree_lines = render_open_tree_lines(artifacts, root, project=project, color_enabled=color_enabled)
+    print(colorize("[Active work tree]", "cyan", color_enabled))
+    tree_lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=color_enabled)
     if not tree_lines:
         print("none")
         return 0

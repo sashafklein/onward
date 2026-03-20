@@ -32,6 +32,8 @@ onward --help
 
 You should see the full command list: `init`, `doctor`, `new`, `list`, `report`, `next`, `start`, `complete`, `sync`, `work`, etc.
 
+**`onward tree`** and **`onward report`** label each task with **`(A)`** (agent; default `human: false`) or **`(H)`** (human; `human: true`). `onward next` only suggests agent tasks. Run **`onward tree --help`** or **`onward report --help`** for the full legend.
+
 ### Initialize a Workspace
 
 In any project repo where you want Onward-tracked development:
@@ -52,6 +54,8 @@ You're installed. Now the important part.
 ## Phase 2: Agent Configuration
 
 **This is where the magic happens.** Onward is designed to be the **exclusive** planning and execution tracking system for AI agents working in your repo. For this to work, your agent needs explicit, emphatic instructions to use Onward for ALL planning — no ad-hoc todo lists, no plans-in-chat, no scattered notes.
+
+For a **compact operator guide** (session loop, `work` vs `complete`, project flags, sync expectations, anti-patterns and how to recover), read **[docs/AI_OPERATOR.md](docs/AI_OPERATOR.md)**. It complements the paste blocks below; lifecycle authority remains **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 Below are ready-to-use configuration blocks for every major agent configuration format. **Pick the one that matches your setup and paste it in.**
 
@@ -247,7 +251,7 @@ ONWARD QUICK-REF:
   cancel   → abandon work
   list     → filter artifacts         tree     → hierarchy view
   show     → inspect one artifact     progress → what's in flight
-  recent   → what just finished       archive  → retire a plan
+  recent   → what just finished       onward archive → retire a plan
   sync     → mirror .onward/plans to branch or second repo (optional)
 
 WORKFLOW: report → next → (start?) → work → report (use complete when not using work; see docs/LIFECYCLE.md)
@@ -380,6 +384,10 @@ onward sync pull     # fast-forward sync checkout, copy plans → workspace, rei
 ```
 
 `onward doctor` checks `.onward.config.yaml` for unsupported keys (including removed legacy keys) and basic shape (for example, `ralph.args` and shell hook lists must be YAML lists). It also validates the `sync:` section (for example, branch mode requires a git repo at the workspace root) and flags ignored combinations such as `sync.mode: local` with a non-null `sync.repo`.
+
+### Local sync mode (default): exit codes
+
+With **`sync.mode: local`** there is no sync checkout. **`onward sync status`** exits **0** and prints that plans are local-only (nothing to compare remotely). **`onward sync push`** and **`onward sync pull`** exit **1** with a short hint to enable **`branch`** or **`repo`** mode. That non-zero exit is deliberate: push/pull are invalid in this configuration, and automation should not treat them as a successful mirror.
 
 ### Plan sync semantics (branch and repo modes)
 

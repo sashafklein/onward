@@ -123,6 +123,24 @@ def test_sync_push_local_mode_errors(tmp_path: Path, capsys):
     assert "local" in capsys.readouterr().out.lower()
 
 
+def test_sync_pull_local_mode_errors(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    capsys.readouterr()
+    assert cli.main(["sync", "--root", str(tmp_path), "pull"]) == 1
+    out = capsys.readouterr().out.lower()
+    assert "local" in out
+
+
+def test_doctor_warns_sync_repo_in_local_mode(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    cfg = (tmp_path / ".onward.config.yaml").read_text(encoding="utf-8")
+    cfg = cfg.replace("repo: null", "repo: https://example.invalid/repo.git")
+    (tmp_path / ".onward.config.yaml").write_text(cfg, encoding="utf-8")
+    assert cli.main(["doctor", "--root", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "sync.repo" in out and "local" in out.lower()
+
+
 def test_doctor_flags_branch_mode_without_git(tmp_path: Path, capsys):
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
     cfg = (tmp_path / ".onward.config.yaml").read_text(encoding="utf-8")

@@ -67,6 +67,11 @@ def validate_sync_config(root: Path, config: dict[str, Any]) -> list[str]:
         if not settings.worktree_rel:
             issues.append("sync.worktree_path must be set for repo sync")
 
+    if settings.mode == "local" and settings.repo:
+        issues.append(
+            'sync.repo is set but sync.mode is "local"; remove sync.repo or switch sync.mode to repo'
+        )
+
     return issues
 
 

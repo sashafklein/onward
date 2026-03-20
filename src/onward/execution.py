@@ -14,7 +14,15 @@ from onward.artifacts import (
     read_notes,
     update_artifact_status,
 )
-from onward.config import is_ralph_enabled, load_workspace_config, model_setting, resolve_model_alias
+from onward.config import (
+    is_executor_enabled,
+    load_workspace_config,
+    model_setting,
+    resolve_model_alias,
+    work_require_success_ack,
+)
+from onward.executor_ack import find_task_success_ack
+from onward.preflight import preflight_executor_command, preflight_shell_invocation
 from onward.executor_payload import with_schema_version
 from onward.util import (
     as_str_list,
@@ -169,11 +177,11 @@ def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
 
 def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     config = load_workspace_config(root)
-    ralph = config.get("ralph", {})
-    if not isinstance(ralph, dict):
-        ralph = {}
-    command = clean_string(ralph.get("command")) or "ralph"
-    command_args = ralph.get("args", [])
+    block = config.get("executor", {})
+    if not isinstance(block, dict):
+        block = {}
+    command = clean_string(block.get("command")) or "onward-exec"
+    command_args = block.get("args", [])
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
@@ -198,7 +206,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
         "chunk": task.metadata.get("chunk"),
         "status": "running",
         "model": model,
-        "executor": "ralph",
+        "executor": command,
         "started_at": started_at,
         "finished_at": None,
         "log_path": str(run_log.relative_to(root)),
@@ -250,6 +258,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     log_sections: list[str] = [f"$ {' '.join(cmd)}"]
     error = ""
     ok = False
+    ack_obj: dict[str, Any] | None = None
     pre_shell = _hook_commands(config, "pre_task_shell")
     post_shell = _hook_commands(config, "post_task_shell")
     pre_md = _hook_markdown_path(config, "pre_task_markdown")
@@ -259,8 +268,8 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     log_sections.append(pre_shell_log)
     if not pre_shell_ok:
         error = "pre_task_shell hook failed"
-    elif not is_ralph_enabled(config):
-        error = "ralph.enabled is false in .onward.config.yaml (executor disabled)"
+    elif not is_executor_enabled(config):
+        error = "executor.enabled is false in .onward.config.yaml (executor disabled)"
     else:
         pre_md_ok, pre_md_log = _run_markdown_hook(root, cmd, pre_md, "pre_task_markdown", model, task, run_id)
         log_sections.append(pre_md_log)
@@ -269,6 +278,7 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
 
     if not error:
         try:
+            child_env = {**os.environ, "ONWARD_RUN_ID": run_id}
             result = subprocess.run(
                 cmd,
                 cwd=root,
@@ -276,13 +286,23 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
                 text=True,
                 capture_output=True,
                 check=False,
+                env=child_env,
             )
             if result.stdout:
                 log_sections.append("[task stdout]\n" + result.stdout.rstrip())
             if result.stderr:
                 log_sections.append("[task stderr]\n" + result.stderr.rstrip())
             ok = result.returncode == 0
-            if not ok:
+            if ok:
+                found, ack_err, ack_obj = find_task_success_ack(
+                    result.stdout or "",
+                    result.stderr or "",
+                    run_id,
+                )
+                if work_require_success_ack(config) and not found:
+                    ok = False
+                    error = ack_err
+            else:
                 error = f"executor exited with code {result.returncode}"
         except FileNotFoundError:
             error = f"executor command not found: {command}"
@@ -310,6 +330,8 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
     run_record["status"] = "completed" if ok else "failed"
     run_record["finished_at"] = finished_at
     run_record["error"] = error
+    if ack_obj is not None:
+        run_record["success_ack"] = ack_obj
     run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
     ongoing = load_ongoing(root)
@@ -326,6 +348,11 @@ def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
 def work_task(root: Path, task: Artifact) -> tuple[bool, str]:
     if str(task.metadata.get("type", "")) != "task":
         raise ValueError(f"{task.metadata.get('id')} is not a task")
+
+    preflight_err = preflight_executor_command(load_workspace_config(root))
+    if preflight_err:
+        raise ValueError(preflight_err)
+
     current = str(task.metadata.get("status", ""))
     if current == "completed":
         return True, ""
@@ -387,14 +414,18 @@ def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str
     if not hook_path.exists():
         return False, f"hook file not found: {hook_rel_path}"
 
-    if not is_ralph_enabled(config):
-        return False, "ralph.enabled is false in .onward.config.yaml (executor disabled)"
+    if not is_executor_enabled(config):
+        return False, "executor.enabled is false in .onward.config.yaml (executor disabled)"
 
-    ralph = config.get("ralph", {})
-    if not isinstance(ralph, dict):
-        ralph = {}
-    command = clean_string(ralph.get("command")) or "ralph"
-    command_args = ralph.get("args", [])
+    preflight_err = preflight_executor_command(config)
+    if preflight_err:
+        return False, preflight_err
+
+    block = config.get("executor", {})
+    if not isinstance(block, dict):
+        block = {}
+    command = clean_string(block.get("command")) or "onward-exec"
+    command_args = block.get("args", [])
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
@@ -425,6 +456,49 @@ def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str
         stderr = (result.stderr or "").strip()
         return False, stderr or f"exit code {result.returncode}"
     return True, ""
+
+
+def finalize_chunks_all_tasks_terminal(root: Path) -> tuple[list[str], list[str]]:
+    """Move chunks to *completed* when every child task is terminal (completed/canceled).
+
+    Runs ``post_chunk_markdown`` when configured, matching ``onward work CHUNK-*`` completion.
+    Skips chunks with zero tasks. Returns ``(completed_chunk_ids, warnings)``.
+    """
+    artifacts = collect_artifacts(root)
+    tasks_by_chunk: dict[str, list[Artifact]] = {}
+    for a in artifacts:
+        if str(a.metadata.get("type", "")) != "task":
+            continue
+        cid = str(a.metadata.get("chunk", ""))
+        if not cid:
+            continue
+        tasks_by_chunk.setdefault(cid, []).append(a)
+
+    completed: list[str] = []
+    warnings: list[str] = []
+    for a in artifacts:
+        if str(a.metadata.get("type", "")) != "chunk":
+            continue
+        st = str(a.metadata.get("status", ""))
+        if st not in {"open", "in_progress"}:
+            continue
+        chunk_id = str(a.metadata.get("id", ""))
+        chunk_tasks = tasks_by_chunk.get(chunk_id, [])
+        if not chunk_tasks:
+            continue
+        if any(str(t.metadata.get("status", "")) not in {"completed", "canceled"} for t in chunk_tasks):
+            continue
+        refreshed = must_find_by_id(root, chunk_id)
+        hook_ok, hook_err = run_chunk_post_markdown_hook(root, refreshed)
+        if not hook_ok:
+            warnings.append(
+                f"Chunk {chunk_id} has all tasks terminal but post hook failed ({hook_err}); chunk left open."
+            )
+            continue
+        if str(refreshed.metadata.get("status", "")) in {"open", "in_progress"}:
+            update_artifact_status(root, refreshed, "completed")
+            completed.append(chunk_id)
+    return completed, warnings
 
 
 # ---------------------------------------------------------------------------
@@ -470,15 +544,23 @@ def execute_plan_review(
     model: str,
     label: str,
     prompt: str,
+    *,
+    executor_command: str | None = None,
+    executor_args: list[str] | None = None,
+    emit_errors: bool = True,
 ) -> tuple[bool, Path]:
     config = load_workspace_config(root)
-    ralph = config.get("ralph", {})
-    if not isinstance(ralph, dict):
-        ralph = {}
-    command = clean_string(ralph.get("command")) or "ralph"
-    command_args = ralph.get("args", [])
-    if not isinstance(command_args, list):
-        command_args = []
+    block = config.get("executor", {})
+    if not isinstance(block, dict):
+        block = {}
+    if executor_command is not None:
+        command = clean_string(executor_command) or "onward-exec"
+        command_args = list(executor_args) if executor_args is not None else []
+    else:
+        command = clean_string(block.get("command")) or "onward-exec"
+        command_args = block.get("args", [])
+        if not isinstance(command_args, list):
+            command_args = []
     cmd = [command, *[str(item) for item in command_args]]
 
     plan_id = str(plan.metadata.get("id", ""))
@@ -514,8 +596,15 @@ def execute_plan_review(
         review_path.write_text(env_override, encoding="utf-8")
         return True, review_path
 
-    if not is_ralph_enabled(config):
-        print("Error: ralph.enabled is false in .onward.config.yaml (executor disabled)")
+    if not is_executor_enabled(config):
+        if emit_errors:
+            print("Error: executor.enabled is false in .onward.config.yaml (executor disabled)")
+        return False, review_path
+
+    preflight_err = preflight_shell_invocation(command)
+    if preflight_err:
+        if emit_errors:
+            print(f"Error: {preflight_err}")
         return False, review_path
 
     try:
@@ -528,15 +617,18 @@ def execute_plan_review(
             check=False,
         )
     except FileNotFoundError:
-        print(f"Error: executor command not found: {command}")
+        if emit_errors:
+            print(f"Error: executor command not found: {command}")
         return False, review_path
     except Exception as exc:  # noqa: BLE001
-        print(f"Error: {exc}")
+        if emit_errors:
+            print(f"Error: {exc}")
         return False, review_path
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
-        print(f"Error: review failed for {label} ({model}): {stderr or f'exit code {result.returncode}'}")
+        if emit_errors:
+            print(f"Error: review failed for {label} ({model}): {stderr or f'exit code {result.returncode}'}")
         return False, review_path
 
     output = (result.stdout or "").strip()

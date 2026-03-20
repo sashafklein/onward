@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-002"
 project: ""
 title: "Re-evaluate local sync exit semantics"
-status: "open"
+status: "completed"
 description: "Decide and document whether local-mode sync subcommands are no-op success or soft failure"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:53Z"
-updated_at: "2026-03-20T00:28:53Z"
+updated_at: "2026-03-20T14:53:50Z"
 ---
 
 # Context
@@ -45,4 +45,6 @@ CHUNK-002 follow-up: when **`sync.mode: local`**, subcommands like **`onward syn
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- **Policy (unchanged, now explicit):** `sync status` in **local** mode → exit **0** (informational). `sync push` / `pull` in **local** mode → exit **1** with stable messages so CI/scripts do not treat a mirror as having run.
+- Docs: README sync table, INSTALLATION “Local sync mode (default): exit codes”, `docs/AI_OPERATOR.md` sync + anti-pattern §7.
+- `validate_sync_config`: warn when `sync.mode: local` with non-empty `sync.repo` (doctor); test `test_doctor_warns_sync_repo_in_local_mode`; `test_sync_pull_local_mode_errors` for pull exit 1.

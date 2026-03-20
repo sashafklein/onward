@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "onward-task-success-ack-v1",
+  "title": "Onward task success acknowledgment (stdout/stderr line, v1)",
+  "description": "When work.require_success_ack is true, the executor must print at least one line of JSON matching this shape (typically the last such line in stdout or stderr wins). Onward scans lines bottom-up. See docs/WORK_HANDOFF.md.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["onward_task_result"],
+  "properties": {
+    "onward_task_result": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "schema_version"],
+      "properties": {
+        "schema_version": { "type": "integer", "const": 1 },
+        "status": { "type": "string", "const": "completed" },
+        "run_id": {
+          "type": "string",
+          "description": "Optional; when set, must equal ONWARD_RUN_ID passed in the executor environment."
+        }
+      }
+    }
+  }
+}

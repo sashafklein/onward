@@ -229,7 +229,7 @@ def prepare_task_writes(
             "description": candidate["description"],
             "human": candidate["human"],
             "model": candidate["model"],
-            "executor": "ralph",
+            "executor": "onward-exec",
             "depends_on": [],
             "blocked_by": [],
             "files": [],

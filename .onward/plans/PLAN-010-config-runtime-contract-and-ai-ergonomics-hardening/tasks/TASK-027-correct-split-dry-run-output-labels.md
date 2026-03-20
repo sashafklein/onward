@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-004"
 project: ""
 title: "Correct split dry-run output labels"
-status: "open"
+status: "completed"
 description: "Ensure dry-run prefixes match artifact type being created"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:52Z"
-updated_at: "2026-03-20T00:28:52Z"
+updated_at: "2026-03-20T14:53:49Z"
 ---
 
 # Context
@@ -45,4 +45,5 @@ PLAN-010 phase 2 **§5**: **`onward split --dry-run`** labels must match **artif
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- `cmd_split` dry-run: header `Split dry-run (plan→chunks|chunk→tasks)`, per-line `CHUNK: create` vs `TASK: create` (`cli_commands.py`).
+- Tests: `test_split_plan_dry_run_*` golden strings; new `test_split_chunk_dry_run_labels_tasks`.

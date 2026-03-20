@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-007"
 project: ""
 title: "Implement execution success contract"
-status: "open"
+status: "completed"
 description: "Require verifiable task-acknowledged completion instead of generic zero exit"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:46Z"
-updated_at: "2026-03-20T00:28:46Z"
+updated_at: "2026-03-20T05:48:43Z"
 ---
 
 # Context
@@ -46,4 +46,7 @@ PLAN-010 **§5d** + acceptance **execution truthfulness**: `onward work` must no
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- **`work.require_success_ack`** (default false) in config + scaffold; **`src/onward/executor_ack.py`** parses bottom-up JSON lines with **`onward_task_result`** (`status: completed`, `schema_version: 1`, optional **`run_id`** must match **`ONWARD_RUN_ID`** env set on the task subprocess).
+- **`execution._execute_task_run`:** after exit 0, strict mode requires ack; **`success_ack`** stored on run JSON when a valid ack is parsed.
+- Schema **`docs/schemas/onward-task-success-ack-v1.schema.json`**; docs: **WORK_HANDOFF**, **CAPABILITIES**, **FORMAT_MIGRATION**, **schemas/README**.
+- Tests: **`tests/test_executor_ack.py`**, **`tests/test_cli_work.py`** (strict fail / strict pass with Python ack script), **`tests/test_architecture_seams.py`** (schema const).

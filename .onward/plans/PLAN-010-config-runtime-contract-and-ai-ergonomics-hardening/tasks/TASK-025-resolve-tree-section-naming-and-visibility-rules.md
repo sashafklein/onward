@@ -5,7 +5,7 @@ plan: "PLAN-010"
 chunk: "CHUNK-004"
 project: ""
 title: "Resolve tree section naming and visibility rules"
-status: "open"
+status: "completed"
 description: "Either filter completed leaves from open tree or rename section to match output"
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T00:28:52Z"
-updated_at: "2026-03-20T00:28:52Z"
+updated_at: "2026-03-20T14:36:22Z"
 ---
 
 # Context
@@ -45,4 +45,6 @@ PLAN-010 phase 2 **§5**: **`onward tree`** section naming vs filtering is ambig
 
 # Handoff notes
 
-<!-- Fill when closing. -->
+- Renamed `render_open_tree_lines` → `render_active_work_tree_lines`; filters **chunks** and **tasks** to `open` / `in_progress` only.
+- Report section **`[Active work tree]`**; `onward tree` help + empty message updated; README, CONTRIBUTION, AI_OPERATOR.
+- Regression: `test_tree_hides_completed_tasks_and_chunks`.

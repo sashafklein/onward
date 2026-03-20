@@ -1,7 +1,7 @@
 """Fresh-workspace onboarding path (init → doctor → artifacts → next/report → work).
 
 CI-runnable counterpart to INSTALLATION / CONTRIBUTION quickstart and dogfood e2e (PLAN-010 TASK-014).
-Executor is set to ``true`` so no external ralph binary is required.
+Executor is set to ``true`` so no external executor binary is required.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from onward import cli
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    raw = raw.replace("  command: ralph", f'  command: "{command}"')
+    raw = raw.replace("  command: onward-exec", f'  command: "{command}"')
     config_path.write_text(raw, encoding="utf-8")
 
 

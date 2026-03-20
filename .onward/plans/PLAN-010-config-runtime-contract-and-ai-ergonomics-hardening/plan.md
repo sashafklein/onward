@@ -3,12 +3,12 @@ id: "PLAN-010"
 type: "plan"
 project: ""
 title: "Config-runtime contract and AI ergonomics hardening"
-status: "open"
+status: "completed"
 description: ""
 priority: "medium"
 model: "opus-latest"
 created_at: "2026-03-20T00:22:07Z"
-updated_at: "2026-03-20T00:22:07Z"
+updated_at: "2026-03-20T15:50:15Z"
 ---
 
 # Summary

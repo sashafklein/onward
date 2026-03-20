@@ -7,6 +7,17 @@ def _init_workspace(root: Path) -> None:
     assert cli.main(["init", "--root", str(root)]) == 0
 
 
+def _null_post_chunk_hook(root: Path) -> None:
+    """Avoid executor-backed post_chunk hook in tests (finalize_chunks_all_tasks_terminal)."""
+    p = root / ".onward.config.yaml"
+    raw = p.read_text(encoding="utf-8")
+    raw = raw.replace(
+        "post_chunk_markdown: .onward/hooks/post-chunk.md",
+        "post_chunk_markdown: null",
+    )
+    p.write_text(raw, encoding="utf-8")
+
+
 def test_new_plan_chunk_task_list_and_show(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
 
@@ -166,6 +177,60 @@ def test_next_skips_task_with_unmet_dependencies(tmp_path: Path, capsys):
     assert out.startswith("TASK-001\ttask\topen\t")
 
 
+def test_next_includes_in_progress_task(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Task One"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["start", "--root", str(tmp_path), "TASK-001"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["next", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("TASK-001\ttask\tin_progress\t")
+
+
+def test_next_skips_open_chunk_when_only_human_tasks_remain(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Human only"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert (
+        cli.main(
+            ["new", "--root", str(tmp_path), "task", "CHUNK-001", "Human step", "--human"]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    code = cli.main(["next", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("PLAN-001\tplan\topen\t")
+
+
+def test_complete_last_task_finalizes_chunk(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _null_post_chunk_hook(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Finalize"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Only task"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["complete", "--root", str(tmp_path), "TASK-001"]) == 0
+    capsys.readouterr()
+
+    chunk_path = next(tmp_path.glob(".onward/plans/**/chunks/CHUNK-001-*.md"))
+    assert 'status: "completed"' in chunk_path.read_text(encoding="utf-8")
+
+    code = cli.main(["next", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("PLAN-001\tplan\topen\t")
+
+
 def test_list_filters_project_human_and_blocking(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Proj", "--project", "alpha"]) == 0
@@ -223,7 +288,7 @@ def test_report_contains_expected_sections(tmp_path: Path, capsys):
     assert "[Next]" in out
     assert "[Blocking Human Tasks]" in out
     assert "[Recent Completed]" in out
-    assert "[Open Plan Tree]" in out
+    assert "[Active work tree]" in out
 
 
 def test_tree_outputs_open_hierarchy(tmp_path: Path, capsys):
@@ -239,3 +304,20 @@ def test_tree_outputs_open_hierarchy(tmp_path: Path, capsys):
     assert "PLAN-001 Tree Plan" in out
     assert "CHUNK-001 [open] Tree Chunk" in out
     assert "TASK-001 [open] (H) Human task" in out
+
+
+def test_tree_hides_completed_tasks_and_chunks(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    _null_post_chunk_hook(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Plan"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Chunk"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Done"]) == 0
+    assert cli.main(["complete", "--root", str(tmp_path), "TASK-001"]) == 0
+    capsys.readouterr()
+
+    code = cli.main(["tree", "--root", str(tmp_path), "--no-color"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "PLAN-001 Plan" in out
+    assert "TASK-001" not in out
+    assert "CHUNK-001" not in out
