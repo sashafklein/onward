@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T19:25:25Z"
-index_version: 254
+generated_at: "2026-03-21T19:26:42Z"
+index_version: 257
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -624,8 +624,8 @@ tasks:
   human: false
 - id: "TASK-041"
   title: "Add unit tests for WorkReporter formatting"
-  status: "in_progress"
-  updated_at: "2026-03-21T19:25:25Z"
+  status: "completed"
+  updated_at: "2026-03-21T19:26:41Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-041-add-unit-tests-for-workreporter-formatting.md"
   plan: "PLAN-005"
   chunk: "CHUNK-013"
@@ -635,8 +635,8 @@ tasks:
   human: false
 - id: "TASK-042"
   title: "Fix regressions in existing tests from print-to-reporter migration"
-  status: "open"
-  updated_at: "2026-03-21T16:27:01Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T19:26:42Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-042-fix-regressions-in-existing-tests-from-print-to-reporter-migration.md"
   plan: "PLAN-005"
   chunk: "CHUNK-013"

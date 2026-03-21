@@ -618,10 +618,12 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     (plan_dir / "chunks").mkdir(parents=True, exist_ok=True)
     (plan_dir / "tasks").mkdir(parents=True, exist_ok=True)
 
+    # Use project for routing; fall back to --project arg as metadata annotation in single-root mode
+    metadata_project = project or (getattr(args, "project", None) or "").strip()
     metadata = {
         "id": plan_id,
         "type": "plan",
-        "project": project or "",
+        "project": metadata_project,
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -1572,12 +1574,12 @@ def cmd_split(args: argparse.Namespace) -> int:
     if artifact_type == "plan":
         parsed = parse_split_payload(raw, "chunks")
         normalized = normalize_chunk_candidates(parsed, default_model)
-        writes = prepare_chunk_writes(root, artifact, normalized)
+        writes = prepare_chunk_writes(layout, artifact, normalized)
         split_kind = "plan"
     else:
         parsed = parse_split_payload(raw, "tasks")
         normalized = normalize_task_candidates(parsed, task_default_model)
-        writes = prepare_task_writes(root, artifact, normalized)
+        writes = prepare_task_writes(layout, artifact, normalized)
         split_kind = "chunk"
 
     warnings, val_errors = validate_split_output(normalized, split_kind)
@@ -2007,7 +2009,7 @@ def format_report_markdown(
         ]
         all_runs: list[dict[str, Any]] = []
         for tid in task_ids:
-            all_runs.extend(collect_runs_for_target(root, tid, limit=100))
+            all_runs.extend(collect_runs_for_target(layout, tid, limit=100))
         total = len(all_runs)
         if total == 0:
             lines.append("| Metric | Value |")
@@ -2158,6 +2160,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.from_config(root, config)
     color_enabled = not args.no_color
     project = require_project_or_default(args, layout, enforce=False)
+    # In single-root mode, --project acts as a metadata filter (not a root selector)
+    if project is None and not layout.is_multi_root:
+        project = ((getattr(args, "project", None) or "").strip()) or None
 
     # Multi-root mode with project=None: show combined multi-project report
     if layout.is_multi_root and project is None:
@@ -2336,7 +2341,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         ]
         all_runs: list[dict[str, Any]] = []
         for tid in task_ids:
-            all_runs.extend(collect_runs_for_target(root, tid, limit=100))
+            all_runs.extend(collect_runs_for_target(layout, tid, limit=100))
         total = len(all_runs)
         if total == 0:
             print("  Total runs: 0")

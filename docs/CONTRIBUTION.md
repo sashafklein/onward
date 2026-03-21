@@ -21,6 +21,7 @@ Right now this repo supports:
 - active/completed views (`onward progress`, `onward recent` — recent includes run records)
 - next-item suggestion (`onward next`) and full ready-task listing (`onward ready`)
 - plan archival (`onward archive PLAN-###`)
+- artifact root migration (`onward migrate` — moves artifacts when `root` config changes)
 - optional plan sync (`onward sync status`, `onward sync push`, `onward sync pull` when `sync.mode` is `branch` or `repo`)
 
 Onward stores tracked planning state in `.onward/plans/` and runtime state in `.onward/`.

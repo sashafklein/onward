@@ -1596,7 +1596,7 @@ def execute_plan_review(
     try:
         result = subprocess.run(
             cmd,
-            cwd=root,
+            cwd=layout.workspace_root,
             input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
             text=True,
             capture_output=True,

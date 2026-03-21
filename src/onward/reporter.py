@@ -6,7 +6,7 @@ import threading
 from contextlib import contextmanager
 from typing import Iterator
 
-from onward.util import _colorize, _status_color
+from onward.util import colorize as _colorize, status_color as _status_color
 
 
 class WorkReporter:

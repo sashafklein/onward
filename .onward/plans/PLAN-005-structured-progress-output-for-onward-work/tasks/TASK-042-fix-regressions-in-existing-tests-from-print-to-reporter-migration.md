@@ -5,16 +5,20 @@ plan: "PLAN-005"
 chunk: "CHUNK-013"
 project: ""
 title: "Fix regressions in existing tests from print-to-reporter migration"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "sonnet"
 executor: "onward-exec"
-depends_on: ["TASK-038", "TASK-039", "TASK-040"]
+depends_on:
+- "TASK-038"
+- "TASK-039"
+- "TASK-040"
 files: []
 acceptance: []
 created_at: "2026-03-21T16:27:01Z"
-updated_at: "2026-03-21T16:27:01Z"
+updated_at: "2026-03-21T19:26:42Z"
+run_count: 1
 ---
 
 # Context

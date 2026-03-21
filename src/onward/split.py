@@ -411,13 +411,13 @@ def validate_split_output(
 
 
 def prepare_chunk_writes(
-    root: Path,
+    layout: WorkspaceLayout,
     plan_artifact: Artifact,
     candidates: list[dict[str, Any]],
 ) -> list[tuple[str, Path, str]]:
     plan_id = str(plan_artifact.metadata.get("id"))
-    plan_dir = find_plan_dir(root, plan_id)
-    chunk_ids = next_ids(root, "CHUNK", len(candidates))
+    plan_dir = find_plan_dir(layout, plan_id)
+    chunk_ids = next_ids(layout, "CHUNK", len(candidates))
     now = now_iso()
     writes: list[tuple[str, Path, str]] = []
     for idx, (chunk_id, candidate) in enumerate(zip(chunk_ids, candidates)):
@@ -488,14 +488,14 @@ def prepare_chunk_writes(
 
 
 def prepare_task_writes(
-    root: Path,
+    layout: WorkspaceLayout,
     chunk_artifact: Artifact,
     candidates: list[dict[str, Any]],
 ) -> list[tuple[str, Path, str]]:
     plan_id = str(chunk_artifact.metadata.get("plan"))
     chunk_id = str(chunk_artifact.metadata.get("id"))
-    plan_dir = find_plan_dir(root, plan_id)
-    task_ids = next_ids(root, "TASK", len(candidates))
+    plan_dir = find_plan_dir(layout, plan_id)
+    task_ids = next_ids(layout, "TASK", len(candidates))
     now = now_iso()
     writes: list[tuple[str, Path, str]] = []
     for idx, (task_id, candidate) in enumerate(zip(task_ids, candidates)):

@@ -10,7 +10,7 @@ import pytest
 
 from onward import cli
 from onward.artifacts import Artifact
-from onward.config import resolve_executor
+from onward.config import resolve_executor, WorkspaceLayout
 from onward.executor import (
     Executor,
     ExecutorResult,
@@ -279,7 +279,7 @@ def test_run_hooked_executor_batch_empty_prepared_is_noop(tmp_path: Path) -> Non
         def execute_task(self, root: Path, ctx: TaskContext) -> ExecutorResult:
             raise AssertionError("no tasks")
 
-    ok, outcomes = _run_hooked_executor_batch(tmp_path, {}, _NeverRun(), [])
+    ok, outcomes = _run_hooked_executor_batch(WorkspaceLayout.from_config(tmp_path, {}), {}, _NeverRun(), [])
     assert ok is True
     assert outcomes == []
 

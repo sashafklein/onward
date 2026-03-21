@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from onward.artifacts import Artifact
-from onward.config import work_max_parallel_tasks
+from onward.config import work_max_parallel_tasks, WorkspaceLayout
 from onward.executor import Executor, ExecutorResult, TaskContext
 from onward.execution import validate_chunk_dag, _is_model_error
 
@@ -329,16 +329,16 @@ def _mock_artifacts(monkeypatch, task_id: str) -> None:
     """Patch must_find_by_id and update_artifact_status to avoid real disk I/O."""
     from onward import execution as exec_mod
 
-    def _fake_must_find(root, tid):
+    def _fake_must_find(layout, tid, project=None):
         return _make_task(tid)
 
-    def _fake_update_status(root, artifact, status):
+    def _fake_update_status(layout, artifact, status, project=None):
         pass
 
-    def _fake_load_ongoing(root):
+    def _fake_load_ongoing(layout, project=None):
         return {"version": 1, "updated_at": "2026-01-01T00:00:00Z", "active_runs": []}
 
-    def _fake_write_ongoing(root, payload):
+    def _fake_write_ongoing(layout, payload, project=None):
         pass
 
     monkeypatch.setattr(exec_mod, "must_find_by_id", _fake_must_find)
@@ -358,7 +358,7 @@ def test_parallel_execute_all_succeed(tmp_path: Path, monkeypatch) -> None:
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=2)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=2)
     assert ok is True
     assert len(outcomes) == 3
     assert all(task_ok for _, task_ok in outcomes)
@@ -375,7 +375,7 @@ def test_parallel_execute_failure_propagates(tmp_path: Path, monkeypatch) -> Non
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=2)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=2)
     assert ok is False
     assert any(not task_ok for _, task_ok in outcomes)
 
@@ -392,7 +392,7 @@ def test_parallel_execute_concurrency(tmp_path: Path, monkeypatch) -> None:
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=3)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=3)
     assert ok is True
     # With a delay and 3 workers, max concurrent should be > 1
     assert executor._max_active > 1
@@ -410,6 +410,6 @@ def test_parallel_execute_serial_max_workers_1(tmp_path: Path, monkeypatch) -> N
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=1)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=1)
     assert ok is True
     assert executor._max_active == 1

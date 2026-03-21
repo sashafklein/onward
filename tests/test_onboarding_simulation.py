@@ -47,7 +47,7 @@ def test_onboarding_flow_init_doctor_new_next_report_work(tmp_path: Path, capsys
     capsys.readouterr()
     assert cli.main(["work", "--root", root, "TASK-001"]) == 0
     work_out = capsys.readouterr().out
-    assert "Run RUN-" in work_out
+    assert "TASK-001" in work_out
 
     task_paths = list(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
     assert len(task_paths) == 1

@@ -5,7 +5,7 @@ plan: "PLAN-005"
 chunk: "CHUNK-013"
 project: ""
 title: "Add unit tests for WorkReporter formatting"
-status: "in_progress"
+status: "completed"
 description: ""
 human: false
 model: "sonnet"
@@ -16,8 +16,9 @@ files:
 - "tests/test_reporter.py"
 acceptance: []
 created_at: "2026-03-21T16:26:57Z"
-updated_at: "2026-03-21T19:25:25Z"
+updated_at: "2026-03-21T19:26:41Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context

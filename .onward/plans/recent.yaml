@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T19:25:25Z"
+generated_at: "2026-03-21T19:26:42Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -598,6 +598,17 @@ completed:
   depends_on:
   - "TASK-037"
   - "TASK-039"
+  human: false
+- id: "TASK-041"
+  title: "Add unit tests for WorkReporter formatting"
+  status: "completed"
+  updated_at: "2026-03-21T19:26:41Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-041-add-unit-tests-for-workreporter-formatting.md"
+  plan: "PLAN-005"
+  chunk: "CHUNK-013"
+  project: ""
+  depends_on:
+  - "TASK-037"
   human: false
 - id: "TASK-043"
   title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
