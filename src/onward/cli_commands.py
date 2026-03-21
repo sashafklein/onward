@@ -819,7 +819,7 @@ def _print_task_show_extras(root: Path, artifact: Artifact, layout: WorkspaceLay
             ls = str(lrs)
             print(f"  last_run_status: {colorize(ls, status_color(ls), tty)}")
 
-    runs = collect_runs_for_target(root, artifact_id, limit=10)
+    runs = collect_runs_for_target(layout, artifact_id, limit=10, project=project)
     print()
     print("Run history:")
     if not runs:
@@ -1046,7 +1046,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
     if artifact.metadata.get("type") != "plan":
         raise ValueError(f"{args.plan_id} is not a plan")
 
-    plan_dir = find_plan_dir(root, str(artifact.metadata["id"]))
+    plan_dir = find_plan_dir(layout, str(artifact.metadata["id"]), project)
     project = artifact_project(artifact)
     archive_dir = layout.archive_dir(project)
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -1614,7 +1614,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
 
 
 def format_report_markdown(
-    root: Path,
+    layout: WorkspaceLayout,
     project: str | None,
     artifacts: list[Artifact],
     blockers: set[str],
@@ -1647,7 +1647,7 @@ def format_report_markdown(
     # In Progress
     lines.append("## In Progress")
     lines.append("")
-    in_progress = report_rows(artifacts, root, status="in_progress", project=project, claimed_ids=active_claimed)
+    in_progress = report_rows(artifacts, layout, status="in_progress", project=project, claimed_ids=active_claimed)
     if in_progress:
         lines.append("| ID | Type | Status | Title |")
         lines.append("|---|---|---|---|")
@@ -1661,7 +1661,7 @@ def format_report_markdown(
     # Upcoming
     lines.append("## Upcoming")
     lines.append("")
-    upcoming = report_rows(artifacts, root, status="open", project=project, claimed_ids=active_claimed)
+    upcoming = report_rows(artifacts, layout, status="open", project=project, claimed_ids=active_claimed)
     if upcoming:
         lines.append("| ID | Type | Status | Title |")
         lines.append("|---|---|---|---|")
@@ -1676,7 +1676,7 @@ def format_report_markdown(
     if active_claimed:
         lines.append("## Claimed")
         lines.append("")
-        c_rows = claimed_rows(artifacts, root, active_claimed, project=project)
+        c_rows = claimed_rows(artifacts, layout, active_claimed, project=project)
         if c_rows:
             lines.append("| ID | Type | Status | Title |")
             lines.append("|---|---|---|---|")
@@ -1954,7 +1954,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     # If --md flag is set, output markdown and return early
     if getattr(args, "md", False):
         md = format_report_markdown(
-            root=root,
+            layout=layout,
             project=project,
             artifacts=artifacts,
             blockers=blockers,
@@ -1983,7 +1983,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print()
 
     print(colorize("[In Progress]", "cyan", color_enabled))
-    in_progress = report_rows(artifacts, root, status="in_progress", project=project, claimed_ids=active_claimed)
+    in_progress = report_rows(artifacts, layout, status="in_progress", project=project, claimed_ids=active_claimed)
     if in_progress:
         for row in in_progress:
             parts = row.split("\t")
@@ -1994,7 +1994,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print()
 
     print(colorize("[Upcoming]", "cyan", color_enabled))
-    upcoming = report_rows(artifacts, root, status="open", project=project, claimed_ids=active_claimed)
+    upcoming = report_rows(artifacts, layout, status="open", project=project, claimed_ids=active_claimed)
     if upcoming:
         for row in upcoming:
             parts = row.split("\t")
@@ -2006,7 +2006,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     if active_claimed:
         print(colorize("[Claimed]", "cyan", color_enabled))
-        c_rows = claimed_rows(artifacts, root, active_claimed, project=project)
+        c_rows = claimed_rows(artifacts, layout, active_claimed, project=project)
         if c_rows:
             for row in c_rows:
                 parts = row.split("\t")

@@ -704,7 +704,7 @@ def list_from_index(
         if not isinstance(row, dict) or not row.get("id"):
             return
         aid = str(row["id"])
-        pseudo = _artifact_from_index_row(kind, row, root)
+        pseudo = _artifact_from_index_row(kind, row, layout)
         if type_filter != "all" and kind != type_filter:
             return
         if project_filter and resolve_project(pseudo, by_id) != project_filter:

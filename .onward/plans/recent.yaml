@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T17:51:52Z"
+generated_at: "2026-03-21T17:56:28Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -337,6 +337,18 @@ completed:
   - "TASK-021"
   human: false
   effort: "l"
+- id: "TASK-024"
+  title: "Implement combined multi-project report"
+  status: "completed"
+  updated_at: "2026-03-21T17:56:27Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-024-implement-combined-multi-project-report.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-006"
+  project: ""
+  depends_on:
+  - "TASK-023"
+  human: false
+  effort: "m"
 - id: "TASK-032"
   title: "Add --md argument to report subparser in cli.py"
   status: "completed"

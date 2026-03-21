@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-006"
 project: ""
 title: "Cross-root ID uniqueness for artifact creation"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "s"
-depends_on: ["TASK-018"]
+depends_on:
+- "TASK-018"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:40Z"
-updated_at: "2026-03-21T15:49:40Z"
+updated_at: "2026-03-21T17:56:28Z"
+run_count: 1
 ---
 
 # Context

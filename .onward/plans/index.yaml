@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T17:51:52Z"
-index_version: 179
+generated_at: "2026-03-21T17:56:28Z"
+index_version: 182
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -413,8 +413,8 @@ tasks:
   effort: "l"
 - id: "TASK-024"
   title: "Implement combined multi-project report"
-  status: "in_progress"
-  updated_at: "2026-03-21T17:51:52Z"
+  status: "completed"
+  updated_at: "2026-03-21T17:56:27Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-024-implement-combined-multi-project-report.md"
   plan: "PLAN-003"
   chunk: "CHUNK-006"
@@ -425,8 +425,8 @@ tasks:
   effort: "m"
 - id: "TASK-025"
   title: "Cross-root ID uniqueness for artifact creation"
-  status: "open"
-  updated_at: "2026-03-21T15:49:40Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T17:56:28Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-025-cross-root-id-uniqueness-for-artifact-creation.md"
   plan: "PLAN-003"
   chunk: "CHUNK-006"
