@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T19:26:42Z"
+generated_at: "2026-03-21T20:30:52Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -17,6 +17,12 @@ completed:
   status: "completed"
   updated_at: "2026-03-21T16:20:49Z"
   path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/plan.md"
+  project: ""
+- id: "PLAN-005"
+  title: "Structured progress output for onward work"
+  status: "completed"
+  updated_at: "2026-03-21T19:43:09Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/plan.md"
   project: ""
 - id: "PLAN-006"
   title: "Simple model aliases (opus, sonnet, haiku, codex)"
@@ -135,6 +141,14 @@ completed:
   status: "completed"
   updated_at: "2026-03-21T19:25:24Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-012-wire-reporter-into-work-command-path.md"
+  plan: "PLAN-005"
+  project: ""
+  depends_on: []
+- id: "CHUNK-013"
+  title: "Tests and polish"
+  status: "completed"
+  updated_at: "2026-03-21T19:43:09Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-013-tests-and-polish.md"
   plan: "PLAN-005"
   project: ""
   depends_on: []
@@ -609,6 +623,19 @@ completed:
   project: ""
   depends_on:
   - "TASK-037"
+  human: false
+- id: "TASK-042"
+  title: "Fix regressions in existing tests from print-to-reporter migration"
+  status: "completed"
+  updated_at: "2026-03-21T19:43:08Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-042-fix-regressions-in-existing-tests-from-print-to-reporter-migration.md"
+  plan: "PLAN-005"
+  chunk: "CHUNK-013"
+  project: ""
+  depends_on:
+  - "TASK-038"
+  - "TASK-039"
+  - "TASK-040"
   human: false
 - id: "TASK-043"
   title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"

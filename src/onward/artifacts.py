@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from onward.config import WorkspaceLayout, load_artifact_template, load_workspace_config, model_setting
+from onward.config import MODEL_ALIASES, WorkspaceLayout, load_artifact_template, load_workspace_config, model_setting
 from onward.util import (
     as_str_list,
     colorize,
@@ -22,6 +22,81 @@ REQUIRED_FIELDS = {
     "plan": ["id", "type", "title", "status", "created_at", "updated_at"],
     "chunk": ["id", "type", "plan", "title", "status", "created_at", "updated_at"],
     "task": ["id", "type", "plan", "chunk", "title", "status", "created_at", "updated_at"],
+}
+
+# Optional fields recognized per artifact type — used to detect unknown frontmatter keys.
+KNOWN_FIELDS: dict[str, list[str]] = {
+    "plan": ["project", "priority", "model", "description"],
+    "chunk": ["project", "priority", "model", "effort", "complexity", "estimated_files", "description"],
+    "task": [
+        "project",
+        "priority",
+        "model",
+        "executor",
+        "effort",
+        "complexity",
+        "human",
+        "depends_on",
+        "blocked_by",
+        "description",
+        "run_count",
+        "files",
+        "acceptance",
+    ],
+}
+
+_VALID_STATUSES = frozenset({"open", "in_progress", "completed", "canceled", "failed"})
+_VALID_PRIORITIES = frozenset({"high", "medium", "low"})
+_VALID_EFFORT_VALUES = frozenset({"xs", "s", "m", "l", "xl"})
+_KNOWN_MODEL_PREFIXES = ("claude-", "codex-")
+
+
+def _validate_status(value: Any) -> str | None:
+    s = str(value).strip()
+    if s not in _VALID_STATUSES:
+        return f"invalid status '{s}' (expected: {', '.join(sorted(_VALID_STATUSES))})"
+    return None
+
+
+def _validate_priority(value: Any) -> str | None:
+    s = str(value).strip().lower()
+    if s not in _VALID_PRIORITIES:
+        return f"invalid priority '{value}' (expected: high, medium, low)"
+    return None
+
+
+def _validate_effort(value: Any) -> str | None:
+    s = str(value).strip().lower()
+    if s not in _VALID_EFFORT_VALUES:
+        return f"invalid effort/complexity '{value}' (expected: xs, s, m, l, xl)"
+    return None
+
+
+def _validate_model(value: Any) -> str | None:
+    s = str(value).strip()
+    if not s:
+        return "model must be a non-empty string"
+    s_lower = s.lower()
+    if s_lower in MODEL_ALIASES:
+        return None
+    if any(s_lower.startswith(prefix) for prefix in _KNOWN_MODEL_PREFIXES):
+        return None
+    return f"unrecognized model '{s}' (expected a short alias like 'sonnet', or a model ID starting with 'claude-' or 'codex-')"
+
+
+def _validate_human(value: Any) -> str | None:
+    if not isinstance(value, bool):
+        return f"'human' must be a boolean (true/false), got '{value}'"
+    return None
+
+
+FIELD_VALIDATORS: dict[str, Any] = {
+    "status": _validate_status,
+    "priority": _validate_priority,
+    "effort": _validate_effort,
+    "complexity": _validate_effort,
+    "model": _validate_model,
+    "human": _validate_human,
 }
 
 
@@ -197,18 +272,28 @@ def find_plan_dir(layout: WorkspaceLayout, plan_id: str, project: str | None = N
 def validate_artifact(artifact: Artifact) -> list[str]:
     issues: list[str] = []
     artifact_type = str(artifact.metadata.get("type", ""))
-    fields = REQUIRED_FIELDS.get(artifact_type)
-    if not fields:
+    required = REQUIRED_FIELDS.get(artifact_type)
+    if not required:
         issues.append(f"{artifact.file_path}: unknown type '{artifact_type}'")
         return issues
 
-    for field in fields:
+    for field in required:
         if artifact.metadata.get(field) in (None, ""):
             issues.append(f"{artifact.file_path}: missing required field '{field}'")
 
-    status = str(artifact.metadata.get("status", ""))
-    if status and status not in {"open", "in_progress", "completed", "canceled", "failed"}:
-        issues.append(f"{artifact.file_path}: invalid status '{status}'")
+    # Run field-level validators for all present fields (skip None/empty optional values).
+    for key, value in artifact.metadata.items():
+        validator = FIELD_VALIDATORS.get(key)
+        if validator is not None and value not in (None, ""):
+            msg = validator(value)
+            if msg:
+                issues.append(f"{artifact.file_path}: {msg}")
+
+    # Warn on unknown frontmatter fields.
+    known = set(required) | set(KNOWN_FIELDS.get(artifact_type, []))
+    for key in artifact.metadata:
+        if key not in known:
+            issues.append(f"{artifact.file_path}: unknown field '{key}'")
 
     return issues
 

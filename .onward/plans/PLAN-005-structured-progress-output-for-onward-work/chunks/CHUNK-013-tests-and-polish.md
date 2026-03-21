@@ -4,12 +4,12 @@ type: "chunk"
 plan: "PLAN-005"
 project: ""
 title: "Tests and polish"
-status: "in_progress"
+status: "completed"
 description: ""
 priority: "medium"
 model: "opus"
 created_at: "2026-03-21T16:25:59Z"
-updated_at: "2026-03-21T19:25:24Z"
+updated_at: "2026-03-21T19:43:09Z"
 ---
 
 # Summary
