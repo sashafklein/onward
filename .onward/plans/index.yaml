@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T20:52:53Z"
-index_version: 292
+generated_at: "2026-03-21T20:53:58Z"
+index_version: 295
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -813,8 +813,8 @@ tasks:
   effort: "xs"
 - id: "TASK-055"
   title: "artifacts.py: rename summarize_effort_remaining → summarize_complexity_remaining, update metadata reads"
-  status: "in_progress"
-  updated_at: "2026-03-21T20:52:53Z"
+  status: "completed"
+  updated_at: "2026-03-21T20:53:56Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-055-artifacts-py-rename-summarize-effort-remaining-summarize-complexity-remaining-update-metadata-reads.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"
@@ -825,8 +825,8 @@ tasks:
   effort: "s"
 - id: "TASK-056"
   title: "cli.py: rename --effort → --complexity on new task and new chunk subcommands"
-  status: "open"
-  updated_at: "2026-03-21T20:23:52Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T20:53:58Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-056-cli-py-rename-effort-complexity-on-new-task-and-new-chunk-subcommands.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"

@@ -110,9 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional project key (omit to inherit from plan; use --project '' for none)",
     )
     chunk_parser.add_argument(
-        "--effort",
+        "--complexity",
         default=None,
-        help="T-shirt size: xs|s|m|l|xl (invalid values ignored)",
+        help="Complexity: low|medium|high (invalid values ignored)",
     )
     chunk_parser.add_argument(
         "--estimated-files",
@@ -149,9 +149,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional project key (omit to inherit from chunk; use --project '' for none)",
     )
     task_parser.add_argument(
-        "--effort",
+        "--complexity",
         default=None,
-        help="T-shirt size: xs|s|m|l|xl (invalid values ignored)",
+        help="Complexity: low|medium|high (invalid values ignored)",
     )
     task_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
     task_parser.set_defaults(func=cmd_new_task)
