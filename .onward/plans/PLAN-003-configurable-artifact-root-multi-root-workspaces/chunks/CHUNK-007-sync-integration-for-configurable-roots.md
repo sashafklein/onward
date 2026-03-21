@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Sync integration for configurable roots"
-status: "in_progress"
+status: "completed"
 description: "Update sync.py to resolve plans_dir and worktree paths through WorkspaceLayout"
 depends_on:
 - "CHUNK-005"
@@ -12,7 +12,7 @@ priority: "medium"
 effort: "m"
 model: "claude-sonnet-4-5"
 created_at: "2026-03-21T15:46:46Z"
-updated_at: "2026-03-21T18:04:47Z"
+updated_at: "2026-03-21T18:16:46Z"
 ---
 
 # Summary

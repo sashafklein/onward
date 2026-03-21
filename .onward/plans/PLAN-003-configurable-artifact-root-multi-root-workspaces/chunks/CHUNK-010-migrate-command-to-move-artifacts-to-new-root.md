@@ -4,15 +4,15 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Migrate command to move artifacts to new root"
-status: "open"
+status: "in_progress"
 description: "Add onward migrate command to move .onward/ contents to a newly configured root"
 depends_on:
-  - "CHUNK-004"
+- "CHUNK-004"
 priority: "medium"
 effort: "m"
 model: "claude-sonnet-4-5"
 created_at: "2026-03-21T16:04:35Z"
-updated_at: "2026-03-21T16:04:35Z"
+updated_at: "2026-03-21T18:16:47Z"
 ---
 
 # Summary

@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T18:09:35Z"
+generated_at: "2026-03-21T18:16:48Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -74,6 +74,16 @@ completed:
   depends_on:
   - "CHUNK-005"
   effort: "l"
+- id: "CHUNK-007"
+  title: "Sync integration for configurable roots"
+  status: "completed"
+  updated_at: "2026-03-21T18:16:46Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/chunks/CHUNK-007-sync-integration-for-configurable-roots.md"
+  plan: "PLAN-003"
+  project: ""
+  depends_on:
+  - "CHUNK-005"
+  effort: "m"
 - id: "CHUNK-009"
   title: "Add --md flag and markdown report formatter"
   status: "completed"
@@ -383,6 +393,18 @@ completed:
   - "TASK-012"
   human: false
   effort: "m"
+- id: "TASK-027"
+  title: "Add --project to sync subcommands"
+  status: "completed"
+  updated_at: "2026-03-21T18:16:46Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-027-add-project-to-sync-subcommands.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-007"
+  project: ""
+  depends_on:
+  - "TASK-026"
+  human: false
+  effort: "s"
 - id: "TASK-032"
   title: "Add --md argument to report subparser in cli.py"
   status: "completed"

@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-007"
 project: ""
 title: "Add --project to sync subcommands"
-status: "in_progress"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -16,8 +16,9 @@ depends_on:
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:50Z"
-updated_at: "2026-03-21T18:09:35Z"
+updated_at: "2026-03-21T18:16:46Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
