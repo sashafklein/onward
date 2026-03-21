@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-003"
 project: ""
 title: "Add root/roots/default_project config keys and validation"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "s"
-depends_on: ["TASK-012"]
+depends_on:
+- "TASK-012"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:13Z"
-updated_at: "2026-03-21T15:49:13Z"
+updated_at: "2026-03-21T16:23:11Z"
+run_count: 1
 ---
 
 # Context

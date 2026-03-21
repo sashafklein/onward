@@ -431,6 +431,33 @@ def validate_config_contract_issues(config: dict[str, Any]) -> list[str]:
     if has_root and has_roots:
         issues.append("config keys 'root' and 'roots' are mutually exclusive (use one or the other)")
 
+    # Validate root value
+    if has_root:
+        root_val = config.get("root")
+        if not isinstance(root_val, str):
+            issues.append("config.root must be a non-empty string")
+        elif not str(root_val).strip():
+            issues.append("config.root must be a non-empty string")
+
+    # Validate roots value
+    if has_roots:
+        roots = config.get("roots")
+        if not isinstance(roots, dict):
+            issues.append("config.roots must be a non-empty mapping of project keys to paths")
+        elif len(roots) == 0:
+            issues.append("config.roots must be a non-empty mapping of project keys to paths")
+        else:
+            # Validate each key-value pair
+            for key, value in roots.items():
+                key_str = str(key).strip()
+                if not key_str:
+                    issues.append("config.roots keys must be non-empty strings")
+                    break
+                if not isinstance(value, str):
+                    issues.append(f"config.roots[{key!r}] must be a non-empty string path")
+                elif not str(value).strip():
+                    issues.append(f"config.roots[{key!r}] must be a non-empty string path")
+
     # Validate default_project when roots is set
     if has_roots:
         roots = config.get("roots")
@@ -444,6 +471,15 @@ def validate_config_contract_issues(config: dict[str, Any]) -> list[str]:
                         f"config.default_project {default_proj_str!r} does not match any key in roots "
                         f"(available: {available})"
                     )
+
+    # Warn if default_project is set without roots
+    if not has_roots and "default_project" in config and config.get("default_project") is not None:
+        default_proj_str = str(config.get("default_project")).strip()
+        if default_proj_str:
+            issues.append(
+                "config.default_project is set but config.roots is not configured "
+                "(default_project is only used with multi-root workspaces)"
+            )
 
     for key in config:
         if key == "path":

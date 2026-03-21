@@ -65,17 +65,15 @@ def test_default_project_valid_when_matches():
     assert not any("default_project" in issue and "does not match" in issue for issue in issues)
 
 
-def test_default_project_without_roots_ignored():
-    """default_project without roots should not error (it's just ignored)."""
+def test_default_project_without_roots_warning():
+    """default_project without roots should produce a warning."""
     config = {
-        "root": "nb",
         "default_project": "whatever",
     }
     issues = validate_config_contract_issues(config)
 
-    # Should not error about default_project (only about mutual exclusivity)
-    # Actually, we don't validate this case - default_project is simply ignored
-    # when roots is not set
+    # Should warn that default_project is only used with roots
+    assert any("default_project" in issue and "roots is not configured" in issue for issue in issues)
 
 
 def test_path_key_error_message_updated():
@@ -133,3 +131,75 @@ def test_default_project_whitespace_not_validated():
 
     # Whitespace is stripped and treated as empty/None, so should not error
     assert not any("default_project" in issue and "does not match" in issue for issue in issues)
+
+
+def test_root_empty_string_error():
+    """root as empty string should be an error."""
+    config = {"root": ""}
+    issues = validate_config_contract_issues(config)
+
+    assert any("root" in issue and "non-empty string" in issue for issue in issues)
+
+
+def test_root_whitespace_string_error():
+    """root as whitespace should be an error."""
+    config = {"root": "   "}
+    issues = validate_config_contract_issues(config)
+
+    assert any("root" in issue and "non-empty string" in issue for issue in issues)
+
+
+def test_root_non_string_error():
+    """root as non-string should be an error."""
+    config = {"root": 123}
+    issues = validate_config_contract_issues(config)
+
+    assert any("root" in issue and "non-empty string" in issue for issue in issues)
+
+
+def test_roots_empty_dict_error():
+    """roots as empty dict should be an error."""
+    config = {"roots": {}}
+    issues = validate_config_contract_issues(config)
+
+    assert any("roots" in issue and "non-empty mapping" in issue for issue in issues)
+
+
+def test_roots_non_dict_error():
+    """roots as non-dict should be an error."""
+    config = {"roots": "not a dict"}
+    issues = validate_config_contract_issues(config)
+
+    assert any("roots" in issue and "non-empty mapping" in issue for issue in issues)
+
+
+def test_roots_empty_key_error():
+    """roots with empty string key should be an error."""
+    config = {"roots": {"": "./path"}}
+    issues = validate_config_contract_issues(config)
+
+    assert any("roots keys" in issue and "non-empty" in issue for issue in issues)
+
+
+def test_roots_empty_value_error():
+    """roots with empty string value should be an error."""
+    config = {"roots": {"project": ""}}
+    issues = validate_config_contract_issues(config)
+
+    assert any("roots['project']" in issue and "non-empty string path" in issue for issue in issues)
+
+
+def test_roots_whitespace_value_error():
+    """roots with whitespace value should be an error."""
+    config = {"roots": {"project": "   "}}
+    issues = validate_config_contract_issues(config)
+
+    assert any("roots['project']" in issue and "non-empty string path" in issue for issue in issues)
+
+
+def test_roots_non_string_value_error():
+    """roots with non-string value should be an error."""
+    config = {"roots": {"project": 123}}
+    issues = validate_config_contract_issues(config)
+
+    assert any("roots['project']" in issue and "non-empty string path" in issue for issue in issues)

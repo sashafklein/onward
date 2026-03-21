@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T16:20:49Z"
+generated_at: "2026-03-21T16:23:11Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -153,6 +153,29 @@ completed:
   project: "onward"
   depends_on: []
   human: false
+- id: "TASK-012"
+  title: "Define WorkspaceLayout dataclass with path resolution methods"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:51Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-012-define-workspacelayout-dataclass-with-path-resolution-methods.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-003"
+  project: ""
+  depends_on: []
+  human: false
+  effort: "m"
+- id: "TASK-013"
+  title: "Add root/roots/default_project config keys and validation"
+  status: "completed"
+  updated_at: "2026-03-21T16:23:11Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-013-add-root-roots-default-project-config-keys-and-validation.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-003"
+  project: ""
+  depends_on:
+  - "TASK-012"
+  human: false
+  effort: "s"
 - id: "TASK-032"
   title: "Add --md argument to report subparser in cli.py"
   status: "completed"
