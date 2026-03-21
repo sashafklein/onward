@@ -359,13 +359,21 @@ def claimed_task_ids(root: Path) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def validate_chunk_dag(tasks: list[Artifact]) -> list[str]:
+def validate_chunk_dag(
+    tasks: list[Artifact],
+    all_statuses: dict[str, str] | None = None,
+) -> list[str]:
     """Return list of error strings (empty = valid DAG).
 
     Checks:
     - All IDs referenced in ``depends_on`` exist within the chunk (dangling refs
       to tasks outside the chunk that are not ``completed`` are also flagged).
     - No cycles (Kahn's algorithm).
+
+    ``all_statuses`` is an optional mapping of artifact-id → status for the
+    entire workspace.  When provided, external dependencies (those not in the
+    chunk) are resolved through this map so that cross-chunk completed deps
+    are recognised correctly.
     """
     errors: list[str] = []
     task_ids = {str(t.metadata.get("id", "")) for t in tasks}
@@ -379,7 +387,8 @@ def validate_chunk_dag(tasks: list[Artifact]) -> list[str]:
         deps = as_str_list(task.metadata.get("depends_on")) + as_str_list(task.metadata.get("blocked_by"))
         for dep in deps:
             if dep not in task_ids:
-                if status_by_id.get(dep) != "completed":
+                resolved_status = (all_statuses or {}).get(dep) or status_by_id.get(dep)
+                if resolved_status != "completed":
                     errors.append(
                         f"{tid} depends_on {dep!r} which is not in this chunk and not completed"
                     )
@@ -1066,13 +1075,15 @@ def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequenti
     """
     max_parallel = work_max_parallel_tasks(config)
 
+    all_artifacts = collect_artifacts(root)
+    all_statuses = {str(a.metadata.get("id", "")): str(a.metadata.get("status", "")) for a in all_artifacts}
     all_chunk_tasks = [
         a
-        for a in collect_artifacts(root)
+        for a in all_artifacts
         if str(a.metadata.get("type", "")) == "task"
         and str(a.metadata.get("chunk", "")) == chunk_id
     ]
-    dag_errors = validate_chunk_dag(all_chunk_tasks)
+    dag_errors = validate_chunk_dag(all_chunk_tasks, all_statuses=all_statuses)
     if dag_errors:
         for err in dag_errors:
             print(f"DAG error: {err}")

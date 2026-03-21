@@ -88,16 +88,22 @@ The task packet contains:
   "type": "task",
   "schema_version": 1,
   "run_id": "RUN-<timestamp>-TASK-<id>",
-  "task": { /* task frontmatter metadata */ },
+  "task": {
+    /* task frontmatter metadata */
+  },
   "body": "task markdown body",
   "notes": "accumulated scratch-pad notes (or null)",
   "notes_hint": "onward note <ID> usage hint",
   "chunk": {
-    "metadata": { /* parent chunk frontmatter */ },
+    "metadata": {
+      /* parent chunk frontmatter */
+    },
     "body": "chunk markdown body"
   },
   "plan": {
-    "metadata": { /* parent plan frontmatter */ },
+    "metadata": {
+      /* parent plan frontmatter */
+    },
     "body": "plan markdown body"
   }
 }
@@ -111,7 +117,7 @@ The `chunk` and `plan` fields give the executor full context about the parent sc
 
 **Split / flags:** `--model` on `onward split` overrides the resolved **split** tier model after CLI parsing.
 
-**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet-latest`) to vendor IDs.
+**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet-4.6`) to vendor IDs.
 
 **Built-in executor:** The same string selects **Claude Code** vs **Cursor agent** via heuristics in code (`route_model_to_backend`); the CLI then interprets the model id.
 
@@ -119,13 +125,13 @@ The `chunk` and `plan` fields give the executor full context about the parent sc
 
 Hooks run at well-defined lifecycle points around task and chunk execution:
 
-| Hook | Type | When |
-|------|------|------|
-| `pre_chunk_shell` | Shell command(s) | Once when `onward work CHUNK-*` starts, before any task in that chunk |
-| `pre_task_shell` | Shell command(s) | Before each task execution |
-| `post_task_shell` | Shell command(s) | After successful task execution |
-| `post_task_markdown` | Markdown via executor | After successful task execution (after shell hooks) |
-| `post_chunk_markdown` | Markdown via executor | After all tasks in a chunk complete successfully |
+| Hook                  | Type                  | When                                                                  |
+| --------------------- | --------------------- | --------------------------------------------------------------------- |
+| `pre_chunk_shell`     | Shell command(s)      | Once when `onward work CHUNK-*` starts, before any task in that chunk |
+| `pre_task_shell`      | Shell command(s)      | Before each task execution                                            |
+| `post_task_shell`     | Shell command(s)      | After successful task execution                                       |
+| `post_task_markdown`  | Markdown via executor | After successful task execution (after shell hooks)                   |
+| `post_chunk_markdown` | Markdown via executor | After all tasks in a chunk complete successfully                      |
 
 Shell hooks run as subprocess commands in the workspace root. Markdown hooks use the **stdin-JSON subprocess** shape (same idea as an external task executor): when the workspace **`executor.command`** is **`builtin`** or unset, Onward falls back to the reference **`onward-exec`** adapter so hooks still receive JSON on stdin. Any hook failure aborts execution and marks the run as failed.
 
@@ -135,18 +141,18 @@ Shell hooks run as subprocess commands in the workspace root. Markdown hooks use
 
 For **`pre_chunk_shell`**, Onward sets:
 
-| Variable | Meaning |
-| -------- | ------- |
-| `ONWARD_CHUNK_ID` | Chunk id (e.g. `CHUNK-001`). |
+| Variable             | Meaning                         |
+| -------------------- | ------------------------------- |
+| `ONWARD_CHUNK_ID`    | Chunk id (e.g. `CHUNK-001`).    |
 | `ONWARD_CHUNK_TITLE` | Chunk `title` from frontmatter. |
 
 For **`pre_task_shell`** and **`post_task_shell`**, Onward merges these into the subprocess environment (in addition to the normal process environment):
 
-| Variable | Meaning |
-| -------- | ------- |
-| `ONWARD_RUN_ID` | Current run id (same as `run_id` in the stdin payload for the main task executor). |
-| `ONWARD_TASK_ID` | Task id being executed (e.g. `TASK-001`). |
-| `ONWARD_TASK_TITLE` | Task `title` from frontmatter. |
+| Variable            | Meaning                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| `ONWARD_RUN_ID`     | Current run id (same as `run_id` in the stdin payload for the main task executor). |
+| `ONWARD_TASK_ID`    | Task id being executed (e.g. `TASK-001`).                                          |
+| `ONWARD_TASK_TITLE` | Task `title` from frontmatter.                                                     |
 
 The main executor subprocess also receives **`ONWARD_RUN_ID`** (see below).
 
@@ -192,7 +198,7 @@ Accepted schema versions: **`1`**, **`2`**, **`3`**. See [`schemas/onward-task-s
 Minimal example line (v1):
 
 ```json
-{"onward_task_result":{"status":"completed","schema_version":1}}
+{ "onward_task_result": { "status": "completed", "schema_version": 1 } }
 ```
 
 Schema v3 adds an optional `token_usage` field:

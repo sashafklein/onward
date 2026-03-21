@@ -8,7 +8,7 @@ title: "Wire WorkReporter into work_task and _finalize_task_run in execution.py"
 status: "open"
 description: ""
 human: false
-model: "sonnet-latest"
+model: "sonnet-4.6"
 executor: "onward-exec"
 depends_on: ["TASK-037", "TASK-039"]
 files: ["src/onward/execution.py"]

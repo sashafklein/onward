@@ -5,10 +5,10 @@ plan: "PLAN-005"
 chunk: "CHUNK-011"
 project: ""
 title: "Create WorkReporter class with output methods and indentation context manager"
-status: "failed"
+status: "open"
 description: ""
 human: false
-model: "sonnet-latest"
+model: "sonnet-4.6"
 executor: "onward-exec"
 depends_on: []
 files: []

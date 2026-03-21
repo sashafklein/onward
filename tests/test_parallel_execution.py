@@ -102,16 +102,24 @@ def test_dag_diamond_is_valid() -> None:
 def test_dag_dep_on_completed_external_task_is_valid() -> None:
     """A depends_on reference to a task outside the chunk is OK if that task is completed."""
     task = _make_task("TASK-002", depends_on=["TASK-001"])
+    # With all_statuses provided, the external dep resolves as completed.
+    errors = validate_chunk_dag([task], all_statuses={"TASK-001": "completed"})
+    assert errors == []
+
+
+def test_dag_dep_on_completed_external_task_via_task_list() -> None:
+    """Passing the completed external task directly also suppresses the error."""
+    task = _make_task("TASK-002", depends_on=["TASK-001"])
     external = _make_task("TASK-001", status="completed")
-    # validate_chunk_dag receives only the chunk's tasks; TASK-001 is external/completed
-    errors = validate_chunk_dag([task])
-    # External + completed → treated as completed, no error
-    # But validate_chunk_dag only knows about tasks in the list; TASK-001 is not there.
-    # According to implementation, if dep not in task_ids AND status_by_id.get(dep) != "completed",
-    # it's an error. So with no external context, this WILL produce an error.
-    # This test documents the boundary: provide the completed external task to suppress.
-    errors_with_context = validate_chunk_dag([task, external])
-    assert errors_with_context == []
+    errors = validate_chunk_dag([task, external])
+    assert errors == []
+
+
+def test_dag_dep_on_open_external_task_is_error() -> None:
+    """External dep that is not completed is an error even with all_statuses."""
+    task = _make_task("TASK-002", depends_on=["TASK-001"])
+    errors = validate_chunk_dag([task], all_statuses={"TASK-001": "open"})
+    assert any("TASK-001" in e for e in errors)
 
 
 # ---------------------------------------------------------------------------

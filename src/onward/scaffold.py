@@ -48,7 +48,7 @@ models:
   default: opus-latest
   # Tiered defaults with automatic fallbacks (null/blank walks the chain — see docs/CAPABILITIES.md).
   high: opus-latest
-  medium: sonnet-latest
+  medium: sonnet-4.6
   low: haiku-latest
   # Split decomposition; blank falls back through split -> default.
   split:
@@ -230,7 +230,7 @@ If you are unsure of paths, use coarse entries (e.g. src/onward/) rather than om
 ## Priority and model
 
 - **priority**: low, medium, or high (default medium).
-- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-latest, opus-latest, etc.).
+- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-4.6, opus-latest, etc.).
 
 ## Output format
 
@@ -240,7 +240,7 @@ Each element of chunks must include: title (string), description (string), prior
 
 Illustrative minimal object (structure only):
 
-{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-latest","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
+{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-4.6","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
 
 Rules: Return at least one chunk. Keep titles short and concrete. JSON only on stdout.
 """,
@@ -260,7 +260,7 @@ Rules: Return at least one chunk. Keep titles short and concrete. JSON only on s
 
 ## Models and effort
 
-- **model**: haiku-latest for trivial edits; sonnet-latest for typical work; opus-latest for deep refactors or cross-cutting design.
+- **model**: haiku-latest for trivial edits; sonnet-4.6 for typical work; opus-latest for deep refactors or cross-cutting design.
 - **effort**: xs | s | m | l | xl — rough size (optional but preferred).
 
 ## Ordering within the chunk
@@ -275,7 +275,7 @@ Each element of tasks must include: title (string), description (string), accept
 
 Illustrative minimal object (structure only):
 
-{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-latest","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
+{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-4.6","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
 
 Rules: Return at least one task. Each task needs at least one acceptance criterion. JSON only on stdout.
 """,

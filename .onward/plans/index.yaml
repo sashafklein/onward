@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T16:32:24Z"
-index_version: 123
+generated_at: "2026-03-21T16:43:17Z"
+index_version: 131
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -28,7 +28,7 @@ plans:
 - id: "PLAN-005"
   title: "Structured progress output for onward work"
   status: "in_progress"
-  updated_at: "2026-03-21T16:31:31Z"
+  updated_at: "2026-03-21T16:42:56Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/plan.md"
   project: ""
 chunks:
@@ -132,16 +132,16 @@ chunks:
   effort: "m"
 - id: "CHUNK-011"
   title: "Implement WorkReporter class"
-  status: "in_progress"
-  updated_at: "2026-03-21T16:31:32Z"
+  status: "completed"
+  updated_at: "2026-03-21T16:41:18Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-011-implement-workreporter-class.md"
   plan: "PLAN-005"
   project: ""
   depends_on: []
 - id: "CHUNK-012"
   title: "Wire reporter into work command path"
-  status: "open"
-  updated_at: "2026-03-21T16:25:55Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T16:42:56Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-012-wire-reporter-into-work-command-path.md"
   plan: "PLAN-005"
   project: ""
@@ -565,7 +565,7 @@ tasks:
   effort: "s"
 - id: "TASK-037"
   title: "Create WorkReporter class with output methods and indentation context manager"
-  status: "failed"
+  status: "open"
   updated_at: "2026-03-21T16:31:35Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-037-create-workreporter-class-with-output-methods-and-indentation-context-manager.md"
   plan: "PLAN-005"
@@ -631,6 +631,16 @@ tasks:
   - "TASK-038"
   - "TASK-039"
   - "TASK-040"
+  human: false
+- id: "TASK-043"
+  title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
+  status: "completed"
+  updated_at: "2026-03-21T16:43:17Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-043-fix-validate-chunk-dag-to-resolve-cross-chunk-completed-dependencies.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-004"
+  project: ""
+  depends_on: []
   human: false
 runs:
 - id: "RUN-2026-03-20T17-50-34Z-TASK-034"

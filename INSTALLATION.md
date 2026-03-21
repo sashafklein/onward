@@ -305,13 +305,13 @@ That's it. You're on the rails. The train is moving. Keep it moving.
 
 When creating or editing task frontmatter, these fields matter:
 
-| Field | What it does | Example |
-|---|---|---|
-| `project` | Cross-plan grouping and filtering | `project: auth-rewrite` |
-| `human` | Flags tasks requiring a person | `human: true` |
-| `depends_on` | Dependency tracking (preferred) | `depends_on: [TASK-003]` |
-| `block_reason` | Why it's stuck | `block_reason: Waiting on API decision` |
-| `status` | Current state | `open`, `in_progress`, `completed`, `canceled` |
+| Field          | What it does                      | Example                                        |
+| -------------- | --------------------------------- | ---------------------------------------------- |
+| `project`      | Cross-plan grouping and filtering | `project: auth-rewrite`                        |
+| `human`        | Flags tasks requiring a person    | `human: true`                                  |
+| `depends_on`   | Dependency tracking (preferred)   | `depends_on: [TASK-003]`                       |
+| `block_reason` | Why it's stuck                    | `block_reason: Waiting on API decision`        |
+| `status`       | Current state                     | `open`, `in_progress`, `completed`, `canceled` |
 
 ### The Blocking Pattern
 
@@ -340,10 +340,10 @@ Onward's workspace config lives at `.onward.config.yaml` in your project root. K
 version: 1
 
 sync:
-  mode: local              # local | branch | repo
-  branch: onward           # used when mode is branch (git worktree on this branch)
-  repo: null               # clone URL or path when mode is repo
-  worktree_path: .onward/sync   # sync checkout directory (gitignored)
+  mode: local # local | branch | repo
+  branch: onward # used when mode is branch (git worktree on this branch)
+  repo: null # clone URL or path when mode is repo
+  worktree_path: .onward/sync # sync checkout directory (gitignored)
 
 executor:
   # Executor command for `onward work`, markdown hooks, and `review-plan`.
@@ -356,13 +356,13 @@ executor:
 
 models:
   # Tiered model keys with automatic fallback chains (see docs/CAPABILITIES.md).
-  default: opus-latest       # ultimate fallback
-  high: opus-latest          # effort: high tasks
-  medium: sonnet-latest      # effort: medium tasks (and default for new tasks)
-  low: haiku-latest          # effort: low tasks
-  split: sonnet-latest       # split decomposition (blank → falls through to default)
-  review_1: codex-latest     # first plan reviewer
-  review_2:                  # second reviewer (blank → falls through high → default)
+  default: opus-latest # ultimate fallback
+  high: opus-latest # effort: high tasks
+  medium: sonnet-4.6 # effort: medium tasks (and default for new tasks)
+  low: haiku-latest # effort: low tasks
+  split: sonnet-4.6 # split decomposition (blank → falls through to default)
+  review_1: codex-latest # first plan reviewer
+  review_2: # second reviewer (blank → falls through high → default)
 
 review:
   # If true, plan reviews spawn two independent reviewers (review_1 + review_2 tiers).
@@ -413,13 +413,13 @@ With **`sync.mode: local`** there is no sync checkout. **`onward sync status`** 
 Onward supports short aliases so you don't have to remember full model identifiers.
 Use `<family>-latest` to always get the current best version of a model family:
 
-| Alias | Resolves to |
-|---|---|
-| `opus-latest` or `opus` | `claude-opus-4-6` |
-| `sonnet-latest` or `sonnet` | `claude-sonnet-4-6` |
-| `haiku-latest` or `haiku` | `claude-haiku-4` |
-| `codex-latest` or `codex` | `codex-5-3` |
-| `gpt5` | `gpt-5` |
+| Alias                     | Resolves to         |
+| ------------------------- | ------------------- |
+| `opus-latest` or `opus`   | `claude-opus-4-6`   |
+| `sonnet-4.6` or `sonnet`  | `claude-sonnet-4-6` |
+| `haiku-latest` or `haiku` | `claude-haiku-4`    |
+| `codex-latest` or `codex` | `codex-5-3`         |
+| `gpt5`                    | `gpt-5`             |
 
 You can also use full model identifiers directly (e.g., `claude-opus-4-6`). Aliases are resolved
 at execution time, so updating Onward automatically picks up new model versions.
@@ -444,4 +444,4 @@ at execution time, so updating Onward automatically picks up new model versions.
 
 ---
 
-*Structure is freedom. Plans are memory. The train doesn't stop. Move onward.*
+_Structure is freedom. Plans are memory. The train doesn't stop. Move onward._

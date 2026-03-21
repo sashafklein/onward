@@ -373,7 +373,7 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
         assert isinstance(entry, dict)
         title = clean_string(entry.get("title", ""))
         desc = clean_string(entry.get("description", ""))
-        model = clean_string(entry.get("model", "")) or "sonnet-latest"
+        model = clean_string(entry.get("model", "")) or "sonnet-4.6"
         human = normalize_bool(entry.get("human", False))
 
         deps_in = entry.get("depends_on") or []
@@ -1103,7 +1103,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     config = load_workspace_config(root)
     default_model = model_setting(config, "default", "opus-latest")
     split_model = clean_string(args.model) or model_setting(config, "split_default", "") or default_model
-    task_default_model = model_setting(config, "task_default", "sonnet-latest")
+    task_default_model = model_setting(config, "task_default", "sonnet-4.6")
 
     prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
     raw = run_split_model(

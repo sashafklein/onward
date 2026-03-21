@@ -303,7 +303,7 @@ def create_follow_up_tasks(
     executor = str(parent.metadata.get("executor", "onward-exec"))
 
     config = load_workspace_config(root)
-    default_model = model_setting(config, "task_default", "sonnet-latest")
+    default_model = model_setting(config, "task_default", "sonnet-4.6")
 
     chunk_tasks = [
         a

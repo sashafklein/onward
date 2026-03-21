@@ -221,7 +221,7 @@ def test_doctor_warns_on_legacy_model_keys(tmp_path: Path, capsys):
     raw = cfg.read_text(encoding="utf-8")
     raw = raw.replace(
         "models:",
-        "models:\n  split_default: sonnet-latest\n  review_default: opus-latest\n  task_default: haiku-latest\n",
+        "models:\n  split_default: sonnet-4.6\n  review_default: opus-latest\n  task_default: haiku-latest\n",
         1,
     )
     cfg.write_text(raw, encoding="utf-8")
@@ -245,7 +245,7 @@ def test_doctor_warns_when_split_and_split_default_both_set(tmp_path: Path, caps
     # Non-empty split + split_default triggers the conflict warning (empty split does not).
     raw = raw.replace(
         "  split:\n",
-        "  split: sonnet-latest\n  split_default: legacy-model\n",
+        "  split: sonnet-4.6\n  split_default: legacy-model\n",
         1,
     )
     cfg.write_text(raw, encoding="utf-8")
@@ -262,7 +262,7 @@ def test_doctor_warns_when_split_and_split_default_both_set(tmp_path: Path, caps
 def test_config_raw_deprecation_split_only_no_duplicate_conflict_message() -> None:
     """Only split_default set should not emit the 'ignored because split is set' line."""
     msgs = config_raw_deprecation_warnings(
-        {"models": {"default": "D", "split_default": "sonnet-latest"}},
+        {"models": {"default": "D", "split_default": "sonnet-4.6"}},
     )
     assert any("rename to models.split" in m for m in msgs)
     assert not any("ignored because models.split" in m for m in msgs)

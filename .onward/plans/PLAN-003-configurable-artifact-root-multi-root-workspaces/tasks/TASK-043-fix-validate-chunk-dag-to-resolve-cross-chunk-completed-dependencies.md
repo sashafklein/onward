@@ -1,10 +1,10 @@
 ---
-id: "TASK-009"
+id: "TASK-043"
 type: "task"
-plan: "PLAN-002"
-chunk: "CHUNK-002"
-project: "onward"
-title: "Move PROVIDER_REGISTRY to archive"
+plan: "PLAN-003"
+chunk: "CHUNK-004"
+project: ""
+title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
 status: "completed"
 description: ""
 human: false
@@ -13,8 +13,8 @@ executor: "onward-exec"
 depends_on: []
 files: []
 acceptance: []
-created_at: "2026-03-21T04:20:03Z"
-updated_at: "2026-03-21T04:30:27Z"
+created_at: "2026-03-21T16:43:13Z"
+updated_at: "2026-03-21T16:43:17Z"
 ---
 
 # Context

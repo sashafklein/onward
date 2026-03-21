@@ -181,7 +181,7 @@ review:
   double_review: true
   reviewers:
     - label: primary-claude
-      model: sonnet-latest
+      model: sonnet-4.6
     - label: secondary-opus
       model: opus-latest
 
@@ -211,7 +211,7 @@ def test_review_plan_reviewer_filter(monkeypatch, tmp_path: Path, capsys):
 review:
   reviewers:
     - label: only-me
-      model: sonnet-latest
+      model: sonnet-4.6
     - label: skipped
       model: opus-latest
 
@@ -242,7 +242,7 @@ def test_review_plan_fallback_after_preflight(monkeypatch, tmp_path: Path, capsy
 review:
   reviewers:
     - label: slot-a
-      model: sonnet-latest
+      model: sonnet-4.6
       command: no-such-onward-review-fallback-preflight
       args: []
       fallback:
@@ -274,7 +274,7 @@ def test_review_plan_fallback_after_executor_fail(monkeypatch, tmp_path: Path, c
 review:
   reviewers:
     - label: slot-b
-      model: sonnet-latest
+      model: sonnet-4.6
       fallback:
         - haiku-latest
 
