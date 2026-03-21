@@ -35,6 +35,7 @@ from onward.config import (
 from onward.executor import Executor, ExecutorResult, TaskContext
 from onward.executor_ack import parse_task_result
 from onward.preflight import preflight_executor_command, preflight_shell_invocation
+from onward.reporter import WorkReporter
 from onward.executor_payload import with_schema_version
 from onward.util import (
     as_str_list,
@@ -997,7 +998,7 @@ def _execute_task_run(layout: WorkspaceLayout, task: Artifact, project: str | No
     return ok, prepared.run_id
 
 
-def work_task(layout: WorkspaceLayout, task: Artifact, project: str | None = None) -> tuple[bool, str]:
+def work_task(layout: WorkspaceLayout, task: Artifact, project: str | None = None, reporter: WorkReporter | None = None) -> tuple[bool, str]:
     if str(task.metadata.get("type", "")) != "task":
         raise ValueError(f"{task.metadata.get('id')} is not a task")
 
@@ -1168,7 +1169,7 @@ def chunk_has_nonterminal_tasks(layout: WorkspaceLayout, chunk_id: str, project:
     ]
 
 
-def work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None) -> int:
+def work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None, reporter: WorkReporter | None = None) -> int:
     """Run all ready tasks in a chunk using :meth:`~onward.executor.Executor.execute_batch` per wave."""
     chunk_id = str(chunk.metadata.get("id", ""))
     if str(chunk.metadata.get("status", "")) == "completed":

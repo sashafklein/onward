@@ -5,7 +5,7 @@ plan: "PLAN-006"
 chunk: "CHUNK-014"
 project: ""
 title: "Add resolve_model_alias and wire into executor"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-4-6"
@@ -14,7 +14,7 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T18:55:25Z"
-updated_at: "2026-03-21T18:55:25Z"
+updated_at: "2026-03-21T19:05:56Z"
 ---
 
 # Context

@@ -55,6 +55,7 @@ from onward.config import (
     validate_config_contract_issues,
 )
 from onward.preflight import preflight_shell_invocation
+from onward.reporter import WorkReporter
 from onward.execution import (
     chunk_has_nonterminal_tasks,
     register_claim,
@@ -1396,32 +1397,36 @@ def _plan_chunks(layout: WorkspaceLayout, plan_id: str, project: str | None = No
     return sorted(chunks, key=lambda a: str(a.metadata.get("id", "")))
 
 
-def _work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None) -> int:
-    return work_chunk(layout, chunk, config, project)
+def _work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None, reporter: WorkReporter | None = None) -> int:
+    return work_chunk(layout, chunk, config, project, reporter=reporter)
 
 
-def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], project: str | None = None) -> int:
+def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], project: str | None = None, reporter: WorkReporter | None = None) -> int:
     root = layout.workspace_root
     plan_id = str(plan.metadata.get("id", ""))
+    plan_title = str(plan.metadata.get("title", ""))
     st = str(plan.metadata.get("status", ""))
+    if reporter is None:
+        reporter = WorkReporter()
     if st == "completed":
-        print(f"Plan {plan_id} already completed")
+        reporter.info(f"Plan {plan_id} already completed")
         return 0
 
     chunks = _plan_chunks(layout, plan_id, project)
     if not chunks:
-        print(f"Plan {plan_id} has no chunks")
+        reporter.warning(f"Plan {plan_id} has no chunks")
         return 0
 
     if st in {"open", "in_progress"}:
         update_artifact_status(layout, plan, "in_progress", project)
+        reporter.status_change(plan_id, plan_title, "in_progress")
 
     for c in chunks:
         cid = str(c.metadata.get("id", ""))
         if str(c.metadata.get("status", "")) == "completed":
             bad = chunk_has_nonterminal_tasks(layout, cid, project)
             if bad:
-                print(
+                reporter.warning(
                     f"Chunk {cid} was marked completed but has non-terminal tasks: "
                     f"{', '.join(bad)} — reopening chunk"
                 )
@@ -1433,12 +1438,13 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
         for c in chunks
         if str(c.metadata.get("status", "")) not in {"completed", "canceled"}
     ]
-    if not pending:
+
+    def _plan_complete() -> int:
         refreshed_plan = must_find_by_id(layout, plan_id, project)
         update_artifact_status(layout, refreshed_plan, "completed", project)
         _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
         for w in warnings:
-            print(w)
+            reporter.warning(w)
         n_tasks = sum(
             1
             for a in collect_artifacts(layout, project)
@@ -1446,55 +1452,46 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
             and str(a.metadata.get("plan", "")) == plan_id
             and str(a.metadata.get("status", "")) == "completed"
         )
-        print(f"Plan {plan_id} completed ({len(chunks)} chunks, {n_tasks} tasks)")
+        reporter.plan_summary(plan_id, plan_title, len(chunks), n_tasks)
         return 0
 
-    while pending:
-        status_by_id = _status_by_id(layout, project)
-        ready = [
-            cid
-            for cid in pending
-            if _chunk_depends_satisfied(must_find_by_id(layout, cid, project), status_by_id)
-        ]
-        if not ready:
-            print(
-                f"Plan {plan_id}: no chunk is ready to run (check chunk depends_on / ordering)"
-            )
-            return 1
-        cid = min(ready)
-        chunk_art = must_find_by_id(layout, cid, project)
-        chunk_claimed = [
-            str(a.metadata.get("id", ""))
-            for a in collect_artifacts(layout, project)
-            if str(a.metadata.get("type", "")) == "task"
-            and str(a.metadata.get("chunk", "")) == cid
-            and str(a.metadata.get("status", "")) in {"open", "in_progress"}
-        ]
-        plan_claim_id = f"CLAIM-{run_timestamp()}-{cid}"
-        register_claim(layout, plan_claim_id, cid, "plan", chunk_claimed, os.getpid(), project)
-        try:
-            code = _work_chunk(layout, chunk_art, config, project)
-        finally:
-            release_claim(layout, plan_claim_id, project)
-        if code != 0:
-            print(f"Stopping plan work for {plan_id} after chunk {cid} failure")
-            return 1
-        pending.remove(cid)
+    if not pending:
+        return _plan_complete()
 
-    refreshed_plan = must_find_by_id(layout, plan_id, project)
-    update_artifact_status(layout, refreshed_plan, "completed", project)
-    _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
-    for w in warnings:
-        print(w)
-    n_tasks = sum(
-        1
-        for a in collect_artifacts(layout, project)
-        if str(a.metadata.get("type", "")) == "task"
-        and str(a.metadata.get("plan", "")) == plan_id
-        and str(a.metadata.get("status", "")) == "completed"
-    )
-    print(f"Plan {plan_id} completed ({len(chunks)} chunks, {n_tasks} tasks)")
-    return 0
+    with reporter.indent():
+        while pending:
+            status_by_id = _status_by_id(layout, project)
+            ready = [
+                cid
+                for cid in pending
+                if _chunk_depends_satisfied(must_find_by_id(layout, cid, project), status_by_id)
+            ]
+            if not ready:
+                reporter.warning(
+                    f"Plan {plan_id}: no chunk is ready to run (check chunk depends_on / ordering)"
+                )
+                return 1
+            cid = min(ready)
+            chunk_art = must_find_by_id(layout, cid, project)
+            chunk_claimed = [
+                str(a.metadata.get("id", ""))
+                for a in collect_artifacts(layout, project)
+                if str(a.metadata.get("type", "")) == "task"
+                and str(a.metadata.get("chunk", "")) == cid
+                and str(a.metadata.get("status", "")) in {"open", "in_progress"}
+            ]
+            plan_claim_id = f"CLAIM-{run_timestamp()}-{cid}"
+            register_claim(layout, plan_claim_id, cid, "plan", chunk_claimed, os.getpid(), project)
+            try:
+                code = _work_chunk(layout, chunk_art, config, project, reporter=reporter)
+            finally:
+                release_claim(layout, plan_claim_id, project)
+            if code != 0:
+                reporter.warning(f"Stopping plan work for {plan_id} after chunk {cid} failure")
+                return 1
+            pending.remove(cid)
+
+    return _plan_complete()
 
 
 def cmd_work(args: argparse.Namespace) -> int:
@@ -1505,13 +1502,19 @@ def cmd_work(args: argparse.Namespace) -> int:
     artifact = must_find_by_id(layout, args.id, search_project)
     artifact_type = str(artifact.metadata.get("type", ""))
     project = artifact_project(artifact)
+    reporter = WorkReporter(color=sys.stdout.isatty())
 
     if artifact_type == "task":
-        ok, run_id = work_task(layout, artifact, project)
+        task_id = str(artifact.metadata.get("id", ""))
+        task_title = str(artifact.metadata.get("title", ""))
+        ok, run_id = work_task(layout, artifact, project, reporter=reporter)
         if run_id:
-            print(f"Run {run_id}: {'completed' if ok else 'failed'}")
+            if ok:
+                reporter.completed(task_id, task_title)
+            else:
+                reporter.failed(task_id, task_title)
         else:
-            print(f"{args.id} already completed")
+            reporter.info(f"{args.id} already completed")
         if ok and run_id and not getattr(args, "no_follow_ups", False):
             rec = collect_runs_for_target(layout, args.id, limit=1, project=project)
             run_rec = rec[0] if rec else {}
@@ -1521,19 +1524,19 @@ def cmd_work(args: argparse.Namespace) -> int:
                 parent = must_find_by_id(layout, args.id, search_project)
                 created, fu_warnings = create_follow_up_tasks(layout, parent, fus, project)
                 for w in fu_warnings:
-                    print(f"Warning: {w}")
+                    reporter.warning(w)
                 for cid in created:
-                    print(f"Created follow-up task {cid}")
+                    reporter.info(f"Created follow-up task {cid}")
         if ok:
             _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
             for w in warnings:
-                print(w)
+                reporter.warning(w)
         return 0 if ok else 1
     if artifact_type == "plan":
-        return _work_plan(layout, artifact, config, project)
+        return _work_plan(layout, artifact, config, project, reporter=reporter)
     if artifact_type != "chunk":
         raise ValueError(f"{args.id} is not a task, chunk, or plan")
-    return _work_chunk(layout, artifact, config, project)
+    return _work_chunk(layout, artifact, config, project, reporter=reporter)
 
 
 def cmd_split(args: argparse.Namespace) -> int:

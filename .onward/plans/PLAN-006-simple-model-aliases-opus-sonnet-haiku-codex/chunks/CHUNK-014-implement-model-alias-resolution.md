@@ -4,12 +4,12 @@ type: "chunk"
 plan: "PLAN-006"
 project: ""
 title: "Implement model alias resolution"
-status: "open"
+status: "completed"
 description: ""
 priority: "medium"
 model: "opus"
 created_at: "2026-03-21T18:55:19Z"
-updated_at: "2026-03-21T18:55:19Z"
+updated_at: "2026-03-21T19:05:57Z"
 ---
 
 # Summary

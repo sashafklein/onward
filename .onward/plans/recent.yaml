@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T19:03:22Z"
+generated_at: "2026-03-21T19:05:57Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -116,6 +116,22 @@ completed:
   depends_on:
   - "CHUNK-004"
   effort: "m"
+- id: "CHUNK-011"
+  title: "Implement WorkReporter class"
+  status: "completed"
+  updated_at: "2026-03-21T19:03:49Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-011-implement-workreporter-class.md"
+  plan: "PLAN-005"
+  project: ""
+  depends_on: []
+- id: "CHUNK-014"
+  title: "Implement model alias resolution"
+  status: "completed"
+  updated_at: "2026-03-21T19:05:57Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/chunks/CHUNK-014-implement-model-alias-resolution.md"
+  plan: "PLAN-006"
+  project: ""
+  depends_on: []
 - id: "TASK-001"
   title: "Fix AI_OPERATOR.md anti-pattern #3 factual error"
   status: "completed"
@@ -524,6 +540,16 @@ completed:
   - "TASK-035"
   human: false
   effort: "s"
+- id: "TASK-037"
+  title: "Create WorkReporter class with output methods and indentation context manager"
+  status: "completed"
+  updated_at: "2026-03-21T19:03:49Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-037-create-workreporter-class-with-output-methods-and-indentation-context-manager.md"
+  plan: "PLAN-005"
+  chunk: "CHUNK-011"
+  project: ""
+  depends_on: []
+  human: false
 - id: "TASK-043"
   title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
   status: "completed"
@@ -541,6 +567,36 @@ completed:
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-044-detect-model-errors-at-runtime-and-revert-task-to-open-instead-of-failed.md"
   plan: "PLAN-003"
   chunk: "CHUNK-004"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-045"
+  title: "Add resolve_model_alias and wire into executor"
+  status: "completed"
+  updated_at: "2026-03-21T19:05:56Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-045-add-resolve-model-alias-and-wire-into-executor.md"
+  plan: "PLAN-006"
+  chunk: "CHUNK-014"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-046"
+  title: "Update defaults, scaffold, prompts, and docs to use short aliases"
+  status: "completed"
+  updated_at: "2026-03-21T19:05:56Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-046-update-defaults-scaffold-prompts-and-docs-to-use-short-aliases.md"
+  plan: "PLAN-006"
+  chunk: "CHUNK-014"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-047"
+  title: "Update tests for model alias changes"
+  status: "completed"
+  updated_at: "2026-03-21T19:05:57Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-047-update-tests-for-model-alias-changes.md"
+  plan: "PLAN-006"
+  chunk: "CHUNK-014"
   project: ""
   depends_on: []
   human: false

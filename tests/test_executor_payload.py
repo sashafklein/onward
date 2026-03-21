@@ -79,7 +79,7 @@ def test_validate_split_payload_ok():
     p = with_schema_version(
         {
             "type": "split",
-            "model": "opus
+            "model": "opus",
             "prompt": "instructions",
             "artifact_metadata": {"id": "PLAN-001", "type": "plan"},
             "artifact_body": "# Plan\n",
