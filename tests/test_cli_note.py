@@ -3,6 +3,7 @@ from pathlib import Path
 from onward import cli
 from onward.artifacts import find_by_id
 
+from tests.conftest import make_default_layout
 from tests.workspace_helpers import set_artifact_status_in_frontmatter
 
 
@@ -67,12 +68,13 @@ def test_note_sets_has_notes_frontmatter(tmp_path: Path):
     _init_workspace(tmp_path)
     _create_plan_and_task(tmp_path)
 
-    artifact_before = find_by_id(tmp_path, "TASK-001")
+    layout = make_default_layout(tmp_path)
+    artifact_before = find_by_id(layout, "TASK-001")
     assert not artifact_before.metadata.get("has_notes")
 
     cli.main(["note", "--root", str(tmp_path), "TASK-001", "a note"])
 
-    artifact_after = find_by_id(tmp_path, "TASK-001")
+    artifact_after = find_by_id(layout, "TASK-001")
     assert artifact_after.metadata.get("has_notes") is True
 
 

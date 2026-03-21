@@ -14,6 +14,7 @@ from onward.artifacts import (
     resolve_project,
 )
 from onward.util import normalize_effort
+from tests.conftest import make_default_layout
 
 
 def _init_workspace(root: Path) -> None:
@@ -57,7 +58,7 @@ def test_batch_creates_tasks_sequential_ids(tmp_path: Path, capsys) -> None:
     )
     out = capsys.readouterr().out
     assert "TASK-001" in out and "TASK-002" in out
-    arts = collect_artifacts(tmp_path)
+    arts = collect_artifacts(make_default_layout(tmp_path))
     ids = sorted(str(a.metadata.get("id", "")) for a in arts if str(a.metadata.get("type", "")) == "task")
     assert ids == ["TASK-001", "TASK-002"]
 
@@ -238,12 +239,13 @@ def test_resolve_project_inherited_for_filter(tmp_path: Path, capsys) -> None:
 
 def test_index_version_increments(tmp_path: Path) -> None:
     _init_workspace(tmp_path)
-    idx1 = load_index(tmp_path)
+    layout = make_default_layout(tmp_path)
+    idx1 = load_index(layout)
     assert idx1 is not None
     v1 = idx1.get("index_version")
     assert isinstance(v1, int) and v1 >= 1
-    regenerate_indexes(tmp_path)
-    idx2 = load_index(tmp_path)
+    regenerate_indexes(layout)
+    idx2 = load_index(layout)
     assert idx2 is not None and idx2.get("index_version") == v1 + 1
 
 
@@ -266,7 +268,7 @@ def test_resolve_project_walks_hierarchy(tmp_path: Path) -> None:
         )
         == 0
     )
-    arts = collect_artifacts(tmp_path)
+    arts = collect_artifacts(make_default_layout(tmp_path))
     by_id = {str(a.metadata.get("id", "")): a for a in arts if a.metadata.get("id")}
     task = by_id["TASK-001"]
     assert resolve_project(task, by_id) == ""

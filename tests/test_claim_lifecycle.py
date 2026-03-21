@@ -16,6 +16,7 @@ from onward.execution import (
     claimed_task_ids,
     load_ongoing,
 )
+from tests.conftest import make_default_layout
 from tests.workspace_helpers import (
     clear_post_chunk_markdown,
     clear_post_task_markdown,
@@ -52,8 +53,9 @@ def _set_python_ack_executor(root: Path) -> None:
 def _inject_claim(root: Path, task_ids: list[str], *, pid: int | None = None) -> str:
     """Inject a chunk-scope claim for the given task IDs; returns the claim run_id."""
     claim_id = "CLAIM-TEST-CHUNK-001"
+    layout = make_default_layout(root)
     register_claim(
-        root,
+        layout,
         claim_id,
         "CHUNK-001",
         "chunk",
@@ -79,7 +81,8 @@ def test_work_chunk_releases_claim_on_completion(tmp_path: Path, capsys):
     capsys.readouterr()
     assert code == 0
 
-    ongoing = load_ongoing(tmp_path)
+    layout = make_default_layout(tmp_path)
+    ongoing = load_ongoing(layout)
     claim_entries = [e for e in ongoing["active_runs"] if e.get("scope") in {"chunk", "plan"}]
     assert claim_entries == [], "claim should be released after work_chunk completes"
 
@@ -101,7 +104,8 @@ def test_work_chunk_releases_claim_on_task_failure(tmp_path: Path, capsys):
     capsys.readouterr()
     assert code == 1
 
-    ongoing = load_ongoing(tmp_path)
+    layout = make_default_layout(tmp_path)
+    ongoing = load_ongoing(layout)
     claim_entries = [e for e in ongoing["active_runs"] if e.get("scope") in {"chunk", "plan"}]
     assert claim_entries == [], "claim should be released even when task fails"
 
@@ -199,7 +203,8 @@ def test_report_cleans_stale_claim_with_dead_pid(tmp_path: Path, capsys):
     capsys.readouterr()
 
     # Inject a claim with a dead PID
-    register_claim(tmp_path, "CLAIM-STALE", "CHUNK-001", "chunk", ["TASK-001"], pid=99999999)
+    layout = make_default_layout(tmp_path)
+    register_claim(layout, "CLAIM-STALE", "CHUNK-001", "chunk", ["TASK-001"], pid=99999999)
 
     with patch("os.kill", side_effect=ProcessLookupError):
         code = cli.main(["report", "--root", str(tmp_path), "--no-color"])
@@ -207,7 +212,7 @@ def test_report_cleans_stale_claim_with_dead_pid(tmp_path: Path, capsys):
     assert code == 0
 
     # After report, the stale claim should be gone from ongoing.json
-    ongoing = load_ongoing(tmp_path)
+    ongoing = load_ongoing(layout)
     stale = [e for e in ongoing["active_runs"] if e.get("id") == "CLAIM-STALE"]
     assert stale == [], "stale claim with dead PID should be pruned"
 

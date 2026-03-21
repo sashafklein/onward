@@ -11,6 +11,7 @@ from onward import cli
 from onward.artifacts import must_find_by_id
 from onward.execution import run_chunk_post_markdown_hook
 from onward.preflight import preflight_executor_command
+from tests.conftest import make_default_layout
 from tests.workspace_helpers import clear_post_task_shell
 
 
@@ -102,7 +103,8 @@ def test_post_chunk_markdown_preflight(tmp_path: Path) -> None:
     _set_executor(tmp_path, "no-such-onward-preflight-cmd-xyz")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
-    chunk = must_find_by_id(tmp_path, "CHUNK-001")
-    ok, msg = run_chunk_post_markdown_hook(tmp_path, chunk)
+    layout = make_default_layout(tmp_path)
+    chunk = must_find_by_id(layout, "CHUNK-001")
+    ok, msg = run_chunk_post_markdown_hook(layout, chunk)
     assert ok is False
     assert "PATH" in msg

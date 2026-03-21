@@ -1821,7 +1821,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.from_config(root, config)
     project = require_project_or_default(args, layout, enforce=False)
     artifacts = artifacts_from_index_or_collect(layout, project)
-    lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
+    lines = render_active_work_tree_lines(artifacts, layout, project=project, color_enabled=not args.no_color)
     if not lines:
         print("No active work tree (no open plans)")
         return 0
@@ -1982,7 +1982,7 @@ def format_report_markdown(
     # Active Work Tree
     lines.append("## Active Work Tree")
     lines.append("")
-    tree_lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=False)
+    tree_lines = render_active_work_tree_lines(artifacts, layout, project=project, color_enabled=False)
     if not tree_lines:
         lines.append("*None*")
     else:

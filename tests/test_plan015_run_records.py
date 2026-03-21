@@ -14,6 +14,7 @@ import pytest
 from onward.executor import ExecutorResult, TaskContext
 from onward.executor_builtin import _tee_stream, extract_token_usage
 from onward.util import compute_files_changed, get_head_sha
+from tests.conftest import make_default_layout
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +172,7 @@ def test_collect_runs_for_target_finds_legacy_flat_files(tmp_path: Path) -> None
         json.dumps(legacy_rec), encoding="utf-8"
     )
 
-    results = collect_runs_for_target(tmp_path, "TASK-001")
+    results = collect_runs_for_target(make_default_layout(tmp_path), "TASK-001")
     assert len(results) == 1
     assert results[0]["id"] == "RUN-2026-01-01T00-00-00Z-TASK-001"
 
@@ -219,7 +220,7 @@ def test_collect_runs_for_target_merges_new_and_legacy(tmp_path: Path) -> None:
         dump_run_json_record(new_rec), encoding="utf-8"
     )
 
-    results = collect_runs_for_target(tmp_path, "TASK-001")
+    results = collect_runs_for_target(make_default_layout(tmp_path), "TASK-001")
     assert len(results) == 2
     assert results[0]["id"] == "RUN-2026-03-01T00-00-00Z-TASK-001"
     assert results[1]["id"] == "RUN-2026-01-01T00-00-00Z-TASK-001"
@@ -267,7 +268,7 @@ def test_latest_run_for_returns_newest_across_both_layouts(tmp_path: Path) -> No
         dump_run_json_record(new_rec), encoding="utf-8"
     )
 
-    latest = latest_run_for(tmp_path, "TASK-001")
+    latest = latest_run_for(make_default_layout(tmp_path), "TASK-001")
     assert latest is not None
     assert latest["id"] == "RUN-2026-06-01T00-00-00Z-TASK-001"
 

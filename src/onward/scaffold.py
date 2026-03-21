@@ -374,6 +374,7 @@ Capture chunk-level completion and recommend plan updates.
 - Risks and recommended next actions
 """,
         f"{artifact_root}/plans/index.yaml": """generated_at: null
+index_version: 1
 plans: []
 chunks: []
 tasks: []

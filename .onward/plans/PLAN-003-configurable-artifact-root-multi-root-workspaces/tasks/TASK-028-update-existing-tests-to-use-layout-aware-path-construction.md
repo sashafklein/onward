@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-008"
 project: ""
 title: "Update existing tests to use layout-aware path construction"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -15,7 +15,8 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:55Z"
-updated_at: "2026-03-21T15:49:55Z"
+updated_at: "2026-03-21T18:24:23Z"
+run_count: 1
 ---
 
 # Context

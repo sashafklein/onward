@@ -15,6 +15,7 @@ from onward.execution import (
     load_ongoing,
     _write_ongoing,
 )
+from tests.conftest import make_default_layout
 
 
 # ---------------------------------------------------------------------------
@@ -53,14 +54,14 @@ def _default_config(root: Path) -> None:
 
 def test_claimed_task_ids_missing_ongoing(tmp_path: Path):
     _default_config(tmp_path)
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == set()
 
 
 def test_claimed_task_ids_empty_ongoing(tmp_path: Path):
     _default_config(tmp_path)
     _write_ongoing_json(tmp_path, [])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == set()
 
 
@@ -70,7 +71,7 @@ def test_claimed_task_ids_no_scope_entries(tmp_path: Path):
     _write_ongoing_json(tmp_path, [
         {"id": "RUN-001-TASK-001", "target": "TASK-001", "status": "running"},
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == set()
 
 
@@ -91,7 +92,7 @@ def test_claimed_task_ids_chunk_scope(tmp_path: Path):
             "started_at": "2099-01-01T00:00:00Z",
         }
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == {"TASK-001", "TASK-002"}
 
 
@@ -108,7 +109,7 @@ def test_claimed_task_ids_plan_scope(tmp_path: Path):
             "started_at": "2099-01-01T00:00:00Z",
         }
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == {"TASK-010", "TASK-011"}
 
 
@@ -134,7 +135,7 @@ def test_claimed_task_ids_union_of_multiple_entries(tmp_path: Path):
             "started_at": "2099-01-01T00:00:00Z",
         },
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == {"TASK-001", "TASK-002", "TASK-003"}
 
 
@@ -156,11 +157,11 @@ def test_claimed_task_ids_dead_pid_pruned(tmp_path: Path):
         }
     ])
     with patch("os.kill", side_effect=ProcessLookupError):
-        result = claimed_task_ids(tmp_path)
+        result = claimed_task_ids(make_default_layout(tmp_path))
 
     assert result == set()
     # Entry should be pruned from ongoing.json
-    ongoing = load_ongoing(tmp_path)
+    ongoing = load_ongoing(make_default_layout(tmp_path))
     claim_entries = [e for e in ongoing["active_runs"] if e.get("scope") in {"chunk", "plan"}]
     assert claim_entries == []
 
@@ -195,10 +196,10 @@ def test_claimed_task_ids_dead_pid_pruned_but_live_pid_kept(tmp_path: Path):
         # live_pid: do nothing (alive)
 
     with patch("os.kill", side_effect=_fake_kill):
-        result = claimed_task_ids(tmp_path)
+        result = claimed_task_ids(make_default_layout(tmp_path))
 
     assert result == {"TASK-002"}
-    ongoing = load_ongoing(tmp_path)
+    ongoing = load_ongoing(make_default_layout(tmp_path))
     remaining_ids = [e["id"] for e in ongoing["active_runs"]]
     assert "CLAIM-LIVE" in remaining_ids
     assert "CLAIM-DEAD" not in remaining_ids
@@ -222,9 +223,9 @@ def test_claimed_task_ids_expired_by_timeout(tmp_path: Path):
             "started_at": "2020-01-01T00:00:00Z",
         }
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == set()
-    ongoing = load_ongoing(tmp_path)
+    ongoing = load_ongoing(make_default_layout(tmp_path))
     claim_entries = [e for e in ongoing["active_runs"] if e.get("scope") in {"chunk", "plan"}]
     assert claim_entries == []
 
@@ -242,7 +243,7 @@ def test_claimed_task_ids_not_expired_within_timeout(tmp_path: Path):
             "started_at": "2099-01-01T00:00:00Z",
         }
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert "TASK-001" in result
 
 
@@ -263,7 +264,7 @@ def test_claimed_task_ids_disabled_when_timeout_zero(tmp_path: Path):
             "started_at": "2099-01-01T00:00:00Z",
         }
     ])
-    result = claimed_task_ids(tmp_path)
+    result = claimed_task_ids(make_default_layout(tmp_path))
     assert result == set()
 
 
@@ -274,8 +275,8 @@ def test_claimed_task_ids_disabled_when_timeout_zero(tmp_path: Path):
 def testregister_claim_adds_entry(tmp_path: Path):
     _default_config(tmp_path)
     _write_ongoing_json(tmp_path, [])
-    register_claim(tmp_path, "CLAIM-X-CHUNK-001", "CHUNK-001", "chunk", ["TASK-001", "TASK-002"], 1234)
-    ongoing = load_ongoing(tmp_path)
+    register_claim(make_default_layout(tmp_path), "CLAIM-X-CHUNK-001", "CHUNK-001", "chunk", ["TASK-001", "TASK-002"], 1234)
+    ongoing = load_ongoing(make_default_layout(tmp_path))
     entries = [e for e in ongoing["active_runs"] if e.get("id") == "CLAIM-X-CHUNK-001"]
     assert len(entries) == 1
     e = entries[0]
@@ -290,9 +291,9 @@ def testregister_claim_adds_entry(tmp_path: Path):
 def testrelease_claim_removes_entry(tmp_path: Path):
     _default_config(tmp_path)
     _write_ongoing_json(tmp_path, [])
-    register_claim(tmp_path, "CLAIM-Y-CHUNK-001", "CHUNK-001", "chunk", ["TASK-001"], 1234)
-    release_claim(tmp_path, "CLAIM-Y-CHUNK-001")
-    ongoing = load_ongoing(tmp_path)
+    register_claim(make_default_layout(tmp_path), "CLAIM-Y-CHUNK-001", "CHUNK-001", "chunk", ["TASK-001"], 1234)
+    release_claim(make_default_layout(tmp_path), "CLAIM-Y-CHUNK-001")
+    ongoing = load_ongoing(make_default_layout(tmp_path))
     entries = [e for e in ongoing["active_runs"] if e.get("id") == "CLAIM-Y-CHUNK-001"]
     assert entries == []
 
@@ -300,10 +301,10 @@ def testrelease_claim_removes_entry(tmp_path: Path):
 def testrelease_claim_leaves_other_entries(tmp_path: Path):
     _default_config(tmp_path)
     _write_ongoing_json(tmp_path, [])
-    register_claim(tmp_path, "CLAIM-A", "CHUNK-001", "chunk", ["TASK-001"], 1)
-    register_claim(tmp_path, "CLAIM-B", "CHUNK-002", "chunk", ["TASK-002"], 2)
-    release_claim(tmp_path, "CLAIM-A")
-    ongoing = load_ongoing(tmp_path)
+    register_claim(make_default_layout(tmp_path), "CLAIM-A", "CHUNK-001", "chunk", ["TASK-001"], 1)
+    register_claim(make_default_layout(tmp_path), "CLAIM-B", "CHUNK-002", "chunk", ["TASK-002"], 2)
+    release_claim(make_default_layout(tmp_path), "CLAIM-A")
+    ongoing = load_ongoing(make_default_layout(tmp_path))
     ids = [e["id"] for e in ongoing["active_runs"]]
     assert "CLAIM-A" not in ids
     assert "CLAIM-B" in ids

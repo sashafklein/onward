@@ -886,7 +886,7 @@ def append_note(layout: WorkspaceLayout, artifact: Artifact, message: str, proje
         artifact.metadata["has_notes"] = True
         artifact.metadata["updated_at"] = now_iso()
         write_artifact(artifact)
-        regenerate_indexes(root)
+        regenerate_indexes(layout, project=project)
 
     return path
 

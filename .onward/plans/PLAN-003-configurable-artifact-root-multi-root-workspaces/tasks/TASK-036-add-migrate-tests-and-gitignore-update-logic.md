@@ -23,8 +23,9 @@ acceptance:
 - ".gitignore entries updated from old root paths to new root paths"
 - "onward doctor passes after migration"
 created_at: "2026-03-21T16:05:06Z"
-updated_at: "2026-03-21T18:18:43Z"
+updated_at: "2026-03-21T18:24:22Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
