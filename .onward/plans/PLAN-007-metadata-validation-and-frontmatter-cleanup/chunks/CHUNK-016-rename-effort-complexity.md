@@ -4,14 +4,14 @@ type: "chunk"
 plan: "PLAN-007"
 project: ""
 title: "Rename effort → complexity"
-status: "open"
+status: "in_progress"
 description: "Rename normalize_effort → normalize_complexity in util.py; accept only low|medium|high (drop xs/s/m/l/xl). Update config.py (_EFFORT_TIER_VALUES, resolve_model_for_task) to read the complexity key with a fallback to effort for backward compat. Update cli.py --effort flag → --complexity on new task and batch. Update all call sites in cli_commands.py, split.py, artifacts.py (summarize_effort_remaining → summarize_complexity_remaining, metadata key reads). Update scaffold.py templates and prompts. Update executor_payload.py. Update docs. Update all affected tests. Keep a single compat fallback reading the old effort key where documented."
 priority: "high"
 model: "sonnet"
 depends_on:
 - "CHUNK-015"
 created_at: "2026-03-21T20:18:55Z"
-updated_at: "2026-03-21T20:18:55Z"
+updated_at: "2026-03-21T20:51:32Z"
 ---
 
 # Summary

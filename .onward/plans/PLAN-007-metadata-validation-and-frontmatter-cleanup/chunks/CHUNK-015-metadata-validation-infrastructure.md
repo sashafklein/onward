@@ -4,13 +4,13 @@ type: "chunk"
 plan: "PLAN-007"
 project: ""
 title: "Metadata validation infrastructure"
-status: "in_progress"
+status: "completed"
 description: "Define KNOWN_FIELDS per artifact type and FIELD_VALIDATORS in artifacts.py (status, priority, effort/complexity compat, model, human). Expand validate_artifact() to run field validators and warn on unknown fields. Add validate_task_preflight() in execution.py called before marking in_progress in _work_task(). Surface richer issues in cmd_doctor(). Add tests covering validation logic, pre-flight gate, and doctor output."
 priority: "high"
 model: "sonnet"
 depends_on: []
 created_at: "2026-03-21T20:18:55Z"
-updated_at: "2026-03-21T20:30:51Z"
+updated_at: "2026-03-21T20:51:31Z"
 ---
 
 # Summary

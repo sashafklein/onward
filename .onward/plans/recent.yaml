@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T20:49:37Z"
+generated_at: "2026-03-21T20:51:34Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -158,6 +158,14 @@ completed:
   updated_at: "2026-03-21T19:05:57Z"
   path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/chunks/CHUNK-014-implement-model-alias-resolution.md"
   plan: "PLAN-006"
+  project: ""
+  depends_on: []
+- id: "CHUNK-015"
+  title: "Metadata validation infrastructure"
+  status: "completed"
+  updated_at: "2026-03-21T20:51:31Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/chunks/CHUNK-015-metadata-validation-infrastructure.md"
+  plan: "PLAN-007"
   project: ""
   depends_on: []
 - id: "TASK-001"
@@ -732,5 +740,18 @@ completed:
   project: ""
   depends_on:
   - "TASK-048"
+  human: false
+  effort: "m"
+- id: "TASK-052"
+  title: "Integration tests: preflight gate in work_task and metadata issues in doctor output"
+  status: "completed"
+  updated_at: "2026-03-21T20:51:31Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-052-integration-tests-preflight-gate-in-work-task-and-metadata-issues-in-doctor-output.md"
+  plan: "PLAN-007"
+  chunk: "CHUNK-015"
+  project: ""
+  depends_on:
+  - "TASK-049"
+  - "TASK-050"
   human: false
   effort: "m"
