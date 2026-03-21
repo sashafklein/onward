@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-005"
 project: ""
 title: "Implement per-project template/prompt/hook fallback"
-status: "done"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -16,8 +16,9 @@ depends_on:
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:33Z"
-updated_at: "2026-03-21T17:33:10Z"
+updated_at: "2026-03-21T17:37:29Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context

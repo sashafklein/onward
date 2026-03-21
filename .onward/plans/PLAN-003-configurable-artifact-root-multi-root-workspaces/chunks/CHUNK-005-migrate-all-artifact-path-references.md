@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Migrate all artifact path references"
-status: "in_progress"
+status: "completed"
 description: "Replace every hardcoded .onward/ path construction with WorkspaceLayout method calls"
 depends_on:
 - "CHUNK-003"
@@ -13,7 +13,7 @@ priority: "high"
 effort: "xl"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:46:43Z"
-updated_at: "2026-03-21T17:03:08Z"
+updated_at: "2026-03-21T17:37:30Z"
 ---
 
 # Summary

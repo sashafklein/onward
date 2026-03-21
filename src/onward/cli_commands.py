@@ -114,6 +114,62 @@ from onward.util import (
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def require_project_or_default(args: argparse.Namespace, layout: WorkspaceLayout, *, enforce: bool = True) -> str | None:
+    """Resolve project key from args or config default, optionally enforcing multi-root requirements.
+
+    Args:
+        args: Parsed CLI arguments (must have a `project` attribute)
+        layout: WorkspaceLayout instance for this workspace
+        enforce: If True, raise error in multi-root mode when no project is available.
+                 If False, return None when no project is specified (allows searching all roots).
+
+    Returns:
+        Project key string (in multi-root mode) or None (in single-root mode or when not enforced)
+
+    Raises:
+        ValueError: If enforce=True and multi-root mode is active but no project is specified and no default_project is set
+        ValueError: If the specified project is not in the configured roots
+    """
+    # Single-root mode: always return None (project is optional metadata filter)
+    if not layout.is_multi_root:
+        return None
+
+    # Multi-root mode: resolve project from args or default_project
+    project = getattr(args, "project", None)
+    if project is not None:
+        # Empty string from CLI is treated as None (user didn't specify)
+        project = project.strip() or None
+
+    if project is None:
+        # Try to use default_project from config
+        if layout.default_project is not None:
+            project = layout.default_project
+        elif enforce:
+            # No project specified and no default: error (only if enforcing)
+            available = [k for k in layout.roots.keys() if k is not None]
+            raise ValueError(
+                f"Multiple project roots configured. Use --project <name> or set default_project in .onward.config.yaml. "
+                f"Available projects: {', '.join(sorted(available))}"
+            )
+        else:
+            # Not enforcing: return None (will search all roots)
+            return None
+
+    # Validate that the project exists in the configured roots
+    if project is not None and project not in layout.roots:
+        available = [k for k in layout.roots.keys() if k is not None]
+        raise ValueError(
+            f"Unknown project {project!r}. Available projects: {', '.join(sorted(available))}"
+        )
+
+    return project
+
+
+# ---------------------------------------------------------------------------
 # Command handlers
 # ---------------------------------------------------------------------------
 
@@ -333,7 +389,7 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    project = (args.project or "").strip() or None
+    project = require_project_or_default(args, layout)
 
     plan_id = next_id(layout, "PLAN", project)
     now = now_iso()
@@ -347,7 +403,7 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     metadata = {
         "id": plan_id,
         "type": "plan",
-        "project": "" if args.project is None else args.project,
+        "project": project or "",
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -376,16 +432,23 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
     layout = WorkspaceLayout.from_config(root, config)
     plan_id = args.plan_id
 
-    plan_art = find_by_id(layout, plan_id)
+    # Enforce project requirement for layout resolution
+    layout_project = require_project_or_default(args, layout)
+
+    # Find the plan using the enforced project
+    plan_art = find_by_id(layout, plan_id, layout_project)
     if not plan_art:
         raise ValueError(f"plan not found: {plan_id}")
     if str(plan_art.metadata.get("type", "")) != "plan":
         raise ValueError(f"{plan_id} is not a plan")
 
-    if args.project is None:
-        proj = artifact_project(plan_art)
+    # Determine chunk's project metadata: explicit arg if provided, otherwise inherit from plan
+    explicit_project = (args.project or "").strip()
+    if explicit_project:
+        proj = explicit_project
     else:
-        proj = args.project
+        # Inherit from plan when --project was not explicitly provided
+        proj = artifact_project(plan_art)
 
     plan_dir = find_plan_dir(layout, plan_id, proj)
     chunk_id = next_id(layout, "CHUNK", proj)
@@ -432,16 +495,22 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
 
-    chunk = find_by_id(layout, args.chunk_id)
+    # Enforce project requirement for layout resolution
+    layout_project = require_project_or_default(args, layout)
+
+    # Find the chunk using the enforced project
+    chunk = find_by_id(layout, args.chunk_id, layout_project)
     if not chunk:
         raise ValueError(f"chunk not found: {args.chunk_id}")
     if str(chunk.metadata.get("type", "")) != "chunk":
         raise ValueError(f"{args.chunk_id} is not a chunk")
 
-    if args.project is None:
-        base_project = artifact_project(chunk)
+    # Determine base project for batch: explicit arg if provided, otherwise inherit from chunk
+    explicit_project = (args.project or "").strip()
+    if explicit_project:
+        base_project = explicit_project
     else:
-        base_project = args.project
+        base_project = artifact_project(chunk)
 
     plan_id = str(chunk.metadata["plan"])
     chunk_id = str(chunk.metadata["id"])
@@ -560,16 +629,23 @@ def cmd_new_task(args: argparse.Namespace) -> int:
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
 
-    chunk = find_by_id(layout, args.chunk_id)
+    # Enforce project requirement for layout resolution
+    layout_project = require_project_or_default(args, layout)
+
+    # Find the chunk using the enforced project
+    chunk = find_by_id(layout, args.chunk_id, layout_project)
     if not chunk:
         raise ValueError(f"chunk not found: {args.chunk_id}")
     if chunk.metadata.get("type") != "chunk":
         raise ValueError(f"{args.chunk_id} is not a chunk")
 
-    if args.project is None:
-        proj = artifact_project(chunk)
+    # Determine task's project metadata: explicit arg if provided, otherwise inherit from chunk
+    explicit_project = (args.project or "").strip()
+    if explicit_project:
+        proj = explicit_project
     else:
-        proj = args.project
+        # Inherit from chunk when --project was not explicitly provided
+        proj = artifact_project(chunk)
 
     plan_id = str(chunk.metadata["plan"])
     chunk_id = str(chunk.metadata["id"])
@@ -616,22 +692,24 @@ def cmd_new_task(args: argparse.Namespace) -> int:
 
 def cmd_list(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
     artifact_type = args.type
-    project_filter = (args.project or "").strip()
+    project_filter = require_project_or_default(args, layout, enforce=False)
     blockers_only = bool(args.blocking)
     human_only = bool(args.human)
 
     indexed = list_from_index(
-        root,
+        layout,
         type_filter=artifact_type,
-        project_filter=project_filter,
+        project_filter=project_filter or "",
         blocking=blockers_only,
         human_only=human_only,
     )
     if indexed is not None:
         rows = indexed
     else:
-        artifacts = collect_artifacts(root)
+        artifacts = collect_artifacts(layout, project_filter)
         blocker_ids = blocking_ids(artifacts) if blockers_only else set()
         by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
 
@@ -704,10 +782,10 @@ def _format_tokens(token_usage: dict[str, Any] | None) -> str:
     return f"{inp_s}/{out_s} tokens"
 
 
-def _print_runs_table(root: Path, artifact_id: str) -> None:
+def _print_runs_table(layout: WorkspaceLayout, artifact_id: str, project: str | None = None) -> None:
     """Print a tabular run history for ``artifact_id``."""
     tty = sys.stdout.isatty()
-    runs = collect_runs_for_target(root, artifact_id, limit=20)
+    runs = collect_runs_for_target(layout, artifact_id, limit=20, project=project)
     if not runs:
         print(f"Runs for {artifact_id}: No runs yet")
         return
@@ -725,7 +803,7 @@ def _print_runs_table(root: Path, artifact_id: str) -> None:
         print(f"  #{i}  {ts}  {st_disp}  {dur}  {model}  {tok}  {file_count} files")
 
 
-def _print_task_show_extras(root: Path, artifact: Artifact) -> None:
+def _print_task_show_extras(root: Path, artifact: Artifact, layout: WorkspaceLayout, project: str | None) -> None:
     """Extra sections for ``onward show TASK-*`` (run history, structured result, deps)."""
     tty = sys.stdout.isatty()
     artifact_id = str(artifact.metadata.get("id", ""))
@@ -793,7 +871,7 @@ def _print_task_show_extras(root: Path, artifact: Artifact) -> None:
                 if isinstance(fu, dict):
                     print(f"    - {fu.get('title', '')}: {fu.get('description', '')}")
 
-    artifacts = collect_artifacts(root)
+    artifacts = collect_artifacts(layout, project)
     status_by_id = {
         str(a.metadata.get("id", "")): str(a.metadata.get("status", "")) for a in artifacts
     }
@@ -828,23 +906,25 @@ def cmd_show(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    artifact = find_by_id(layout, args.id)
+    project = require_project_or_default(args, layout, enforce=False)
+    artifact = find_by_id(layout, args.id, project)
     if not artifact:
         print(f"Artifact not found: {args.id}")
         return 1
 
-    project = (getattr(args, "project", "") or "").strip()
-    if project:
-        artifacts = collect_artifacts(root)
+    # If project filter was explicitly provided, validate artifact matches
+    explicit_project_filter = (getattr(args, "project", "") or "").strip()
+    if explicit_project_filter:
+        artifacts = collect_artifacts(layout, None)  # Search all for resolution
         by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
-        if resolve_project(artifact, by_id) != project:
-            print(f"Artifact not in project {project!r} (resolved)")
+        if resolve_project(artifact, by_id) != explicit_project_filter:
+            print(f"Artifact not in project {explicit_project_filter!r} (resolved)")
             return 1
 
     show_runs = getattr(args, "runs", False)
     if show_runs and str(artifact.metadata.get("type", "")) == "task":
         task_id = str(artifact.metadata.get("id", ""))
-        _print_runs_table(root, task_id)
+        _print_runs_table(layout, task_id, project)
         return 0
 
     print(f"# {artifact.metadata.get('id')} {artifact.metadata.get('title')}")
@@ -861,16 +941,16 @@ def cmd_show(args: argparse.Namespace) -> int:
 
     if str(artifact.metadata.get("type", "")) == "task":
         task_id = str(artifact.metadata.get("id", ""))
-        active_claimed = claimed_task_ids(root)
+        active_claimed = claimed_task_ids(layout, project)
         if task_id in active_claimed:
-            ongoing = load_ongoing(root)
+            ongoing = load_ongoing(layout, project)
             for entry in ongoing.get("active_runs", []):
                 if task_id in (entry.get("claimed_children") or []):
                     claim_id = str(entry.get("id", ""))
                     claim_target = str(entry.get("target", ""))
                     print(f"\nClaimed by {claim_id} (running {claim_target})")
                     break
-        _print_task_show_extras(root, artifact)
+        _print_task_show_extras(root, artifact, layout, project)
     return 0
 
 
@@ -878,7 +958,8 @@ def cmd_note(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    artifact = must_find_by_id(layout, args.id)
+    search_project = require_project_or_default(args, layout, enforce=False)
+    artifact = must_find_by_id(layout, args.id, search_project)
     artifact_id = str(artifact.metadata.get("id", ""))
     project = artifact_project(artifact)
 
@@ -902,7 +983,8 @@ def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    artifact = must_find_by_id(layout, args.id)
+    project = require_project_or_default(args, layout, enforce=False)
+    artifact = must_find_by_id(layout, args.id, project)
 
     current = str(artifact.metadata.get("status", ""))
     artifact.metadata["status"] = transition_status(current, action)
@@ -914,12 +996,12 @@ def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
 
     if action == "complete":
-        _, warnings = finalize_chunks_all_tasks_terminal(root)
+        _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
         for w in warnings:
             print(w)
 
     if action in {"complete", "cancel"}:
-        notes = read_notes(root, artifact_id)
+        notes = read_notes(layout, artifact_id, project)
         if notes.strip():
             print(f"\nRelated notes for {artifact_id}:\n")
             print(notes.rstrip())
@@ -939,7 +1021,8 @@ def cmd_retry(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    artifact = must_find_by_id(layout, args.id)
+    project = require_project_or_default(args, layout, enforce=False)
+    artifact = must_find_by_id(layout, args.id, project)
     if str(artifact.metadata.get("type", "")) != "task":
         raise ValueError("onward retry only applies to tasks (TASK-###)")
     current = str(artifact.metadata.get("status", ""))
@@ -957,8 +1040,9 @@ def cmd_archive(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
 
-    artifact = must_find_by_id(layout, args.plan_id)
+    artifact = must_find_by_id(layout, args.plan_id, project)
     if artifact.metadata.get("type") != "plan":
         raise ValueError(f"{args.plan_id} is not a plan")
 
@@ -982,8 +1066,9 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
     require_workspace(root)
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
 
-    plan = must_find_by_id(layout, args.plan_id)
+    plan = must_find_by_id(layout, args.plan_id, project)
     plan_type = str(plan.metadata.get("type", ""))
     if plan_type != "plan":
         raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
@@ -1069,10 +1154,10 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _status_by_id(root: Path) -> dict[str, str]:
+def _status_by_id(layout: WorkspaceLayout, project: str | None = None) -> dict[str, str]:
     return {
         str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
-        for a in collect_artifacts(root)
+        for a in collect_artifacts(layout, project)
         if str(a.metadata.get("id", ""))
     }
 
@@ -1084,10 +1169,10 @@ def _chunk_depends_satisfied(chunk: Artifact, status_by_id: dict[str, str]) -> b
     return True
 
 
-def _plan_chunks(root: Path, plan_id: str) -> list[Artifact]:
+def _plan_chunks(layout: WorkspaceLayout, plan_id: str, project: str | None = None) -> list[Artifact]:
     chunks = [
         a
-        for a in collect_artifacts(root)
+        for a in collect_artifacts(layout, project)
         if str(a.metadata.get("type", "")) == "chunk"
         and str(a.metadata.get("plan", "")) == plan_id
     ]
@@ -1106,7 +1191,7 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
         print(f"Plan {plan_id} already completed")
         return 0
 
-    chunks = _plan_chunks(root, plan_id)
+    chunks = _plan_chunks(layout, plan_id, project)
     if not chunks:
         print(f"Plan {plan_id} has no chunks")
         return 0
@@ -1123,23 +1208,23 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
                     f"Chunk {cid} was marked completed but has non-terminal tasks: "
                     f"{', '.join(bad)} — reopening chunk"
                 )
-                update_artifact_status(layout, must_find_by_id(layout, cid), "in_progress", project)
+                update_artifact_status(layout, must_find_by_id(layout, cid, project), "in_progress", project)
 
-    chunks = _plan_chunks(root, plan_id)
+    chunks = _plan_chunks(layout, plan_id, project)
     pending = [
         str(c.metadata.get("id", ""))
         for c in chunks
         if str(c.metadata.get("status", "")) not in {"completed", "canceled"}
     ]
     if not pending:
-        refreshed_plan = must_find_by_id(layout, plan_id)
+        refreshed_plan = must_find_by_id(layout, plan_id, project)
         update_artifact_status(layout, refreshed_plan, "completed", project)
         _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
         for w in warnings:
             print(w)
         n_tasks = sum(
             1
-            for a in collect_artifacts(root)
+            for a in collect_artifacts(layout, project)
             if str(a.metadata.get("type", "")) == "task"
             and str(a.metadata.get("plan", "")) == plan_id
             and str(a.metadata.get("status", "")) == "completed"
@@ -1148,11 +1233,11 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
         return 0
 
     while pending:
-        status_by_id = _status_by_id(root)
+        status_by_id = _status_by_id(layout, project)
         ready = [
             cid
             for cid in pending
-            if _chunk_depends_satisfied(must_find_by_id(layout, cid), status_by_id)
+            if _chunk_depends_satisfied(must_find_by_id(layout, cid, project), status_by_id)
         ]
         if not ready:
             print(
@@ -1160,10 +1245,10 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
             )
             return 1
         cid = min(ready)
-        chunk_art = must_find_by_id(layout, cid)
+        chunk_art = must_find_by_id(layout, cid, project)
         chunk_claimed = [
             str(a.metadata.get("id", ""))
-            for a in collect_artifacts(root)
+            for a in collect_artifacts(layout, project)
             if str(a.metadata.get("type", "")) == "task"
             and str(a.metadata.get("chunk", "")) == cid
             and str(a.metadata.get("status", "")) in {"open", "in_progress"}
@@ -1179,14 +1264,14 @@ def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], 
             return 1
         pending.remove(cid)
 
-    refreshed_plan = must_find_by_id(layout, plan_id)
+    refreshed_plan = must_find_by_id(layout, plan_id, project)
     update_artifact_status(layout, refreshed_plan, "completed", project)
     _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
     for w in warnings:
         print(w)
     n_tasks = sum(
         1
-        for a in collect_artifacts(root)
+        for a in collect_artifacts(layout, project)
         if str(a.metadata.get("type", "")) == "task"
         and str(a.metadata.get("plan", "")) == plan_id
         and str(a.metadata.get("status", "")) == "completed"
@@ -1199,7 +1284,8 @@ def cmd_work(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    artifact = must_find_by_id(layout, args.id)
+    search_project = require_project_or_default(args, layout, enforce=False)
+    artifact = must_find_by_id(layout, args.id, search_project)
     artifact_type = str(artifact.metadata.get("type", ""))
     project = artifact_project(artifact)
 
@@ -1215,7 +1301,7 @@ def cmd_work(args: argparse.Namespace) -> int:
             tr = run_rec.get("task_result") or {}
             fus = tr.get("follow_ups") or []
             if isinstance(fus, list) and fus:
-                parent = must_find_by_id(layout, args.id)
+                parent = must_find_by_id(layout, args.id, search_project)
                 created, fu_warnings = create_follow_up_tasks(layout, parent, fus, project)
                 for w in fu_warnings:
                     print(f"Warning: {w}")
@@ -1237,8 +1323,9 @@ def cmd_split(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
+    search_project = require_project_or_default(args, layout, enforce=False)
 
-    artifact = must_find_by_id(layout, args.id)
+    artifact = must_find_by_id(layout, args.id, search_project)
     artifact_type = str(artifact.metadata.get("type", ""))
     if artifact_type not in {"plan", "chunk"}:
         raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
@@ -1311,8 +1398,10 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 def cmd_progress(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    project = (getattr(args, "project", "") or "").strip()
-    artifacts = collect_artifacts(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    artifacts = collect_artifacts(layout, project)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     rows: list[str] = []
 
@@ -1335,7 +1424,7 @@ def cmd_progress(args: argparse.Namespace) -> int:
         )
 
     if not rows:
-        ongoing = load_ongoing(root)
+        ongoing = load_ongoing(layout, project)
         active = ongoing.get("active_runs", [])
         if not isinstance(active, list) or not active:
             print("No in-progress artifacts")
@@ -1344,7 +1433,7 @@ def cmd_progress(args: argparse.Namespace) -> int:
         for row in sorted(rows):
             print(row)
 
-    ongoing = load_ongoing(root)
+    ongoing = load_ongoing(layout, project)
     active = ongoing.get("active_runs", [])
     if isinstance(active, list):
         for run in active:
@@ -1364,8 +1453,10 @@ def cmd_progress(args: argparse.Namespace) -> int:
 
 def cmd_recent(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    project = (getattr(args, "project", "") or "").strip()
-    artifacts = collect_artifacts(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    artifacts = collect_artifacts(layout, project)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     rows: list[tuple[str, str, str, str, str, str]] = []
 
@@ -1386,7 +1477,7 @@ def cmd_recent(args: argparse.Namespace) -> int:
             )
         )
 
-    for rec in collect_run_records(root):
+    for rec in collect_run_records(layout, project):
         finished = str(rec.get("finished_at") or rec.get("started_at", ""))
         status = str(rec.get("status", ""))
         if status not in {"completed", "failed"}:
@@ -1419,12 +1510,14 @@ def cmd_recent(args: argparse.Namespace) -> int:
 
 def cmd_ready(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
     for w in warnings:
         print(w)
-    artifacts = artifacts_from_index_or_collect(root)
+    artifacts = artifacts_from_index_or_collect(layout, project)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
-    project = (args.project or "").strip() or None
     status_by_id = {
         str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
         for a in artifacts
@@ -1474,14 +1567,17 @@ def cmd_ready(args: argparse.Namespace) -> int:
 
 def cmd_next(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
     for w in warnings:
         print(w)
-    artifacts = artifacts_from_index_or_collect(root)
-    active_claimed = claimed_task_ids(root)
+    artifacts = artifacts_from_index_or_collect(layout, project)
+    active_claimed = claimed_task_ids(layout, project)
     chosen = select_next_artifact(
         artifacts,
-        project=(args.project or "").strip() or None,
+        project=project,
         claimed_ids=active_claimed,
     )
     if chosen:
@@ -1496,8 +1592,10 @@ def cmd_next(args: argparse.Namespace) -> int:
 
 def cmd_tree(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifacts = artifacts_from_index_or_collect(root)
-    project = (args.project or "").strip() or None
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    artifacts = artifacts_from_index_or_collect(layout, project)
     lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
     if not lines:
         print("No active work tree (no open plans)")
@@ -1724,15 +1822,17 @@ def format_report_markdown(
 
 def cmd_report(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
     color_enabled = not args.no_color
-    project = (args.project or "").strip() or None
-    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    project = require_project_or_default(args, layout, enforce=False)
+    _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
     for w in warnings:
         print(w)
-    artifacts = artifacts_from_index_or_collect(root)
+    artifacts = artifacts_from_index_or_collect(layout, project)
     blockers = blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
-    active_claimed = claimed_task_ids(root)
+    active_claimed = claimed_task_ids(layout, project)
 
     # If --md flag is set, output markdown and return early
     if getattr(args, "md", False):

@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T17:33:11Z"
+generated_at: "2026-03-21T17:37:31Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -53,6 +53,17 @@ completed:
   depends_on:
   - "CHUNK-003"
   effort: "m"
+- id: "CHUNK-005"
+  title: "Migrate all artifact path references"
+  status: "completed"
+  updated_at: "2026-03-21T17:37:30Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/chunks/CHUNK-005-migrate-all-artifact-path-references.md"
+  plan: "PLAN-003"
+  project: ""
+  depends_on:
+  - "CHUNK-003"
+  - "CHUNK-004"
+  effort: "xl"
 - id: "CHUNK-009"
   title: "Add --md flag and markdown report formatter"
   status: "completed"
@@ -299,6 +310,18 @@ completed:
   depends_on:
   - "TASK-018"
   - "TASK-019"
+  - "TASK-020"
+  human: false
+  effort: "m"
+- id: "TASK-022"
+  title: "Implement per-project template/prompt/hook fallback"
+  status: "completed"
+  updated_at: "2026-03-21T17:37:29Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-022-implement-per-project-template-prompt-hook-fallback.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-005"
+  project: ""
+  depends_on:
   - "TASK-020"
   human: false
   effort: "m"
