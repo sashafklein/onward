@@ -11,6 +11,7 @@ from onward.cli_commands import (
     cmd_doctor,
     cmd_init,
     cmd_list,
+    cmd_migrate,
     cmd_new_chunk,
     cmd_new_plan,
     cmd_new_task,
@@ -61,6 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Validate basic onward workspace structure")
     doctor_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    migrate_parser = subparsers.add_parser("migrate", help="Move artifacts from old root to new configured root")
+    migrate_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    migrate_parser.add_argument("--dry-run", action="store_true", help="Print planned moves without executing them")
+    migrate_parser.add_argument("--force", action="store_true", help="Overwrite target if it already has content")
+    migrate_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
+    migrate_parser.set_defaults(func=cmd_migrate)
 
     sync_parser = subparsers.add_parser("sync", help="Sync .onward/plans with a branch or remote repo")
     sync_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
@@ -306,9 +314,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        # Skip workspace validation for init and doctor commands
-        # (init creates the workspace, doctor diagnoses workspace issues)
-        if getattr(args, "command", "") not in ("init", "doctor"):
+        # Skip workspace validation for init, doctor, and migrate commands
+        # (init creates the workspace, doctor diagnoses workspace issues, migrate moves artifacts)
+        if getattr(args, "command", "") not in ("init", "doctor", "migrate"):
             root_value = getattr(args, "root", ".")
             require_workspace(Path(root_value).resolve())
         return args.func(args)

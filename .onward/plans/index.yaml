@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T18:16:48Z"
-index_version: 196
+generated_at: "2026-03-21T18:18:43Z"
+index_version: 199
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -541,8 +541,8 @@ tasks:
   effort: "s"
 - id: "TASK-035"
   title: "Implement onward migrate command with dry-run support"
-  status: "in_progress"
-  updated_at: "2026-03-21T18:16:48Z"
+  status: "completed"
+  updated_at: "2026-03-21T18:18:43Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-035-implement-onward-migrate-command-with-dry-run-support.md"
   plan: "PLAN-003"
   chunk: "CHUNK-010"
@@ -553,8 +553,8 @@ tasks:
   effort: "m"
 - id: "TASK-036"
   title: "Add migrate tests and gitignore update logic"
-  status: "open"
-  updated_at: "2026-03-21T16:05:06Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T18:18:43Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-036-add-migrate-tests-and-gitignore-update-logic.md"
   plan: "PLAN-003"
   chunk: "CHUNK-010"

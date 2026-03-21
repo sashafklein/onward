@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -359,6 +360,213 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     print("Doctor check passed")
     return 0
+
+
+def cmd_migrate(args: argparse.Namespace) -> int:
+    """Migrate artifacts from old root to new configured root."""
+    root = Path(args.root).resolve()
+    dry_run = args.dry_run
+    force = args.force
+    project_arg = args.project if args.project else None
+
+    # Load config and create layout
+    config_path = root / ".onward.config.yaml"
+    if not config_path.exists():
+        print("Error: .onward.config.yaml not found. Initialize workspace first with 'onward init'")
+        return 1
+
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    # Determine which project root to migrate to
+    target_project_key = project_arg
+    if layout.is_multi_root:
+        if not target_project_key:
+            if layout.default_project:
+                target_project_key = layout.default_project
+            else:
+                available = [k for k in layout.all_project_keys() if k is not None]
+                print(f"Error: Multiple projects configured. Use --project <name> (available: {', '.join(available)})")
+                return 1
+        elif target_project_key not in layout.roots:
+            available = [k for k in layout.all_project_keys() if k is not None]
+            print(f"Error: Unknown project '{target_project_key}'. Available: {', '.join(available)}")
+            return 1
+
+    # Get target root path
+    try:
+        target_root = layout.artifact_root(target_project_key)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    # Detect source root - assume .onward/ if it exists
+    default_source = root / ".onward"
+    if not default_source.exists() or not (default_source / "plans").exists():
+        print("Nothing to migrate: .onward/ directory not found or already migrated")
+        return 0
+
+    source_root = default_source
+    target_root_rel = target_root.relative_to(root) if target_root.is_relative_to(root) else target_root
+    source_root_rel = source_root.relative_to(root) if source_root.is_relative_to(root) else source_root
+
+    # Check if source and target are the same
+    if source_root.resolve() == target_root.resolve():
+        print(f"Nothing to migrate: source and target are the same ({source_root_rel})")
+        return 0
+
+    # List of subdirectories and files to migrate
+    items_to_migrate = [
+        ("plans", True),  # (path, is_directory)
+        ("runs", True),
+        ("reviews", True),
+        ("templates", True),
+        ("prompts", True),
+        ("hooks", True),
+        ("notes", True),
+        ("sync", True),
+        ("ongoing.json", False),
+    ]
+
+    # Check if source has any content to migrate
+    has_content = False
+    for item_name, is_dir in items_to_migrate:
+        item_path = source_root / item_name
+        if item_path.exists():
+            has_content = True
+            break
+
+    if not has_content:
+        print(f"Nothing to migrate: {source_root_rel}/ is empty or already migrated")
+        return 0
+
+    # Check if target already has content (unless --force)
+    if not force:
+        target_has_content = False
+        for item_name, is_dir in items_to_migrate:
+            target_item = target_root / item_name
+            if target_item.exists():
+                if is_dir and any(target_item.iterdir()):
+                    target_has_content = True
+                    break
+                elif not is_dir:
+                    target_has_content = True
+                    break
+
+        if target_has_content:
+            print(f"Error: Target {target_root_rel}/ already has content. Use --force to overwrite")
+            return 1
+
+    # Ensure target directory structure exists
+    if not dry_run:
+        target_root.mkdir(parents=True, exist_ok=True)
+        for subdir in ["plans", "plans/.archive", "templates", "prompts", "hooks", "sync", "runs", "reviews", "notes"]:
+            (target_root / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Perform migration
+    moved_count = 0
+    for item_name, is_dir in items_to_migrate:
+        source_item = source_root / item_name
+        target_item = target_root / item_name
+
+        if not source_item.exists():
+            continue
+
+        if dry_run:
+            print(f"Would move: {source_root_rel}/{item_name} → {target_root_rel}/{item_name}")
+            moved_count += 1
+        else:
+            try:
+                if is_dir:
+                    # For directories, move contents
+                    if target_item.exists():
+                        # Merge contents if target exists
+                        for subitem in source_item.iterdir():
+                            target_subitem = target_item / subitem.name
+                            if subitem.is_dir():
+                                if target_subitem.exists():
+                                    shutil.rmtree(target_subitem)
+                                shutil.copytree(subitem, target_subitem)
+                            else:
+                                shutil.copy2(subitem, target_subitem)
+                        # Remove source after copying
+                        shutil.rmtree(source_item)
+                    else:
+                        shutil.move(str(source_item), str(target_item))
+                else:
+                    # For files, just move
+                    if target_item.exists():
+                        target_item.unlink()
+                    shutil.move(str(source_item), str(target_item))
+
+                moved_count += 1
+                print(f"Moved: {source_root_rel}/{item_name} → {target_root_rel}/{item_name}")
+            except Exception as exc:
+                print(f"Warning: Failed to move {item_name}: {exc}")
+
+    if not dry_run and moved_count > 0:
+        # Update .gitignore
+        _update_gitignore_for_migration(root, str(source_root_rel), str(target_root_rel))
+        print(f"Updated .gitignore entries")
+
+        # Try to remove empty source directory
+        try:
+            if source_root.exists() and not any(source_root.iterdir()):
+                source_root.rmdir()
+                print(f"Removed empty directory: {source_root_rel}/")
+        except Exception:
+            pass  # Ignore errors when removing source directory
+
+    if dry_run:
+        print(f"\nDry run: {moved_count} items would be migrated")
+    else:
+        print(f"\nMigration complete: {moved_count} items moved")
+        print(f"Run 'onward doctor --root {root}' to verify the migration")
+
+    return 0
+
+
+def _update_gitignore_for_migration(root: Path, old_root: str, new_root: str) -> None:
+    """Update .gitignore entries from old root to new root.
+
+    Args:
+        root: Workspace root directory
+        old_root: Old artifact root path (relative string)
+        new_root: New artifact root path (relative string)
+    """
+    gitignore = root / ".gitignore"
+    if not gitignore.exists():
+        # Create .gitignore with new entries
+        lines = gitignore_lines(new_root)
+        gitignore.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+        return
+
+    # Read existing .gitignore
+    existing_lines = gitignore.read_text(encoding="utf-8").splitlines()
+    new_lines = []
+    old_entries = gitignore_lines(old_root)
+    new_entries = gitignore_lines(new_root)
+
+    # Create mapping from old to new entries
+    entry_map = {}
+    for old_entry, new_entry in zip(old_entries, new_entries):
+        entry_map[old_entry] = new_entry
+
+    # Replace old entries with new ones
+    for line in existing_lines:
+        if line in entry_map:
+            new_lines.append(entry_map[line])
+        else:
+            new_lines.append(line)
+
+    # Add any new entries that weren't in the old set
+    existing_set = set(new_lines)
+    for new_entry in new_entries:
+        if new_entry not in existing_set:
+            new_lines.append(new_entry)
+
+    # Write updated .gitignore
+    gitignore.write_text("\n".join(new_lines).rstrip() + "\n", encoding="utf-8")
 
 
 def cmd_sync_status(args: argparse.Namespace) -> int:

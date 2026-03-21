@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T18:16:48Z"
+generated_at: "2026-03-21T18:18:43Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -440,6 +440,18 @@ completed:
   - "TASK-033"
   human: false
   effort: "s"
+- id: "TASK-035"
+  title: "Implement onward migrate command with dry-run support"
+  status: "completed"
+  updated_at: "2026-03-21T18:18:43Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-035-implement-onward-migrate-command-with-dry-run-support.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-010"
+  project: ""
+  depends_on:
+  - "TASK-015"
+  human: false
+  effort: "m"
 - id: "TASK-043"
   title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
   status: "completed"

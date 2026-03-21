@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-010"
 project: ""
 title: "Implement onward migrate command with dry-run support"
-status: "in_progress"
+status: "completed"
 description: "New onward migrate subcommand: detect old root, move contents to new configured root, --dry-run, --force"
 human: false
 model: "claude-sonnet-4-5"
@@ -23,8 +23,9 @@ acceptance:
 - "Errors if target has existing content without --force"
 - "Idempotent: no-op if source doesn't exist"
 created_at: "2026-03-21T16:05:04Z"
-updated_at: "2026-03-21T18:16:48Z"
+updated_at: "2026-03-21T18:18:43Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
