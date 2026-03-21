@@ -44,6 +44,7 @@ from onward.artifacts import (
     write_artifact,
 )
 from onward.config import (
+    WorkspaceLayout,
     build_plan_review_slots,
     config_raw_deprecation_warnings,
     config_validation_warnings,
@@ -70,6 +71,9 @@ from onward.scaffold import (
     DEFAULT_FILES,
     GITIGNORE_LINES,
     REQUIRED_PATHS,
+    default_directories,
+    default_files,
+    gitignore_lines,
     require_workspace,
     update_gitignore,
     write_workspace_file,
@@ -115,19 +119,62 @@ from onward.util import (
 def cmd_init(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
 
-    for rel_path in DEFAULT_DIRECTORIES:
-        (root / rel_path).mkdir(parents=True, exist_ok=True)
+    # Load config if it exists, otherwise use empty dict (defaults to .onward)
+    config_path = root / ".onward.config.yaml"
+    config = {}
+    if config_path.exists():
+        from onward.util import parse_simple_yaml
+        raw = parse_simple_yaml(config_path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            config = raw
+
+    # Build layout from config
+    layout = WorkspaceLayout.from_config(root, config)
+
+    # Always ensure the config file exists at workspace root
+    config_content = default_files(".onward")[".onward.config.yaml"]
+    config_wrote = write_workspace_file(config_path, config_content, force=args.force)
 
     created = 0
-    for rel_path, content in DEFAULT_FILES.items():
-        wrote = write_workspace_file(root / rel_path, content, force=args.force)
-        if wrote:
-            created += 1
+    if config_wrote:
+        created += 1
 
-    gitignore_updated = update_gitignore(root)
-    regenerate_indexes(root)
+    # Scaffold each artifact root
+    artifact_roots_scaffolded = []
+    for project_key in layout.all_project_keys():
+        artifact_root = layout.artifact_root(project_key)
+        # Convert to path relative to workspace root for scaffold functions
+        artifact_root_rel = artifact_root.relative_to(root)
+        artifact_root_str = str(artifact_root_rel)
+
+        # Create directories
+        for rel_path in default_directories(artifact_root_str):
+            (root / rel_path).mkdir(parents=True, exist_ok=True)
+
+        # Create artifact-relative files (skip config file as we already wrote it)
+        for rel_path, content in default_files(artifact_root_str).items():
+            if rel_path == ".onward.config.yaml":
+                continue  # Already written above
+            wrote = write_workspace_file(root / rel_path, content, force=args.force)
+            if wrote:
+                created += 1
+
+        artifact_roots_scaffolded.append(artifact_root_str)
+
+    # Update gitignore with all artifact roots
+    gitignore_updated = False
+    for artifact_root_str in artifact_roots_scaffolded:
+        if update_gitignore(root, artifact_root=artifact_root_str):
+            gitignore_updated = True
+
+    # Regenerate indexes for each artifact root
+    for project_key in layout.all_project_keys():
+        artifact_root = layout.artifact_root(project_key)
+        regenerate_indexes(root, artifact_root=artifact_root.relative_to(root))
 
     print(f"Initialized Onward workspace in {root}")
+    if artifact_roots_scaffolded:
+        print(f"Artifact roots: {', '.join(artifact_roots_scaffolded)}")
     print(f"Created/updated files: {created}")
     if gitignore_updated:
         print("Updated .gitignore")

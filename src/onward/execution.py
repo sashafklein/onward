@@ -902,9 +902,21 @@ def _run_hooked_executor_batch(
         ongoing["active_runs"] = remaining
         _write_ongoing(root, ongoing)
 
+        model_err = not ok and _is_model_error(ex_result, error)
+        if model_err:
+            print(
+                f"Model error for {task_id}: {error}\n"
+                f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
+                f"  Task reverted to open (not marked as failed)."
+            )
+
         refreshed = must_find_by_id(root, task_id)
-        refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
-        update_artifact_status(root, refreshed, "completed" if ok else "failed")
+        if model_err:
+            refreshed.metadata["last_run_status"] = "model_error"
+            update_artifact_status(root, refreshed, "open")
+        else:
+            refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
+            update_artifact_status(root, refreshed, "completed" if ok else "failed")
 
         outcomes.append((run_id, ok))
         if not ok:

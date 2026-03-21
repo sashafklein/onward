@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-004"
 project: ""
 title: "Update cmd_init to scaffold configurable roots"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "s"
-depends_on: ["TASK-015"]
+depends_on:
+- "TASK-015"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:19Z"
-updated_at: "2026-03-21T15:49:19Z"
+updated_at: "2026-03-21T16:53:26Z"
+run_count: 1
 ---
 
 # Context

@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T16:50:49Z"
-index_version: 144
+generated_at: "2026-03-21T16:54:52Z"
+index_version: 149
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -303,8 +303,8 @@ tasks:
   effort: "m"
 - id: "TASK-015"
   title: "Parameterize scaffold.py path lists and functions"
-  status: "in_progress"
-  updated_at: "2026-03-21T16:47:29Z"
+  status: "completed"
+  updated_at: "2026-03-21T16:53:25Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-015-parameterize-scaffold-py-path-lists-and-functions.md"
   plan: "PLAN-003"
   chunk: "CHUNK-004"
@@ -315,8 +315,8 @@ tasks:
   effort: "m"
 - id: "TASK-016"
   title: "Update cmd_init to scaffold configurable roots"
-  status: "open"
-  updated_at: "2026-03-21T15:49:19Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T16:53:26Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-016-update-cmd-init-to-scaffold-configurable-roots.md"
   plan: "PLAN-003"
   chunk: "CHUNK-004"
@@ -637,6 +637,16 @@ tasks:
   status: "completed"
   updated_at: "2026-03-21T16:43:17Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-043-fix-validate-chunk-dag-to-resolve-cross-chunk-completed-dependencies.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-004"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-044"
+  title: "Detect model errors at runtime and revert task to open instead of failed"
+  status: "completed"
+  updated_at: "2026-03-21T16:54:52Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-044-detect-model-errors-at-runtime-and-revert-task-to-open-instead-of-failed.md"
   plan: "PLAN-003"
   chunk: "CHUNK-004"
   project: ""

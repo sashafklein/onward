@@ -11,7 +11,7 @@ import pytest
 from onward.artifacts import Artifact
 from onward.config import work_max_parallel_tasks
 from onward.executor import Executor, ExecutorResult, TaskContext
-from onward.execution import validate_chunk_dag
+from onward.execution import validate_chunk_dag, _is_model_error
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +162,57 @@ def test_dag_dangling_ref_to_open_external() -> None:
     tasks = [_make_task("TASK-002", depends_on=["TASK-GHOST"])]
     errors = validate_chunk_dag(tasks)
     assert any("TASK-GHOST" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# _is_model_error — model error detection
+# ---------------------------------------------------------------------------
+
+
+def _make_executor_result(
+    success: bool = False, output: str = "", error: str = "", return_code: int = 1,
+) -> ExecutorResult:
+    return ExecutorResult(
+        task_id="TASK-001", run_id="RUN-001", success=success,
+        output=output, error=error, ack=None, return_code=return_code,
+    )
+
+
+def test_is_model_error_claude_cli_pattern() -> None:
+    r = _make_executor_result(
+        output="There's an issue with the selected model (sonnet-4.6). "
+               "It may not exist or you may not have access to it."
+    )
+    assert _is_model_error(r, "executor exited with code 1") is True
+
+
+def test_is_model_error_invalid_model_string() -> None:
+    r = _make_executor_result(error="invalid model: foo-bar-baz")
+    assert _is_model_error(r, "executor exited with code 1") is True
+
+
+def test_is_model_error_unknown_model() -> None:
+    r = _make_executor_result(error="unknown model identifier")
+    assert _is_model_error(r, "") is True
+
+
+def test_is_model_error_not_available() -> None:
+    r = _make_executor_result(output="model xyz is not available for your account")
+    assert _is_model_error(r, "") is True
+
+
+def test_is_model_error_false_on_normal_failure() -> None:
+    r = _make_executor_result(error="syntax error in generated code")
+    assert _is_model_error(r, "executor exited with code 1") is False
+
+
+def test_is_model_error_false_on_success() -> None:
+    r = _make_executor_result(success=True, output="all good", return_code=0)
+    assert _is_model_error(r, "") is False
+
+
+def test_is_model_error_none_result() -> None:
+    assert _is_model_error(None, "executor exited with code 1") is False
 
 
 # ---------------------------------------------------------------------------
