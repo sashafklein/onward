@@ -5,16 +5,20 @@ plan: "PLAN-005"
 chunk: "CHUNK-012"
 project: ""
 title: "Wire WorkReporter into work_task and _finalize_task_run in execution.py"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet"
 executor: "onward-exec"
-depends_on: ["TASK-037", "TASK-039"]
-files: ["src/onward/execution.py"]
+depends_on:
+- "TASK-037"
+- "TASK-039"
+files:
+- "src/onward/execution.py"
 acceptance: []
 created_at: "2026-03-21T16:26:53Z"
-updated_at: "2026-03-21T16:26:53Z"
+updated_at: "2026-03-21T19:21:14Z"
+run_count: 1
 ---
 
 # Context
@@ -50,10 +54,10 @@ Final wiring task. Handles the standalone `work_task()` path (for `onward work T
 
 # Acceptance criteria
 
-- [ ] `work_task` accepts and uses reporter
-- [ ] `_finalize_task_run` uses reporter for completion/failure
-- [ ] `onward work TASK-XXX` shows status transitions with title
-- [ ] No bare `print()` calls remain anywhere in the work execution path
+- [x] `work_task` accepts and uses reporter
+- [x] `_finalize_task_run` uses reporter for completion/failure
+- [x] `onward work TASK-XXX` shows status transitions with title
+- [x] No bare `print()` calls remain anywhere in the work execution path
 
 # Handoff notes
 

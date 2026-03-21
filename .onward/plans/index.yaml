@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T19:06:19Z"
-index_version: 246
+generated_at: "2026-03-21T19:21:14Z"
+index_version: 249
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -600,8 +600,8 @@ tasks:
   human: false
 - id: "TASK-039"
   title: "Wire WorkReporter into work_chunk and _work_chunk_loop in execution.py"
-  status: "in_progress"
-  updated_at: "2026-03-21T19:06:19Z"
+  status: "completed"
+  updated_at: "2026-03-21T19:21:13Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-039-wire-workreporter-into-work-chunk-and-work-chunk-loop-in-execution-py.md"
   plan: "PLAN-005"
   chunk: "CHUNK-012"
@@ -612,8 +612,8 @@ tasks:
   human: false
 - id: "TASK-040"
   title: "Wire WorkReporter into work_task and _finalize_task_run in execution.py"
-  status: "open"
-  updated_at: "2026-03-21T16:26:53Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T19:21:14Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-040-wire-workreporter-into-work-task-and-finalize-task-run-in-execution-py.md"
   plan: "PLAN-005"
   chunk: "CHUNK-012"

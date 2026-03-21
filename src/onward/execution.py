@@ -619,6 +619,7 @@ def _finalize_task_run(
     post_hook_lock: threading.Lock | None = None,
     before_sha: str = "",
     project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[str, bool]:
     """Write log, run JSON, artifact status, and remove ongoing entry for one completed task.
 
@@ -701,20 +702,30 @@ def _finalize_task_run(
     _write_ongoing(layout, ongoing, project)
 
     model_err = not ok and _is_model_error(ex_result, error)
+    model_err_msg = (
+        f"Model error for {task_id}: {error}\n"
+        f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
+        f"  Task reverted to open (not marked as failed)."
+    )
     if model_err:
-        print(
-            f"Model error for {task_id}: {error}\n"
-            f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
-            f"  Task reverted to open (not marked as failed)."
-        )
+        if reporter:
+            reporter.warning(model_err_msg)
+        else:
+            print(model_err_msg)
 
     refreshed = must_find_by_id(layout, task_id, project)
+    title = str(refreshed.metadata.get("title", ""))
     if model_err:
         refreshed.metadata["last_run_status"] = "model_error"
         update_artifact_status(layout, refreshed, "open", project)
     else:
         refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
         update_artifact_status(layout, refreshed, "completed" if ok else "failed", project)
+        if reporter:
+            if ok:
+                reporter.completed(task_id, title)
+            else:
+                reporter.failed(task_id, title, error)
 
     return run_id, ok
 
@@ -728,6 +739,7 @@ def _run_one_task_with_hooks(
     ongoing_lock: threading.Lock,
     post_hook_lock: threading.Lock,
     project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[str, bool]:
     """Run pre-hooks, executor, and finalize for a single task. Thread-safe for parallel use.
 
@@ -781,6 +793,7 @@ def _run_one_task_with_hooks(
     return _finalize_task_run(
         layout, config, p, ex_result, error, ok, ack_obj,
         post_hook_lock=post_hook_lock, before_sha=before_sha, project=project,
+        reporter=reporter,
     )
 
 
@@ -791,6 +804,7 @@ def parallel_execute(
     prepared_list: list[PreparedTaskRun],
     max_workers: int,
     project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[bool, list[tuple[str, bool]]]:
     """Dispatch up to ``max_workers`` tasks concurrently using :class:`~concurrent.futures.ThreadPoolExecutor`.
 
@@ -819,6 +833,7 @@ def parallel_execute(
                 ongoing_lock=ongoing_lock,
                 post_hook_lock=post_hook_lock,
                 project=project,
+                reporter=reporter,
             )
             futures[future] = p
 
@@ -846,6 +861,7 @@ def _run_hooked_executor_batch(
     executor: Executor,
     prepared_list: list[PreparedTaskRun],
     project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[bool, list[tuple[str, bool]]]:
     """Pre/post hooks per task; sequential execution via :meth:`~onward.executor.Executor.execute_batch`.
 
@@ -967,20 +983,30 @@ def _run_hooked_executor_batch(
         _write_ongoing(layout, ongoing, project)
 
         model_err = not ok and _is_model_error(ex_result, error)
+        model_err_msg = (
+            f"Model error for {task_id}: {error}\n"
+            f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
+            f"  Task reverted to open (not marked as failed)."
+        )
         if model_err:
-            print(
-                f"Model error for {task_id}: {error}\n"
-                f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
-                f"  Task reverted to open (not marked as failed)."
-            )
+            if reporter:
+                reporter.warning(model_err_msg)
+            else:
+                print(model_err_msg)
 
         refreshed = must_find_by_id(layout, task_id, project)
+        title = str(refreshed.metadata.get("title", ""))
         if model_err:
             refreshed.metadata["last_run_status"] = "model_error"
             update_artifact_status(layout, refreshed, "open", project)
         else:
             refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
             update_artifact_status(layout, refreshed, "completed" if ok else "failed", project)
+            if reporter:
+                if ok:
+                    reporter.completed(task_id, title)
+                else:
+                    reporter.failed(task_id, title, error)
 
         outcomes.append((run_id, ok))
         if not ok:
@@ -990,12 +1016,12 @@ def _run_hooked_executor_batch(
     return wave_ok, outcomes
 
 
-def _execute_task_run(layout: WorkspaceLayout, task: Artifact, project: str | None = None) -> tuple[bool, str]:
+def _execute_task_run(layout: WorkspaceLayout, task: Artifact, project: str | None = None, reporter: WorkReporter | None = None) -> tuple[bool, str]:
     task_id = str(task.metadata.get("id", ""))
     config = load_workspace_config(layout.workspace_root)
     executor = resolve_executor(config)
     prepared = _prepare_task_run(layout, must_find_by_id(layout, task_id, project), config, project)
-    ok, _ = _run_hooked_executor_batch(layout, config, executor, [prepared], project)
+    ok, _ = _run_hooked_executor_batch(layout, config, executor, [prepared], project, reporter=reporter)
     return ok, prepared.run_id
 
 
@@ -1040,8 +1066,12 @@ def work_task(layout: WorkspaceLayout, task: Artifact, project: str | None = Non
             "See docs/LIFECYCLE.md"
         )
 
+    title = str(fresh.metadata.get("title", ""))
     update_artifact_status(layout, fresh, "in_progress", project)
-    return _execute_task_run(layout, fresh, project)
+    if reporter:
+        reporter.status_change(tid, title, "in_progress")
+        reporter.working_on(tid, title)
+    return _execute_task_run(layout, fresh, project, reporter=reporter)
 
 
 def _open_task_ids_for_chunk(layout: WorkspaceLayout, chunk_id: str, project: str | None = None) -> list[str]:
@@ -1309,21 +1339,12 @@ def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, A
                     reporter.status_change(tid, title, "in_progress")
                 wave.append(_prepare_task_run(layout, must_find_by_id(layout, tid, project), config, project))
 
-            run_map = {p.run_id: p for p in wave}
             if max_parallel > 1 and len(wave) > 1:
-                ok, outcomes = parallel_execute(layout, config, executor, wave, max_workers=max_parallel, project=project)
+                ok, outcomes = parallel_execute(layout, config, executor, wave, max_workers=max_parallel, project=project, reporter=reporter)
             else:
-                ok, outcomes = _run_hooked_executor_batch(layout, config, executor, wave, project)
-            for run_id, task_ok in outcomes:
-                if reporter:
-                    p = run_map.get(run_id)
-                    tid = str(p.task.metadata.get("id", "")) if p else run_id
-                    title = str(p.task.metadata.get("title", "")) if p else ""
-                    if task_ok:
-                        reporter.completed(tid, title)
-                    else:
-                        reporter.failed(tid, title)
-                else:
+                ok, outcomes = _run_hooked_executor_batch(layout, config, executor, wave, project, reporter=reporter)
+            if not reporter:
+                for run_id, task_ok in outcomes:
                     print(f"Run {run_id}: {'completed' if task_ok else 'failed'}")
             if not ok:
                 if reporter:
