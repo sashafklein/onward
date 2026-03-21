@@ -5,16 +5,20 @@ plan: "PLAN-005"
 chunk: "CHUNK-012"
 project: ""
 title: "Wire WorkReporter into work_chunk and _work_chunk_loop in execution.py"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "sonnet"
 executor: "onward-exec"
-depends_on: ["TASK-037", "TASK-038"]
-files: ["src/onward/execution.py"]
+depends_on:
+- "TASK-037"
+- "TASK-038"
+files:
+- "src/onward/execution.py"
 acceptance: []
 created_at: "2026-03-21T16:26:49Z"
-updated_at: "2026-03-21T16:26:49Z"
+updated_at: "2026-03-21T19:06:19Z"
+run_count: 1
 ---
 
 # Context

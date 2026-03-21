@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T19:05:57Z"
+generated_at: "2026-03-21T19:06:19Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -17,6 +17,12 @@ completed:
   status: "completed"
   updated_at: "2026-03-21T16:20:49Z"
   path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/plan.md"
+  project: ""
+- id: "PLAN-006"
+  title: "Simple model aliases (opus, sonnet, haiku, codex)"
+  status: "completed"
+  updated_at: "2026-03-21T18:54:50Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/plan.md"
   project: ""
 - id: "CHUNK-001"
   title: "Fix doc errors and stale references"
@@ -549,6 +555,17 @@ completed:
   chunk: "CHUNK-011"
   project: ""
   depends_on: []
+  human: false
+- id: "TASK-038"
+  title: "Wire WorkReporter into cmd_work and _work_plan in cli_commands.py"
+  status: "completed"
+  updated_at: "2026-03-21T19:06:18Z"
+  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-038-wire-workreporter-into-cmd-work-and-work-plan-in-cli-commands-py.md"
+  plan: "PLAN-005"
+  chunk: "CHUNK-012"
+  project: ""
+  depends_on:
+  - "TASK-037"
   human: false
 - id: "TASK-043"
   title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"

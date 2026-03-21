@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -1172,41 +1173,55 @@ def chunk_has_nonterminal_tasks(layout: WorkspaceLayout, chunk_id: str, project:
 def work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None, reporter: WorkReporter | None = None) -> int:
     """Run all ready tasks in a chunk using :meth:`~onward.executor.Executor.execute_batch` per wave."""
     chunk_id = str(chunk.metadata.get("id", ""))
+    chunk_title = str(chunk.metadata.get("title", ""))
     if str(chunk.metadata.get("status", "")) == "completed":
         nonterminal = chunk_has_nonterminal_tasks(layout, chunk_id, project)
         if nonterminal:
-            print(
+            msg = (
                 f"Chunk {chunk_id} was marked completed but has non-terminal tasks: "
                 f"{', '.join(nonterminal)} — reopening chunk"
             )
+            if reporter:
+                reporter.warning(msg)
+            else:
+                print(msg)
             update_artifact_status(layout, must_find_by_id(layout, chunk_id, project), "in_progress", project)
         else:
             return 0
 
     preflight_err = preflight_executor_command(config)
     if preflight_err:
-        print(f"Error: {preflight_err}")
+        if reporter:
+            reporter.warning(f"Error: {preflight_err}")
+        else:
+            print(f"Error: {preflight_err}")
         return 1
 
     sequential = work_sequential_by_default(config)
     if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
         update_artifact_status(layout, chunk, "in_progress", project)
+        if reporter:
+            reporter.status_change(chunk_id, chunk_title, "in_progress")
 
     pre_chunk_ok, pre_chunk_log = run_pre_chunk_shell_hooks(layout, chunk, project)
     if not pre_chunk_ok:
-        print(f"pre_chunk_shell hook failed:\n{pre_chunk_log}")
+        msg = f"pre_chunk_shell hook failed:\n{pre_chunk_log}"
+        if reporter:
+            reporter.warning(msg)
+        else:
+            print(msg)
         return 1
 
     claimed_children = _open_task_ids_for_chunk(layout, chunk_id, project)
     claim_run_id = f"CLAIM-{run_timestamp()}-{chunk_id}"
     register_claim(layout, claim_run_id, chunk_id, "chunk", claimed_children, os.getpid(), project)
     try:
-        return _work_chunk_loop(layout, chunk_id, config, sequential, project)
+        return _work_chunk_loop(layout, chunk_id, config, sequential, project, reporter=reporter)
     finally:
         release_claim(layout, claim_run_id, project)
 
 
-def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, Any], sequential: bool, project: str | None = None) -> int:
+def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, Any], sequential: bool, project: str | None = None, reporter: WorkReporter | None = None) -> int:
     """Inner task loop for work_chunk (separated so claim try/finally is clean).
 
     When ``work.max_parallel_tasks > 1``, ready tasks are dispatched concurrently up to
@@ -1227,95 +1242,154 @@ def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, A
     dag_errors = validate_chunk_dag(all_chunk_tasks, all_statuses=all_statuses)
     if dag_errors:
         for err in dag_errors:
-            print(f"DAG error: {err}")
+            if reporter:
+                reporter.warning(f"DAG error: {err}")
+            else:
+                print(f"DAG error: {err}")
         return 1
 
     executor = resolve_executor(config)
 
-    while True:
-        ready_tasks, all_resolved = ordered_ready_chunk_tasks(layout, chunk_id, project)
-        if not ready_tasks:
-            if not all_resolved:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
-                return 1
-            break
+    indent_ctx: contextlib.AbstractContextManager[None] = reporter.indent() if reporter is not None else contextlib.nullcontext()
+    with indent_ctx:
+        while True:
+            ready_tasks, all_resolved = ordered_ready_chunk_tasks(layout, chunk_id, project)
+            if not ready_tasks:
+                if not all_resolved:
+                    if reporter:
+                        reporter.warning(f"Chunk {chunk_id} has unresolved task dependencies")
+                    else:
+                        print(f"Chunk {chunk_id} has unresolved task dependencies")
+                    return 1
+                break
 
-        eligible: list[Artifact] = []
-        for candidate in ready_tasks:
-            tid = str(candidate.metadata.get("id", ""))
-            fresh = must_find_by_id(layout, tid, project)
-            run_count = int(fresh.metadata.get("run_count", 0))
-            max_r = work_max_retries(config)
-            if max_r > 0 and run_count >= max_r:
-                print(
-                    f"Warning: {tid} has reached run_count={run_count} "
-                    f"(work.max_retries={max_r}); skipping. See docs/LIFECYCLE.md"
+            eligible: list[Artifact] = []
+            for candidate in ready_tasks:
+                tid = str(candidate.metadata.get("id", ""))
+                fresh = must_find_by_id(layout, tid, project)
+                run_count = int(fresh.metadata.get("run_count", 0))
+                max_r = work_max_retries(config)
+                if max_r > 0 and run_count >= max_r:
+                    if reporter:
+                        reporter.skipped(
+                            tid,
+                            str(fresh.metadata.get("title", "")),
+                            f"hit work.max_retries={max_r} (run_count={run_count}). See docs/LIFECYCLE.md",
+                        )
+                    else:
+                        print(
+                            f"Warning: {tid} has reached run_count={run_count} "
+                            f"(work.max_retries={max_r}); skipping. See docs/LIFECYCLE.md"
+                        )
+                    continue
+                eligible.append(fresh)
+
+            if not eligible:
+                msg = (
+                    f"Chunk {chunk_id}: no task could run (all ready tasks hit work.max_retries). "
+                    "Use onward retry on a task or adjust work.max_retries. See docs/LIFECYCLE.md"
                 )
-                continue
-            eligible.append(fresh)
-
-        if not eligible:
-            print(
-                f"Chunk {chunk_id}: no task could run (all ready tasks hit work.max_retries). "
-                "Use onward retry on a task or adjust work.max_retries. See docs/LIFECYCLE.md"
-            )
-            return 1
-
-        if not sequential and max_parallel == 1:
-            eligible = eligible[:1]
-        else:
-            eligible = eligible[:max_parallel]
-
-        wave: list[PreparedTaskRun] = []
-        for fresh in eligible:
-            tid = str(fresh.metadata.get("id", ""))
-            update_artifact_status(layout, fresh, "in_progress", project)
-            wave.append(_prepare_task_run(layout, must_find_by_id(layout, tid, project), config, project))
-
-        if max_parallel > 1 and len(wave) > 1:
-            ok, outcomes = parallel_execute(layout, config, executor, wave, max_workers=max_parallel, project=project)
-        else:
-            ok, outcomes = _run_hooked_executor_batch(layout, config, executor, wave, project)
-        for run_id, task_ok in outcomes:
-            print(f"Run {run_id}: {'completed' if task_ok else 'failed'}")
-        if not ok:
-            print(f"Stopping chunk work for {chunk_id} after task failure")
-            print(
-                f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
-                f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
-            )
-            return 1
-
-        if not sequential and max_parallel == 1:
-            ready_again, all_resolved_again = ordered_ready_chunk_tasks(layout, chunk_id, project)
-            if ready_again:
-                print(
-                    f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
-                    "run onward work again to continue."
-                )
-                return 0
-            if not all_resolved_again:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
+                if reporter:
+                    reporter.warning(msg)
+                else:
+                    print(msg)
                 return 1
+
+            if not sequential and max_parallel == 1:
+                eligible = eligible[:1]
+            else:
+                eligible = eligible[:max_parallel]
+
+            wave: list[PreparedTaskRun] = []
+            for fresh in eligible:
+                tid = str(fresh.metadata.get("id", ""))
+                title = str(fresh.metadata.get("title", ""))
+                update_artifact_status(layout, fresh, "in_progress", project)
+                if reporter:
+                    reporter.status_change(tid, title, "in_progress")
+                wave.append(_prepare_task_run(layout, must_find_by_id(layout, tid, project), config, project))
+
+            run_map = {p.run_id: p for p in wave}
+            if max_parallel > 1 and len(wave) > 1:
+                ok, outcomes = parallel_execute(layout, config, executor, wave, max_workers=max_parallel, project=project)
+            else:
+                ok, outcomes = _run_hooked_executor_batch(layout, config, executor, wave, project)
+            for run_id, task_ok in outcomes:
+                if reporter:
+                    p = run_map.get(run_id)
+                    tid = str(p.task.metadata.get("id", "")) if p else run_id
+                    title = str(p.task.metadata.get("title", "")) if p else ""
+                    if task_ok:
+                        reporter.completed(tid, title)
+                    else:
+                        reporter.failed(tid, title)
+                else:
+                    print(f"Run {run_id}: {'completed' if task_ok else 'failed'}")
+            if not ok:
+                if reporter:
+                    reporter.warning(f"Stopping chunk work for {chunk_id} after task failure")
+                    reporter.warning(
+                        f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
+                        f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
+                    )
+                else:
+                    print(f"Stopping chunk work for {chunk_id} after task failure")
+                    print(
+                        f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
+                        f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
+                    )
+                return 1
+
+            if not sequential and max_parallel == 1:
+                ready_again, all_resolved_again = ordered_ready_chunk_tasks(layout, chunk_id, project)
+                if ready_again:
+                    msg = (
+                        f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
+                        "run onward work again to continue."
+                    )
+                    if reporter:
+                        reporter.info(msg)
+                    else:
+                        print(msg)
+                    return 0
+                if not all_resolved_again:
+                    if reporter:
+                        reporter.warning(f"Chunk {chunk_id} has unresolved task dependencies")
+                    else:
+                        print(f"Chunk {chunk_id} has unresolved task dependencies")
+                    return 1
 
     nonterminal = chunk_has_nonterminal_tasks(layout, chunk_id, project)
     if nonterminal:
-        print(
-            f"Chunk {chunk_id} still has non-terminal tasks: {', '.join(nonterminal)}"
-        )
+        msg = f"Chunk {chunk_id} still has non-terminal tasks: {', '.join(nonterminal)}"
+        if reporter:
+            reporter.warning(msg)
+        else:
+            print(msg)
         return 1
 
     refreshed_chunk = must_find_by_id(layout, chunk_id, project)
+    chunk_title = str(refreshed_chunk.metadata.get("title", ""))
     if str(refreshed_chunk.metadata.get("status", "")) == "completed":
-        print(f"Chunk {chunk_id} completed")
+        if reporter:
+            reporter.completed(chunk_id, chunk_title)
+        else:
+            print(f"Chunk {chunk_id} completed")
         return 0
     hook_ok, hook_error = run_chunk_post_markdown_hook(layout, refreshed_chunk, project)
     if not hook_ok:
-        print(f"Chunk {chunk_id} post hook failed: {hook_error}")
+        msg = f"Chunk {chunk_id} post hook failed: {hook_error}"
+        if reporter:
+            reporter.warning(msg)
+        else:
+            print(f"Chunk {chunk_id} post hook failed: {hook_error}")
         return 1
     if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
         update_artifact_status(layout, refreshed_chunk, "completed", project)
-    print(f"Chunk {chunk_id} completed")
+    if reporter:
+        reporter.completed(chunk_id, chunk_title)
+    else:
+        print(f"Chunk {chunk_id} completed")
     return 0
 
 

@@ -5,7 +5,7 @@ plan: "PLAN-005"
 chunk: "CHUNK-012"
 project: ""
 title: "Wire WorkReporter into cmd_work and _work_plan in cli_commands.py"
-status: "in_progress"
+status: "completed"
 description: ""
 human: false
 model: "sonnet"
@@ -16,8 +16,9 @@ files:
 - "src/onward/cli_commands.py"
 acceptance: []
 created_at: "2026-03-21T16:26:45Z"
-updated_at: "2026-03-21T19:03:50Z"
+updated_at: "2026-03-21T19:06:18Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
