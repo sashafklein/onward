@@ -1089,11 +1089,30 @@ def run_pre_chunk_shell_hooks(root: Path, chunk: Artifact) -> tuple[bool, str]:
     return _run_shell_hooks(root, commands, "pre_chunk_shell", env)
 
 
+def chunk_has_nonterminal_tasks(root: Path, chunk_id: str) -> list[str]:
+    """Return IDs of tasks in ``chunk_id`` that are NOT completed or canceled."""
+    return [
+        str(a.metadata.get("id", ""))
+        for a in collect_artifacts(root)
+        if str(a.metadata.get("type", "")) == "task"
+        and str(a.metadata.get("chunk", "")) == chunk_id
+        and str(a.metadata.get("status", "")) not in {"completed", "canceled"}
+    ]
+
+
 def work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
     """Run all ready tasks in a chunk using :meth:`~onward.executor.Executor.execute_batch` per wave."""
     chunk_id = str(chunk.metadata.get("id", ""))
     if str(chunk.metadata.get("status", "")) == "completed":
-        return 0
+        nonterminal = chunk_has_nonterminal_tasks(root, chunk_id)
+        if nonterminal:
+            print(
+                f"Chunk {chunk_id} was marked completed but has non-terminal tasks: "
+                f"{', '.join(nonterminal)} — reopening chunk"
+            )
+            update_artifact_status(root, must_find_by_id(root, chunk_id), "in_progress")
+        else:
+            return 0
 
     preflight_err = preflight_executor_command(config)
     if preflight_err:
@@ -1209,6 +1228,13 @@ def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequenti
             if not all_resolved_again:
                 print(f"Chunk {chunk_id} has unresolved task dependencies")
                 return 1
+
+    nonterminal = chunk_has_nonterminal_tasks(root, chunk_id)
+    if nonterminal:
+        print(
+            f"Chunk {chunk_id} still has non-terminal tasks: {', '.join(nonterminal)}"
+        )
+        return 1
 
     refreshed_chunk = must_find_by_id(root, chunk_id)
     if str(refreshed_chunk.metadata.get("status", "")) == "completed":

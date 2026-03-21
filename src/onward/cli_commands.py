@@ -55,6 +55,7 @@ from onward.config import (
 )
 from onward.preflight import preflight_shell_invocation
 from onward.execution import (
+    chunk_has_nonterminal_tasks,
     register_claim,
     release_claim,
     claimed_task_ids,
@@ -123,7 +124,6 @@ def cmd_init(args: argparse.Namespace) -> int:
     config_path = root / ".onward.config.yaml"
     config = {}
     if config_path.exists():
-        from onward.util import parse_simple_yaml
         raw = parse_simple_yaml(config_path.read_text(encoding="utf-8"))
         if isinstance(raw, dict):
             config = raw
@@ -167,10 +167,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         if update_gitignore(root, artifact_root=artifact_root_str):
             gitignore_updated = True
 
-    # Regenerate indexes for each artifact root
-    for project_key in layout.all_project_keys():
-        artifact_root = layout.artifact_root(project_key)
-        regenerate_indexes(root, artifact_root=artifact_root.relative_to(root))
+    # Note: regenerate_indexes() is not called here because it still uses hardcoded .onward paths
+    # and hasn't been updated for multi-root support yet (CHUNK-005). The index files are already
+    # created with default empty content by default_files(), which is sufficient for initialization.
 
     print(f"Initialized Onward workspace in {root}")
     if artifact_roots_scaffolded:
@@ -1036,6 +1035,18 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
     if st in {"open", "in_progress"}:
         update_artifact_status(root, plan, "in_progress")
 
+    for c in chunks:
+        cid = str(c.metadata.get("id", ""))
+        if str(c.metadata.get("status", "")) == "completed":
+            bad = chunk_has_nonterminal_tasks(root, cid)
+            if bad:
+                print(
+                    f"Chunk {cid} was marked completed but has non-terminal tasks: "
+                    f"{', '.join(bad)} — reopening chunk"
+                )
+                update_artifact_status(root, must_find_by_id(root, cid), "in_progress")
+
+    chunks = _plan_chunks(root, plan_id)
     pending = [
         str(c.metadata.get("id", ""))
         for c in chunks
