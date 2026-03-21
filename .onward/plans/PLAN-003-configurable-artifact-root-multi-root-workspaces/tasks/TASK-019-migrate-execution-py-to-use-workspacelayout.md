@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-005"
 project: ""
 title: "Migrate execution.py to use WorkspaceLayout"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "l"
-depends_on: ["TASK-012"]
+depends_on:
+- "TASK-012"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:29Z"
-updated_at: "2026-03-21T15:49:29Z"
+updated_at: "2026-03-21T17:09:01Z"
+run_count: 1
 ---
 
 # Context

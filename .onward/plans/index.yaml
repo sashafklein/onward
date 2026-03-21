@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T17:03:09Z"
-index_version: 159
+generated_at: "2026-03-21T17:09:01Z"
+index_version: 162
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -339,8 +339,8 @@ tasks:
   effort: "s"
 - id: "TASK-018"
   title: "Migrate artifacts.py to use WorkspaceLayout"
-  status: "in_progress"
-  updated_at: "2026-03-21T17:03:09Z"
+  status: "completed"
+  updated_at: "2026-03-21T17:09:00Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-018-migrate-artifacts-py-to-use-workspacelayout.md"
   plan: "PLAN-003"
   chunk: "CHUNK-005"
@@ -351,8 +351,8 @@ tasks:
   effort: "l"
 - id: "TASK-019"
   title: "Migrate execution.py to use WorkspaceLayout"
-  status: "open"
-  updated_at: "2026-03-21T15:49:29Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T17:09:01Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-019-migrate-execution-py-to-use-workspacelayout.md"
   plan: "PLAN-003"
   chunk: "CHUNK-005"
