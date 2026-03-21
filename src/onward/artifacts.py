@@ -545,7 +545,27 @@ def _read_index_version(layout: WorkspaceLayout, project: str | None = None) -> 
 
 
 def load_index(layout: WorkspaceLayout, project: str | None = None) -> dict[str, Any] | None:
-    """Load index.yaml for a project, or None if not found."""
+    """Load index.yaml for a project, or None if not found.
+
+    In multi-root mode with project=None, loads and merges indexes from all project roots.
+    """
+    # Multi-root mode with project=None: merge all project indexes
+    if layout.is_multi_root and project is None:
+        merged: dict[str, Any] = {"plans": [], "chunks": [], "tasks": []}
+        for proj_key in layout.all_project_keys():
+            if proj_key is None:
+                continue
+            proj_index = load_index(layout, proj_key)
+            if proj_index and isinstance(proj_index, dict):
+                for kind in ("plans", "chunks", "tasks"):
+                    if kind in proj_index and isinstance(proj_index[kind], list):
+                        merged[kind].extend(proj_index[kind])
+        # Return None if no data was collected
+        if not any(merged.get(k) for k in ("plans", "chunks", "tasks")):
+            return None
+        return merged
+
+    # Single-root or specific project
     index_path = layout.index_path(project)
     if not index_path.exists():
         return None
@@ -557,7 +577,20 @@ def load_index(layout: WorkspaceLayout, project: str | None = None) -> dict[str,
 
 
 def index_is_fresh(layout: WorkspaceLayout, index: dict[str, Any] | None = None, project: str | None = None) -> bool:
-    """True when ``index.yaml`` is at least as new as every plan artifact file."""
+    """True when ``index.yaml`` is at least as new as every plan artifact file.
+
+    In multi-root mode with project=None, all project indexes must be fresh.
+    """
+    # Multi-root mode with project=None: all project indexes must be fresh
+    if layout.is_multi_root and project is None:
+        for proj_key in layout.all_project_keys():
+            if proj_key is None:
+                continue
+            if not index_is_fresh(layout, None, proj_key):
+                return False
+        return True
+
+    # Single-root or specific project
     index_path = layout.index_path(project)
     if not index_path.exists():
         return False

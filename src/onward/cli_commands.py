@@ -1581,9 +1581,17 @@ def cmd_next(args: argparse.Namespace) -> int:
         claimed_ids=active_claimed,
     )
     if chosen:
-        print(
-            f"{chosen.metadata.get('id')}\t{chosen.metadata.get('type')}\t{chosen.metadata.get('status')}\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
-        )
+        # In multi-root mode with project=None, include project name in output
+        by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
+        artifact_project = resolve_project(chosen, by_id)
+        if layout.is_multi_root and project is None and artifact_project:
+            print(
+                f"[{artifact_project}] {chosen.metadata.get('id')}\t{chosen.metadata.get('type')}\t{chosen.metadata.get('status')}\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
+            )
+        else:
+            print(
+                f"{chosen.metadata.get('id')}\t{chosen.metadata.get('type')}\t{chosen.metadata.get('status')}\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
+            )
         return 0
 
     print("No next artifact found")
@@ -1820,12 +1828,121 @@ def format_report_markdown(
     return "\n".join(lines)
 
 
+def _cmd_report_multi_project(
+    args: argparse.Namespace,
+    root: Path,
+    config: dict[str, Any],
+    layout: WorkspaceLayout,
+    color_enabled: bool,
+) -> int:
+    """Generate combined multi-project report when in multi-root mode with project=None."""
+    print(colorize("== Onward Multi-Project Report ==", "bold", color_enabled))
+    print()
+
+    # Load all artifacts from all roots
+    artifacts = artifacts_from_index_or_collect(layout, None)
+    blockers = blocking_ids(artifacts)
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
+
+    # Get all project keys
+    project_keys = [k for k in layout.all_project_keys() if k is not None]
+    if not project_keys:
+        print("No projects configured.")
+        return 0
+
+    # Overall summary
+    print(colorize("[Overall Summary]", "cyan", color_enabled))
+    total_effort = summarize_effort_remaining(artifacts)
+    print(
+        "  "
+        + "  ".join(
+            f"{k}: {total_effort[k]}"
+            for k in ("xs", "s", "m", "l", "xl", "unestimated")
+        )
+    )
+    print()
+
+    # Per-project reports
+    for proj_key in sorted(project_keys):
+        print(colorize(f"== Project: {proj_key} ==", "bold", color_enabled))
+        print()
+
+        # Filter artifacts for this project
+        proj_artifacts = [a for a in artifacts if resolve_project(a, by_id) == proj_key]
+        proj_claimed = claimed_task_ids(layout, proj_key)
+
+        # Effort remaining
+        print(colorize("[Effort remaining]", "cyan", color_enabled))
+        eff_counts = summarize_effort_remaining(proj_artifacts)
+        print(
+            "  "
+            + "  ".join(
+                f"{k}: {eff_counts[k]}"
+                for k in ("xs", "s", "m", "l", "xl", "unestimated")
+            )
+        )
+        print()
+
+        # In Progress
+        print(colorize("[In Progress]", "cyan", color_enabled))
+        in_progress = report_rows(proj_artifacts, layout, status="in_progress", project=proj_key, claimed_ids=proj_claimed)
+        if in_progress:
+            for row in in_progress:
+                parts = row.split("\t")
+                parts[2] = colorize(parts[2], status_color(parts[2]), color_enabled)
+                print("\t".join(parts))
+        else:
+            print("none")
+        print()
+
+        # Upcoming
+        print(colorize("[Upcoming (top 5)]", "cyan", color_enabled))
+        upcoming = report_rows(proj_artifacts, layout, status="open", project=proj_key, claimed_ids=proj_claimed)
+        if upcoming:
+            for row in upcoming[:5]:  # Show top 5 for combined view
+                parts = row.split("\t")
+                parts[2] = colorize(parts[2], status_color(parts[2]), color_enabled)
+                print("\t".join(parts))
+            if len(upcoming) > 5:
+                print(f"  ... and {len(upcoming) - 5} more")
+        else:
+            print("none")
+        print()
+
+        # Next
+        print(colorize("[Next]", "cyan", color_enabled))
+        nxt = select_next_artifact(proj_artifacts, project=proj_key, claimed_ids=proj_claimed)
+        if nxt:
+            status = str(nxt.metadata.get("status", ""))
+            print(
+                "\t".join(
+                    [
+                        str(nxt.metadata.get("id", "")),
+                        str(nxt.metadata.get("type", "")),
+                        colorize(status, status_color(status), color_enabled),
+                        str(nxt.metadata.get("title", "")),
+                        str(nxt.file_path.relative_to(root)),
+                    ]
+                )
+            )
+        else:
+            print("none")
+        print()
+
+    return 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
     color_enabled = not args.no_color
     project = require_project_or_default(args, layout, enforce=False)
+
+    # Multi-root mode with project=None: show combined multi-project report
+    if layout.is_multi_root and project is None:
+        return _cmd_report_multi_project(args, root, config, layout, color_enabled)
+
     _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
     for w in warnings:
         print(w)

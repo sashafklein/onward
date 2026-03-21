@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-006"
 project: ""
 title: "Add require_project_or_default helper and wire into all commands"
-status: "in_progress"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -16,8 +16,9 @@ depends_on:
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:38Z"
-updated_at: "2026-03-21T17:37:31Z"
+updated_at: "2026-03-21T17:51:51Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context

@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-006"
 project: ""
 title: "Implement combined multi-project report"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "m"
-depends_on: ["TASK-023"]
+depends_on:
+- "TASK-023"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:39Z"
-updated_at: "2026-03-21T15:49:39Z"
+updated_at: "2026-03-21T19:30:00Z"
+run_count: 1
 ---
 
 # Context
