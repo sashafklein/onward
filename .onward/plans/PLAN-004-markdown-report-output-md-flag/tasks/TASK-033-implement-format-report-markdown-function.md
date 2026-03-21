@@ -22,8 +22,9 @@ acceptance:
 - "Tables have proper header and separator rows"
 - "Active work tree renders as fenced code block"
 created_at: "2026-03-21T15:50:09Z"
-updated_at: "2026-03-21T16:17:01Z"
+updated_at: "2026-03-21T16:17:25Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context

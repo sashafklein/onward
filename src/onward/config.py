@@ -10,9 +10,200 @@ if TYPE_CHECKING:
 
 from onward.util import clean_string, normalize_bool, parse_simple_yaml
 
+
+@dataclass(frozen=True)
+class WorkspaceLayout:
+    """Encapsulates artifact directory path resolution for single-root and multi-root workspaces.
+
+    The `roots` dict maps project keys to their artifact root paths:
+    - Single-root mode (default or `root: nb`): `{None: Path(".onward")}` or `{None: Path("nb")}`
+    - Multi-root mode (`roots: {a: .a, b: .b}`): `{"a": Path(".a"), "b": Path(".b")}`
+
+    All path resolution methods accept an optional `project` parameter. In single-root mode,
+    `project` is ignored (always resolves to the single root). In multi-root mode without a
+    `default_project`, `project` must be provided or a ValueError is raised.
+    """
+
+    workspace_root: Path
+    roots: dict[str | None, Path]  # project key -> absolute artifact root
+    default_project: str | None
+
+    @classmethod
+    def from_config(cls, root: Path, config: dict[str, Any]) -> "WorkspaceLayout":
+        """Create a WorkspaceLayout from workspace root and parsed config.
+
+        Args:
+            root: Absolute path to the workspace root (where .onward.config.yaml lives)
+            config: Parsed config dict (may be empty)
+
+        Returns:
+            WorkspaceLayout instance with resolved artifact root paths
+
+        Config keys processed:
+            - `root` (str): Single custom artifact root (mutually exclusive with `roots`)
+            - `roots` (dict): Multi-project artifact roots `{project_key: path, ...}`
+            - `default_project` (str): Default project key when `roots` is set
+
+        When neither `root` nor `roots` is set, defaults to `.onward/` (backward compatible).
+        """
+        if not isinstance(config, dict):
+            config = {}
+
+        config_root = config.get("root")
+        config_roots = config.get("roots")
+        default_project = config.get("default_project")
+
+        # Normalize default_project
+        if default_project is not None:
+            default_project = str(default_project).strip() or None
+
+        # Case 1: Multi-root mode (roots dict provided)
+        if config_roots is not None:
+            if not isinstance(config_roots, dict):
+                # Invalid, but we'll just fall back to default
+                roots_map = {None: root / ".onward"}
+                default_project = None
+            else:
+                roots_map = {}
+                for key, path_str in config_roots.items():
+                    key_str = str(key).strip()
+                    if not key_str or not path_str:
+                        continue
+                    path = Path(path_str)
+                    if not path.is_absolute():
+                        path = root / path
+                    roots_map[key_str] = path.resolve()
+
+                # If roots is empty after parsing, fall back to default
+                if not roots_map:
+                    roots_map = {None: root / ".onward"}
+                    default_project = None
+
+            return cls(
+                workspace_root=root,
+                roots=roots_map,
+                default_project=default_project,
+            )
+
+        # Case 2: Single custom root (root key provided)
+        if config_root is not None:
+            root_str = str(config_root).strip()
+            if root_str:
+                custom_path = Path(root_str)
+                if not custom_path.is_absolute():
+                    custom_path = root / custom_path
+                return cls(
+                    workspace_root=root,
+                    roots={None: custom_path.resolve()},
+                    default_project=None,
+                )
+
+        # Case 3: Default (no root or roots configured)
+        return cls(
+            workspace_root=root,
+            roots={None: root / ".onward"},
+            default_project=None,
+        )
+
+    @property
+    def is_multi_root(self) -> bool:
+        """True if multiple project roots are configured (len(roots) > 1)."""
+        # If we have any non-None key, we're in multi-root mode
+        return any(k is not None for k in self.roots.keys())
+
+    def all_project_keys(self) -> list[str | None]:
+        """Return all configured project keys (or [None] in single-root mode)."""
+        return list(self.roots.keys())
+
+    def artifact_root(self, project: str | None = None) -> Path:
+        """Resolve the artifact root directory for a project.
+
+        Args:
+            project: Project key (required in multi-root mode without default_project)
+
+        Returns:
+            Absolute path to the artifact root directory
+
+        Raises:
+            ValueError: If project is required but not provided
+        """
+        # Single-root mode: always use the single root
+        if not self.is_multi_root:
+            return self.roots[None]
+
+        # Multi-root mode: resolve project
+        if project is None:
+            if self.default_project is not None:
+                project = self.default_project
+            else:
+                available = [k for k in self.roots.keys() if k is not None]
+                raise ValueError(
+                    f"Multiple projects configured. Use --project <name> (available: {', '.join(available)})"
+                )
+
+        if project not in self.roots:
+            available = [k for k in self.roots.keys() if k is not None]
+            raise ValueError(
+                f"Unknown project {project!r}. Available projects: {', '.join(available)}"
+            )
+
+        return self.roots[project]
+
+    def plans_dir(self, project: str | None = None) -> Path:
+        """Resolve the plans directory for a project."""
+        return self.artifact_root(project) / "plans"
+
+    def runs_dir(self, project: str | None = None) -> Path:
+        """Resolve the runs directory for a project."""
+        return self.artifact_root(project) / "runs"
+
+    def reviews_dir(self, project: str | None = None) -> Path:
+        """Resolve the reviews directory for a project."""
+        return self.artifact_root(project) / "reviews"
+
+    def templates_dir(self, project: str | None = None) -> Path:
+        """Resolve the templates directory for a project."""
+        return self.artifact_root(project) / "templates"
+
+    def prompts_dir(self, project: str | None = None) -> Path:
+        """Resolve the prompts directory for a project."""
+        return self.artifact_root(project) / "prompts"
+
+    def hooks_dir(self, project: str | None = None) -> Path:
+        """Resolve the hooks directory for a project."""
+        return self.artifact_root(project) / "hooks"
+
+    def notes_dir(self, project: str | None = None) -> Path:
+        """Resolve the notes directory for a project."""
+        return self.artifact_root(project) / "notes"
+
+    def sync_dir(self, project: str | None = None) -> Path:
+        """Resolve the sync directory for a project."""
+        return self.artifact_root(project) / "sync"
+
+    def ongoing_path(self, project: str | None = None) -> Path:
+        """Resolve the ongoing.json path for a project."""
+        return self.artifact_root(project) / "ongoing.json"
+
+    def index_path(self, project: str | None = None) -> Path:
+        """Resolve the index.yaml path for a project."""
+        return self.artifact_root(project) / "plans" / "index.yaml"
+
+    def recent_path(self, project: str | None = None) -> Path:
+        """Resolve the recent.yaml path for a project."""
+        return self.artifact_root(project) / "plans" / "recent.yaml"
+
+    def archive_dir(self, project: str | None = None) -> Path:
+        """Resolve the archive directory for a project."""
+        return self.artifact_root(project) / "plans" / ".archive"
+
+
 # Declared keys for `.onward.config.yaml` (unknown keys fail `onward doctor`).
 # ``ralph`` is accepted for backward compatibility; prefer ``executor``.
-CONFIG_TOP_LEVEL_KEYS = frozenset({"version", "sync", "executor", "ralph", "models", "review", "work", "hooks"})
+CONFIG_TOP_LEVEL_KEYS = frozenset({
+    "version", "sync", "executor", "ralph", "models", "review", "work", "hooks",
+    "root", "roots", "default_project"
+})
 
 _EXECUTOR_SECTION_KEYS = frozenset({"command", "args", "enabled"})
 
@@ -234,10 +425,30 @@ def validate_config_contract_issues(config: dict[str, Any]) -> list[str]:
     if not isinstance(config, dict):
         return ["workspace config root must be a mapping"]
 
+    # Validate root/roots mutual exclusivity
+    has_root = "root" in config and config.get("root") is not None
+    has_roots = "roots" in config and config.get("roots") is not None
+    if has_root and has_roots:
+        issues.append("config keys 'root' and 'roots' are mutually exclusive (use one or the other)")
+
+    # Validate default_project when roots is set
+    if has_roots:
+        roots = config.get("roots")
+        if isinstance(roots, dict):
+            default_proj = config.get("default_project")
+            if default_proj is not None:
+                default_proj_str = str(default_proj).strip()
+                if default_proj_str and default_proj_str not in roots:
+                    available = ", ".join(str(k) for k in roots.keys())
+                    issues.append(
+                        f"config.default_project {default_proj_str!r} does not match any key in roots "
+                        f"(available: {available})"
+                    )
+
     for key in config:
         if key == "path":
             issues.append(
-                "unsupported config key 'path' (removed; artifacts always live under .onward/ at the workspace root)"
+                "unsupported config key 'path' (removed; use 'root' or 'roots' to configure artifact directories)"
             )
         elif key not in CONFIG_TOP_LEVEL_KEYS:
             issues.append(f"unsupported config key {key!r}")
