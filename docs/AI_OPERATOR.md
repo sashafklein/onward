@@ -34,7 +34,7 @@ Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in depende
 
 ## Project flags and metadata
 
-- **`--project <key>`** on `list`, `report`, `next`, `tree`, etc. scopes views to one project stream. Use a stable key your team agrees on. **`onward tree`** (and the report’s **Active work tree** section) list **open** plans, **open / in_progress** chunks, and tasks in **open**, **in_progress**, or **failed** — not completed or canceled leaves.
+- **`--project <key>`** on `list`, `report`, `next`, `tree`, etc. scopes views to one project stream. Use a stable key your team agrees on. **When `roots` is configured** (multi-root workspace), `--project` is **required** for artifact commands (unless `default_project` is set in config). **`onward tree`** (and the report’s **Active work tree** section) list **open** plans, **open / in_progress** chunks, and tasks in **open**, **in_progress**, or **failed** — not completed or canceled leaves.
 - **`--blocking`** — tasks/chunks that block others (good for “what stops the train?”).
 - **`--human`** — work that needs a human decision; agents should not silently steamroll these.
 
@@ -49,7 +49,7 @@ When you discover new work during a run, **create a new task** (with `depends_on
 
 ## Sync (optional)
 
-If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you can mirror `.onward/plans/` to another checkout with **`onward sync status`**, **`onward sync push`**, **`onward sync pull`**. Default **`local`** mode has no remote target — **`onward sync status`** still succeeds (exit 0); **`onward sync push`** / **`pull`** exit **1** with a hint (not a silent no-op). Full semantics: [README.md](../README.md) (sync section) and [INSTALLATION.md](../INSTALLATION.md).
+If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you can mirror your plans directory to another checkout with **`onward sync status`**, **`onward sync push`**, **`onward sync pull`**. Default **`local`** mode has no remote target — **`onward sync status`** still succeeds (exit 0); **`onward sync push`** / **`pull`** exit **1** with a hint (not a silent no-op). Full semantics: [README.md](../README.md) (sync section) and [INSTALLATION.md](../INSTALLATION.md).
 
 ---
 
@@ -57,9 +57,9 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ### 1. Planning and todos only in chat
 
-**Symptom:** No files under `.onward/plans/`, or plans exist but status never updates.
+**Symptom:** No artifact files in the configured root (default `.onward/`, may be customized), or plans exist but status never updates.
 
-**Recovery:** Run **`onward init`** / **`onward doctor`**. Create or update artifacts with **`onward new plan`**, **`onward new chunk`**, **`onward new task`**. Paste the repo’s **AGENTS.md** / install instructions so the agent must use Onward as the sole plan store.
+**Recovery:** Run **`onward init`** / **`onward doctor`**. Create or update artifacts with **`onward new plan`**, **`onward new chunk`**, **`onward new task`**. Paste the repo’s **AGENTS.md** / install instructions so the agent must use Onward as the sole plan store. Check `.onward.config.yaml` for the configured `root` or `roots` to see where artifacts should live.
 
 ---
 
@@ -107,7 +107,7 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 **Symptom:** Next session or agent has no snapshot of status or recent runs.
 
-**Recovery:** Run **`onward report`** (and commit `.onward/plans/` if your team tracks plans in git). Make **`report`** the last step in your operating loop.
+**Recovery:** Run **`onward report`** (and commit your plans directory if your team tracks plans in git). Make **`report`** the last step in your operating loop.
 
 ---
 

@@ -12,7 +12,7 @@ Onward itself. We eat our own cooking.
 ### The Rule
 
 Every piece of work — from initial planning through final completion — is tracked as an
-Onward artifact. No exceptions. If it's not in `.onward/plans/`, it doesn't exist.
+Onward artifact. No exceptions. If it's not in the configured artifact root (check `.onward.config.yaml` for `root` or `roots`), it doesn't exist.
 
 ### The Loop
 
@@ -68,8 +68,9 @@ When the user describes a new initiative, feature, or project:
 - The package is `onward-cli`, installed via `pip install -e .`
 - Entry point: `onward` command (maps to `onward.cli:main`)
 - Python 3.11+ required
-- Templates, hooks, and prompts live in `.onward/templates/`, `.onward/hooks/`, `.onward/prompts/`
+- **Artifact root:** Default is `.onward/` but configurable via `root` or `roots` in `.onward.config.yaml`. Templates, hooks, and prompts resolve from the configured root(s).
+- Multi-root workspaces: When `roots` is set, use `--project <key>` on artifact commands to specify which project root to use.
 - Contributor guide: `docs/CONTRIBUTION.md`
 - Recovery from failed runs: **[docs/RECOVERY.md](docs/RECOVERY.md)**
-- Planning / roadmap: `.onward/plans/` (run `onward report` for current work)
+- Planning / roadmap: Check the configured artifact root (run `onward report` for current work)
 - Deferred ideas (not tracked as artifacts): **[docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md)** — park follow-ups there instead of chat

@@ -22,7 +22,7 @@ Plan  →  Chunk  →  Task
 - A **Chunk** is a bounded deliverable within a plan. One PR-sized piece. _"Backend token flow."_
 - A **Task** is the smallest executable unit. One clear job. _"Add session table migration."_
 
-Everything is a markdown file with YAML frontmatter. Everything lives in `.onward/plans/`. Everything is versioned in git. The source of truth is always the filesystem.
+Everything is a markdown file with YAML frontmatter. Everything lives in the artifact root (by default `.onward/`, configurable via `root` or `roots` in `.onward.config.yaml`). Everything is versioned in git. The source of truth is always the filesystem.
 
 ## What This Is Not
 
@@ -117,7 +117,7 @@ In **`onward tree`** and the **[Active work tree]** section of **`onward report`
 
 ### Syncing plan files (optional)
 
-Use this when you want a **second git checkout** (same repo, different branch, or another clone) to hold a copy of `.onward/plans/` that you can push to a remote—handy for sharing plan state across machines or with a separate “planner” repo.
+Use this when you want a **second git checkout** (same repo, different branch, or another clone) to hold a copy of your plans directory that you can push to a remote—handy for sharing plan state across machines or with a separate “planner” repo.
 
 Configure `sync` in `.onward.config.yaml`:
 
@@ -127,12 +127,12 @@ Configure `sync` in `.onward.config.yaml`:
 | `branch` | Creates or uses a [git worktree](https://git-scm.com/docs/git-worktree) at `sync.worktree_path` on `sync.branch` inside the **same** repository. Requires a `.git` directory at the workspace root. |
 | `repo` | `git clone` of `sync.repo` (URL or path) into `sync.worktree_path`. |
 
-The sync checkout path defaults to **`.onward/sync/`**; it is **gitignored** by `onward init` so nested checkouts do not dirty your main tree.
+The sync checkout path defaults to **`<artifact-root>/sync/`** (e.g., `.onward/sync/`); it is **gitignored** by `onward init` so nested checkouts do not dirty your main tree.
 
 What gets synchronized:
 
-- The **entire** `.onward/plans/` tree (plan folders, `index.yaml`, `recent.yaml`, `.archive/`, etc.) is **mirrored** file-by-file: extra files on the destination side are removed so the tree matches the source.
-- **`onward sync push`** — copy workspace → sync checkout → `git add` under `.onward/plans` → commit if needed → `git push -u origin HEAD`. Needs a configured **`origin`** on that checkout and a remote that accepts the push (e.g. **bare** remote, or a branch that is not the remote’s checked-out branch).
+- The **entire** plans tree (plan folders, `index.yaml`, `recent.yaml`, `.archive/`, etc.) is **mirrored** file-by-file: extra files on the destination side are removed so the tree matches the source.
+- **`onward sync push`** — copy workspace → sync checkout → `git add` under plans directory → commit if needed → `git push -u origin HEAD`. Needs a configured **`origin`** on that checkout and a remote that accepts the push (e.g. **bare** remote, or a branch that is not the remote’s checked-out branch).
 - **`onward sync pull`** — `git pull --ff-only` in the sync checkout, then copy remote plans → workspace and **regenerate indexes**. If the remote has diverged, fix it in the sync checkout and retry.
 - **`onward sync status`** — Compares local vs remote plan files (content hashes). Does **not** create the worktree or clone until you have run **`onward sync push`** at least once; until then it reports that the sync target is not initialized.
 
@@ -178,7 +178,7 @@ This spawns independent model-backed reviewers that scrutinize the plan for gaps
 
 By default, **two reviewers** run using different models (`review_default` and `default` from config) so the reviews cross-validate each other. Set `review.double_review: false` in `.onward.config.yaml` to use a single reviewer.
 
-Review artifacts are written to `.onward/reviews/` (gitignored — they're working documents, not permanent artifacts). The command announces the file paths and recommends you read through the findings and incorporate them into the plan before proceeding.
+Review artifacts are written to `<artifact-root>/reviews/` (gitignored — they're working documents, not permanent artifacts). The command announces the file paths and recommends you read through the findings and incorporate them into the plan before proceeding.
 
 ### Notes (Artifact Scratch Pad)
 
@@ -193,7 +193,7 @@ onward note PLAN-002 "revisit auth approach after spike"
 onward note TASK-001
 ```
 
-Notes are stored in `.onward/notes/{ID}.md`, one file per artifact, with timestamped entries appended as you go. When a note is added, the artifact's frontmatter gains `has_notes: true` so it's visible in metadata.
+Notes are stored in `<artifact-root>/notes/{ID}.md`, one file per artifact, with timestamped entries appended as you go. When a note is added, the artifact's frontmatter gains `has_notes: true` so it's visible in metadata.
 
 When you **complete** or **cancel** an artifact, its notes are printed inline:
 
@@ -248,7 +248,7 @@ When you run `onward work TASK-001`, here's what happens:
    - **`builtin`** (or absent): `BuiltinExecutor` routes the model string to **Claude Code** or **Cursor agent** CLI, streams output to your terminal in real time, and writes to a run log.
    - **Any other value**: `SubprocessExecutor` spawns `[command, *args]` with the JSON payload on **stdin**. Output is captured (not streamed interactively).
 5. **Run post-task hooks** — Shell commands (`post_task_shell`), then optionally a markdown hook (`post_task_markdown`) via the executor.
-6. **Update status** — On success → `completed`; on failure → `failed`. Run record written to `.onward/runs/`.
+6. **Update status** — On success → `completed`; on failure → `failed`. Run record written to `<artifact-root>/runs/`.
 
 **Chunk execution** (`onward work CHUNK-001`) repeats this for every ready task in dependency order, then runs the `post_chunk_markdown` hook. **Plan execution** (`onward work PLAN-001`) walks every chunk in the plan the same way.
 
@@ -296,8 +296,8 @@ Status flows: `open` → `in_progress` → `completed` (or `canceled` / `failed`
 When you run `onward init`, your project gets:
 
 ```
-.onward.config.yaml              ← workspace config (models, hooks, sync, work, executor, …)
-.onward/
+.onward.config.yaml              ← workspace config (models, hooks, sync, work, executor, root, …)
+.onward/                         ← default artifact root (configurable via `root` or `roots`)
   plans/
     index.yaml                   ← derived index (regenerable)
     recent.yaml                  ← recently completed
@@ -317,6 +317,8 @@ When you run `onward init`, your project gets:
   reviews/                       ← plan review artifacts (gitignored)
   sync/                          ← optional sync git checkout (gitignored)
 ```
+
+**Configurable roots:** The artifact root (`.onward/` by default) can be changed via the `root` or `roots` config keys — see the [Configuration](#configuration) section below for multi-root workspace setups.
 
 Plans are the filesystem. The filesystem is the truth.
 
@@ -363,6 +365,41 @@ Plans live alongside code. They can be committed, branched, diffed, reviewed, an
 
 ---
 
+## Configuration
+
+Onward's workspace config lives at `.onward.config.yaml` in your project root. Beyond the executor, models, hooks, and sync settings (see [INSTALLATION.md](INSTALLATION.md) for full reference), you can configure where artifacts are stored:
+
+### Artifact Root Configuration
+
+By default, Onward stores all artifacts in `.onward/` (a hidden directory). You can change this with:
+
+```yaml
+# Single custom root (all artifacts go here)
+root: notebooks
+
+# OR multi-root (separate artifact trees per project)
+roots:
+  frontend: .fe-plans
+  backend: .be-plans
+default_project: frontend  # optional: default when --project not specified
+```
+
+**Single root (`root`)**: Use this when you want all artifacts in a non-hidden directory (e.g., for Obsidian sync, or just visibility). Relative paths resolve from the workspace root. The artifact structure remains the same — plans, runs, reviews, etc. all live under your configured root.
+
+**Multi-root (`roots`)**: Use this for true multi-project workspaces where you manage multiple codebases or distinct initiatives with separate artifact trees. Each key is a project identifier; the value is its artifact root path.
+
+**Key rules**:
+- `root` and `roots` are mutually exclusive (use one or the other, not both)
+- When `roots` is configured, every artifact-touching command requires `--project <key>` (or `default_project` in config)
+- When `root` is configured (single root), `--project` remains an optional metadata filter (same as before)
+- Relative paths are resolved from the workspace root
+- Run `onward init` to scaffold all configured root directories
+- Run `onward doctor` to validate your configuration
+
+**Migration**: To move from the default `.onward/` to a custom root, update your config and run `onward migrate` (see task documentation for details).
+
+---
+
 ## Development
 
 ### Testing
@@ -400,7 +437,7 @@ Bootstrap a consumer workspace that uses this repo as the source:
 | [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md)                               | Contributor guide & local dev walkthrough |
 | [docs/LIFECYCLE.md](docs/LIFECYCLE.md)                                     | Artifact status: `work` / `complete` / `cancel` / `retry` |
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md)                             | Model-backed vs local/heuristic commands   |
-| **`.onward/plans/`**                                                      | Plans, chunks, tasks, acceptance criteria (source of truth) |
+| **Artifact root** (`.onward/` or configured)                               | Plans, chunks, tasks, acceptance criteria (source of truth) |
 | [docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)                               | Execution handoff design                    |
 | [docs/schemas/onward-executor-stdin-v1.schema.json](docs/schemas/onward-executor-stdin-v1.schema.json) | Executor stdin JSON (versioned)             |
 | [docs/archive/PROVIDER_REGISTRY.md](docs/archive/PROVIDER_REGISTRY.md)     | Archived: multi-provider routing design (superseded by executor layer) |

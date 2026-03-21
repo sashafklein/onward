@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-008"
 project: ""
 title: "Update docs (README, INSTALLATION, AI_OPERATOR, AGENTS) for configurable roots"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -15,7 +15,8 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T15:50:00Z"
-updated_at: "2026-03-21T15:50:00Z"
+updated_at: "2026-03-21T18:44:10Z"
+run_count: 1
 ---
 
 # Context

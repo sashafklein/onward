@@ -44,7 +44,7 @@ onward init
 onward doctor
 ```
 
-`init` creates the `.onward/` directory structure, templates, and config.
+`init` creates the artifact directory structure (default `.onward/`, configurable via `root` or `roots`), templates, and config.
 `doctor` validates everything is wired up correctly.
 
 You're installed. Now the important part.
@@ -75,7 +75,7 @@ or in your own memory. Onward is the single source of truth.
 ### The Rule
 
 Every piece of work — from initial planning through final completion — is tracked as an
-Onward artifact. No exceptions. If it's not in `.onward/plans/`, it doesn't exist.
+Onward artifact. No exceptions. If it's not in the configured artifact root, it doesn't exist.
 
 ### The Loop
 
@@ -129,6 +129,7 @@ When the user describes a new initiative, feature, or project:
 - If you discover work during execution, capture it as an Onward task IMMEDIATELY.
 - At the end of every session, run `onward report` so the next agent (or human) can
   pick up exactly where you left off.
+- Check the configured artifact root (default `.onward/`, may be customized via `root` or `roots` in config).
 ````
 
 ---
@@ -204,7 +205,8 @@ See **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)** for chunk runs and manual transit
 - Use **`onward work`** for executor runs; use **`complete` / `cancel` / `retry`** for non-executor closure (see LIFECYCLE doc)
 - ALWAYS capture discovered follow-up work as new Onward tasks immediately
 - ALWAYS run `onward report` at end of session to leave breadcrumbs for the next agent
-- Artifact files in `.onward/plans/` are the ONLY source of truth for project state
+- Artifact files in the configured artifact root are the ONLY source of truth for project state
+- When `roots` is configured, use `--project <key>` on artifact commands (or set `default_project` in config)
 ````
 
 ---
@@ -216,7 +218,7 @@ For agents configured via system prompts, SOUL.md, or similar instruction files,
 ```
 You MUST use Onward (the `onward` CLI) as your EXCLUSIVE system for planning, task
 tracking, and execution management. All work is structured as Plan → Chunk → Task
-artifacts stored in .onward/plans/.
+artifacts stored in the configured artifact root (check .onward.config.yaml for `root` or `roots`).
 
 MANDATORY BEHAVIORS:
 - Start every session with `onward report` to understand current state
@@ -249,10 +251,11 @@ ONWARD QUICK-REF:
   list     → filter artifacts         tree     → hierarchy view
   show     → inspect one artifact     progress → what's in flight
   recent   → what just finished       onward archive → retire a plan
-  sync     → mirror .onward/plans to branch or second repo (optional)
+  sync     → mirror plans to branch or second repo (optional)
 
 WORKFLOW: report → next → work → report (use complete when not using work; see docs/LIFECYCLE.md)
-FLAGS: --project <key>  --blocking  --human  --no-color
+FLAGS: --project <key> (required for multi-root)  --blocking  --human  --no-color
+CONFIG: root/roots in .onward.config.yaml for custom artifact location
 ```
 
 ---
@@ -339,6 +342,17 @@ Onward's workspace config lives at `.onward.config.yaml` in your project root. K
 ```yaml
 version: 1
 
+# Artifact root configuration (optional)
+# Default: .onward/ (used when neither root nor roots is set)
+# Use `root` for a single custom artifact directory:
+root: notebooks  # all artifacts go here instead of .onward/
+
+# OR use `roots` for multi-project workspaces with separate artifact trees:
+# roots:
+#   frontend: .fe-plans
+#   backend: .be-plans
+# default_project: frontend  # optional: used when --project not specified
+
 sync:
   mode: local # local | branch | repo
   branch: onward # used when mode is branch (git worktree on this branch)
@@ -381,11 +395,43 @@ hooks:
   pre_chunk_shell: []
   post_task_shell:
     - "git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK_TITLE}' --allow-empty"
+  # Hook paths resolve from <artifact-root>/hooks/ (default .onward/hooks/)
   post_task_markdown: .onward/hooks/post-task.md
   post_chunk_markdown: .onward/hooks/post-chunk.md
 ```
 
 > **Migration:** Legacy flat model keys (`task_default`, `split_default`, `review_default`) are still read but deprecated — `onward doctor` warns. Migrate to the tiered keys above. If your older workspace has a top-level `ralph:` key, Onward maps it to `executor` at load time; rename to `executor:` to silence the warning.
+
+### Artifact Root Configuration
+
+**Default behavior:** When neither `root` nor `roots` is set, Onward uses `.onward/` as the artifact root (backward compatible).
+
+**Single custom root (`root`):** Set this to change where all artifacts are stored. Useful for:
+- Making plans visible in tools like Obsidian (non-hidden directories)
+- Keeping artifacts in a specific location for organizational reasons
+- Example: `root: notebooks` → artifacts live in `./notebooks/plans/`, `./notebooks/runs/`, etc.
+
+**Multi-root workspaces (`roots`):** Use this when managing multiple projects with separate artifact trees:
+```yaml
+roots:
+  frontend: .fe-plans
+  backend: .be-plans
+default_project: frontend
+```
+
+With multi-root configuration:
+- Every artifact-touching command requires `--project <key>` unless `default_project` is set
+- Each project gets its own `index.yaml`, `recent.yaml`, `ongoing.json`
+- `onward report` without `--project` shows a combined view across all projects
+- `onward report --project frontend` scopes to one project
+- Templates, prompts, and hooks can be per-project (check project dir first) with shared fallback
+
+**Rules:**
+- `root` and `roots` are mutually exclusive (doctor error if both set)
+- All paths are relative to the workspace root
+- Run `onward init` after changing roots to scaffold new directories
+- Run `onward doctor` to validate configuration
+- Use `onward migrate` to move existing `.onward/` contents to a new root
 
 With `sync.mode` set to `branch` or `repo`, use:
 
@@ -403,9 +449,9 @@ With **`sync.mode: local`** there is no sync checkout. **`onward sync status`** 
 
 ### Plan sync semantics (branch and repo modes)
 
-- **Mirror** — After each push or pull direction, the destination `.onward/plans/` tree matches the source (files absent on the source are removed on the destination).
+- **Mirror** — After each push or pull direction, the destination plans tree matches the source (files absent on the source are removed on the destination).
 - **First run** — `onward sync status` does not clone or add a worktree; it reports that the sync checkout is not initialized until the first successful **`onward sync push`**.
-- **Push** — Copies from your workspace into the sync checkout, commits under `.onward/plans` when there are changes, then runs **`git push -u origin HEAD`**. The sync checkout must have **`origin`** set; the remote should allow the update (a **bare** repository is the usual choice for `repo` mode).
+- **Push** — Copies from your workspace into the sync checkout, commits under the plans directory when there are changes, then runs **`git push -u origin HEAD`**. The sync checkout must have **`origin`** set; the remote should allow the update (a **bare** repository is the usual choice for `repo` mode).
 - **Pull** — Runs **`git pull --ff-only`** in the sync checkout (non-fast-forward updates fail with an error until you reconcile in that checkout), copies plans into the workspace, then regenerates **`index.yaml`** / **`recent.yaml`**.
 
 ### Model Aliases

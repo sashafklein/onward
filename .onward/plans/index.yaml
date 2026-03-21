@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T18:35:44Z"
-index_version: 207
+generated_at: "2026-03-21T18:44:10Z"
+index_version: 210
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -472,8 +472,8 @@ tasks:
   effort: "l"
 - id: "TASK-029"
   title: "Add new tests for single custom root and multi-root scenarios"
-  status: "in_progress"
-  updated_at: "2026-03-21T18:35:44Z"
+  status: "completed"
+  updated_at: "2026-03-21T18:44:10Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-029-add-new-tests-for-single-custom-root-and-multi-root-scenarios.md"
   plan: "PLAN-003"
   chunk: "CHUNK-008"
@@ -484,8 +484,8 @@ tasks:
   effort: "m"
 - id: "TASK-030"
   title: "Update docs (README, INSTALLATION, AI_OPERATOR, AGENTS) for configurable roots"
-  status: "open"
-  updated_at: "2026-03-21T15:50:00Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T18:44:10Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-030-update-docs-readme-installation-ai-operator-agents-for-configurable-roots.md"
   plan: "PLAN-003"
   chunk: "CHUNK-008"
