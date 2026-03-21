@@ -387,16 +387,16 @@ def is_human_task(artifact: Artifact) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
-def summarize_effort_remaining(artifacts: list[Artifact]) -> dict[str, int]:
-    """Count open/in_progress tasks by effort bucket (``unestimated`` = no/invalid effort)."""
-    counts = {"xs": 0, "s": 0, "m": 0, "l": 0, "xl": 0, "unestimated": 0}
+def summarize_complexity_remaining(artifacts: list[Artifact]) -> dict[str, int]:
+    """Count open/in_progress tasks by complexity bucket (``unestimated`` = no/invalid complexity)."""
+    counts = {"low": 0, "medium": 0, "high": 0, "unestimated": 0}
     for a in artifacts:
         if str(a.metadata.get("type", "")) != "task":
             continue
         if str(a.metadata.get("status", "")) not in {"open", "in_progress"}:
             continue
-        e = str(a.metadata.get("effort", "")).strip().lower()
-        if e in {"xs", "s", "m", "l", "xl"}:
+        e = str(a.metadata.get("complexity", "")).strip().lower()
+        if e in {"low", "medium", "high"}:
             counts[e] += 1
         else:
             counts["unestimated"] += 1
@@ -718,9 +718,9 @@ def _artifact_from_index_row(kind: str, row: dict[str, Any], layout: WorkspaceLa
         ef = row.get("estimated_files")
         if isinstance(ef, int):
             meta["estimated_files"] = ef
-        effort = row.get("effort")
-        if effort:
-            meta["effort"] = effort
+        complexity = row.get("complexity")
+        if complexity:
+            meta["complexity"] = complexity
     elif kind == "task":
         meta["plan"] = row.get("plan")
         meta["chunk"] = row.get("chunk")
@@ -728,9 +728,9 @@ def _artifact_from_index_row(kind: str, row: dict[str, Any], layout: WorkspaceLa
         meta["depends_on"] = row.get("depends_on") or []
         meta["blocked_by"] = row.get("blocked_by") or []
         meta["human"] = bool(row.get("human", False))
-        effort = row.get("effort")
-        if effort:
-            meta["effort"] = effort
+        complexity = row.get("complexity")
+        if complexity:
+            meta["complexity"] = complexity
     return Artifact(file_path=path, body="", metadata=meta)
 
 
@@ -866,9 +866,9 @@ def regenerate_indexes(layout: WorkspaceLayout, run_records: list[dict[str, Any]
             ef = m.get("estimated_files")
             if isinstance(ef, int):
                 row["estimated_files"] = ef
-            effort = m.get("effort")
-            if effort:
-                row["effort"] = str(effort).strip()
+            complexity = m.get("complexity")
+            if complexity:
+                row["complexity"] = str(complexity).strip()
             chunks.append(row)
         elif artifact_type == "task":
             row["plan"] = m.get("plan")
@@ -879,9 +879,9 @@ def regenerate_indexes(layout: WorkspaceLayout, run_records: list[dict[str, Any]
             if bb:
                 row["blocked_by"] = bb
             row["human"] = is_human_task(artifact)
-            effort = m.get("effort")
-            if effort:
-                row["effort"] = str(effort).strip()
+            complexity = m.get("complexity")
+            if complexity:
+                row["complexity"] = str(complexity).strip()
             tasks.append(row)
 
     key_fn = lambda row: (str(row.get("id", "")), str(row.get("title", "")))
@@ -1139,7 +1139,7 @@ def render_active_work_tree_lines(
                 t_status = str(task.metadata.get("status", ""))
                 t_status_text = colorize(t_status, status_color(t_status), color_enabled)
                 marker = "H" if is_human_task(task) else "A"
-                eff = str(task.metadata.get("effort", "")).strip()
+                eff = str(task.metadata.get("complexity", "")).strip()
                 eff_s = f" [{eff}]" if eff else ""
                 lines.append(
                     f"  |  |- {task.metadata.get('id')} [{t_status_text}] ({marker}) {task.metadata.get('title')}{eff_s}"

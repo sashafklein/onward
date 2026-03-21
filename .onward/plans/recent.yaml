@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T20:51:53Z"
+generated_at: "2026-03-21T20:52:53Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -764,5 +764,17 @@ completed:
   chunk: "CHUNK-016"
   project: ""
   depends_on: []
+  human: false
+  effort: "xs"
+- id: "TASK-054"
+  title: "config.py: update resolve_model_for_task to read complexity with effort fallback"
+  status: "completed"
+  updated_at: "2026-03-21T20:52:51Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-054-config-py-update-resolve-model-for-task-to-read-complexity-with-effort-fallback.md"
+  plan: "PLAN-007"
+  chunk: "CHUNK-016"
+  project: ""
+  depends_on:
+  - "TASK-053"
   human: false
   effort: "xs"
