@@ -37,7 +37,7 @@ from onward.artifacts import (
     report_rows,
     resolve_project,
     select_next_artifact,
-    summarize_effort_remaining,
+    summarize_complexity_remaining,
     task_is_next_actionable,
     transition_status,
     update_artifact_status,
@@ -105,7 +105,7 @@ from onward.util import (
     dump_simple_yaml,
     normalize_acceptance,
     normalize_bool,
-    normalize_effort,
+    normalize_complexity,
     now_iso,
     parse_simple_yaml,
     run_timestamp,
@@ -688,13 +688,13 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
         "created_at": now,
         "updated_at": now,
     }
-    raw_eff = getattr(args, "effort", None)
-    if raw_eff is not None and str(raw_eff).strip():
-        eff = normalize_effort(raw_eff)
-        if eff:
-            metadata["effort"] = eff
+    raw_cpx = getattr(args, "complexity", None)
+    if raw_cpx is not None and str(raw_cpx).strip():
+        cpx = normalize_complexity(raw_cpx)
+        if cpx:
+            metadata["complexity"] = cpx
         else:
-            print("Warning: invalid --effort value (expected xs|s|m|l|xl); leaving unset")
+            print("Warning: invalid --complexity value (expected low|medium|high); leaving unset")
     if getattr(args, "estimated_files", None) is not None:
         metadata["estimated_files"] = int(args.estimated_files)
 
@@ -817,9 +817,9 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
             "created_at": now,
             "updated_at": now,
         }
-        eff = normalize_effort(entry.get("effort", ""))
-        if eff:
-            metadata["effort"] = eff
+        cpx = normalize_complexity(entry.get("complexity", ""))
+        if cpx:
+            metadata["complexity"] = cpx
 
         slug = slugify(title)
         target = plan_dir / "tasks" / f"{tid}-{slug}.md"
@@ -893,13 +893,13 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         "created_at": now,
         "updated_at": now,
     }
-    raw_eff = getattr(args, "effort", None)
-    if raw_eff is not None and str(raw_eff).strip():
-        eff = normalize_effort(raw_eff)
-        if eff:
-            metadata["effort"] = eff
+    raw_cpx = getattr(args, "complexity", None)
+    if raw_cpx is not None and str(raw_cpx).strip():
+        cpx = normalize_complexity(raw_cpx)
+        if cpx:
+            metadata["complexity"] = cpx
         else:
-            print("Warning: invalid --effort value (expected xs|s|m|l|xl); leaving unset")
+            print("Warning: invalid --complexity value (expected low|medium|high); leaving unset")
 
     body = load_artifact_template(root, "task", layout, proj)
     target = plan_dir / "tasks" / f"{task_id}-{slug}.md"
@@ -1150,9 +1150,9 @@ def cmd_show(args: argparse.Namespace) -> int:
     print(f"# {artifact.metadata.get('id')} {artifact.metadata.get('title')}")
     print(f"type: {artifact.metadata.get('type')}")
     print(f"status: {artifact.metadata.get('status')}")
-    eff = str(artifact.metadata.get("effort", "")).strip()
-    if eff:
-        print(f"effort: {eff}")
+    cpx = str(artifact.metadata.get("complexity", "")).strip()
+    if cpx:
+        print(f"complexity: {cpx}")
     print(f"path: {artifact.file_path.relative_to(root)}")
     print()
     print(dump_simple_yaml(artifact.metadata).rstrip())
@@ -1856,14 +1856,14 @@ def format_report_markdown(
     lines.append(f"**Generated:** {now_iso()}")
     lines.append("")
 
-    # Effort Remaining
-    lines.append("## Effort Remaining")
+    # Complexity Remaining
+    lines.append("## Complexity Remaining")
     lines.append("")
-    eff_counts = summarize_effort_remaining(artifacts)
-    headers = ["xs", "s", "m", "l", "xl", "unestimated"]
+    cpx_counts = summarize_complexity_remaining(artifacts)
+    headers = ["low", "medium", "high", "unestimated"]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "|".join(["---"] * len(headers)) + "|")
-    lines.append("| " + " | ".join(str(eff_counts[k]) for k in headers) + " |")
+    lines.append("| " + " | ".join(str(cpx_counts[k]) for k in headers) + " |")
     lines.append("")
 
     # In Progress
@@ -2074,12 +2074,12 @@ def _cmd_report_multi_project(
 
     # Overall summary
     print(colorize("[Overall Summary]", "cyan", color_enabled))
-    total_effort = summarize_effort_remaining(artifacts)
+    total_cpx = summarize_complexity_remaining(artifacts)
     print(
         "  "
         + "  ".join(
-            f"{k}: {total_effort[k]}"
-            for k in ("xs", "s", "m", "l", "xl", "unestimated")
+            f"{k}: {total_cpx[k]}"
+            for k in ("low", "medium", "high", "unestimated")
         )
     )
     print()
@@ -2093,14 +2093,14 @@ def _cmd_report_multi_project(
         proj_artifacts = [a for a in artifacts if resolve_project(a, by_id) == proj_key]
         proj_claimed = claimed_task_ids(layout, proj_key)
 
-        # Effort remaining
-        print(colorize("[Effort remaining]", "cyan", color_enabled))
-        eff_counts = summarize_effort_remaining(proj_artifacts)
+        # Complexity remaining
+        print(colorize("[Complexity remaining]", "cyan", color_enabled))
+        cpx_counts = summarize_complexity_remaining(proj_artifacts)
         print(
             "  "
             + "  ".join(
-                f"{k}: {eff_counts[k]}"
-                for k in ("xs", "s", "m", "l", "xl", "unestimated")
+                f"{k}: {cpx_counts[k]}"
+                for k in ("low", "medium", "high", "unestimated")
             )
         )
         print()
@@ -2196,13 +2196,13 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"project: {project}")
     print()
 
-    print(colorize("[Effort remaining]", "cyan", color_enabled))
-    eff_counts = summarize_effort_remaining(artifacts)
+    print(colorize("[Complexity remaining]", "cyan", color_enabled))
+    cpx_counts = summarize_complexity_remaining(artifacts)
     print(
         "  "
         + "  ".join(
-            f"{k}: {eff_counts[k]}"
-            for k in ("xs", "s", "m", "l", "xl", "unestimated")
+            f"{k}: {cpx_counts[k]}"
+            for k in ("low", "medium", "high", "unestimated")
         )
     )
     print()

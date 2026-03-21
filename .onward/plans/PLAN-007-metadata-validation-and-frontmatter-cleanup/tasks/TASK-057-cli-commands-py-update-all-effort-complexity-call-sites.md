@@ -5,7 +5,7 @@ plan: "PLAN-007"
 chunk: "CHUNK-016"
 project: ""
 title: "cli_commands.py: update all effort→complexity call sites"
-status: "open"
+status: "in_progress"
 description: "In `src/onward/cli_commands.py`, make the following changes:\n\n**Imports (~lines 40, 108):**\n- Change `summarize_effort_remaining` import to `summarize_complexity_remaining`\n- Change `normalize_effort` import to `normalize_complexity`\n\n**cmd_new_chunk (~lines 691-697):**\n- Change `getattr(args, 'effort', None)` → `getattr(args, 'complexity', None)`\n- Change `normalize_effort(raw_eff)` → `normalize_complexity(raw_eff)` (also rename variable from `raw_eff` to `raw_cpx` for clarity, or just update the normalize call)\n- Change `metadata['effort'] = eff` → `metadata['complexity'] = cpx`\n- Change warning message from `\"expected xs|s|m|l|xl\"` to `\"expected low|medium|high\"`\n\n**cmd_new_task_batch (~line 820):**\n- Change `normalize_effort(entry.get('effort', ''))` → `normalize_complexity(entry.get('complexity', ''))` \n- Change `metadata['effort'] = eff` → `metadata['complexity'] = cpx`\n\n**cmd_new_task (~lines 896-902):**\n- Change `getattr(args, 'effort', None)` → `getattr(args, 'complexity', None)`\n- Change `normalize_effort(raw_eff)` → `normalize_complexity(raw_cpx)`\n- Change `metadata['effort'] = eff` → `metadata['complexity'] = cpx`\n- Change warning message from `\"expected xs|s|m|l|xl\"` to `\"expected low|medium|high\"`\n\n**cmd_show (~lines 1153-1155):**\n- Change `artifact.metadata.get('effort', '')` → `artifact.metadata.get('complexity', '')`\n- Change `print(f'effort: {eff}')` → `print(f'complexity: {cpx}')`\n\n**Lines ~1784, ~1862, ~2077, ~2081, ~2098, ~2200 (effort display in ready/report/tree):**\n- Change `task.metadata.get('effort', '')` → `task.metadata.get('complexity', '')`\n- Change all `summarize_effort_remaining(...)` calls → `summarize_complexity_remaining(...)`\n- Update any f-string labels from `effort` to `complexity`"
 human: false
 model: "sonnet"
@@ -26,8 +26,9 @@ acceptance:
 - "Zero grep matches for normalize_effort or summarize_effort_remaining in cli_commands.py"
 - "Zero grep matches for args.effort or metadata\\[.effort. in cli_commands.py"
 created_at: "2026-03-21T20:23:52Z"
-updated_at: "2026-03-21T20:23:52Z"
+updated_at: "2026-03-21T20:54:34Z"
 effort: "s"
+run_count: 1
 ---
 
 # Context
