@@ -4,12 +4,12 @@ type: "chunk"
 plan: "PLAN-015"
 project: ""
 title: "Run directory restructure and backward compat"
-status: "open"
+status: "completed"
 description: ""
 priority: "medium"
 model: "sonnet-latest"
 created_at: "2026-03-21T03:40:00Z"
-updated_at: "2026-03-21T03:40:00Z"
+updated_at: "2026-03-21T03:56:18Z"
 ---
 
 # Summary

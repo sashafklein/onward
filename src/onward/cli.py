@@ -162,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser.add_argument("id", help="Artifact ID (PLAN-###, CHUNK-###, TASK-###)")
     show_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     show_parser.add_argument("--project", default="", help="When set, hide artifact if it does not match this project (resolved)")
+    show_parser.add_argument("--runs", action="store_true", help="Show run history table for a task")
     show_parser.set_defaults(func=cmd_show)
 
     note_parser = subparsers.add_parser("note", help="Add or view notes on an artifact")
@@ -283,6 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--project", default="", help="Filter by project key")
     report_parser.add_argument("--limit", type=int, default=10, help="Max recent items to show")
     report_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
+    report_parser.add_argument("--verbose", action="store_true", help="Show run stats (total runs, tokens, pass rate)")
     report_parser.set_defaults(func=cmd_report)
 
     return parser

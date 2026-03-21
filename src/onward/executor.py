@@ -35,6 +35,7 @@ class TaskContext:
     plan_context: dict[str, Any] | None
     chunk_context: dict[str, Any] | None
     notes: str | None
+    output_log: Path | None = None
 
 
 @dataclass
@@ -48,6 +49,7 @@ class ExecutorResult:
     error: str
     ack: dict[str, Any] | None
     return_code: int
+    token_usage: dict[str, Any] | None = None
 
 
 class Executor(ABC):

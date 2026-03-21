@@ -5,16 +5,17 @@ plan: "PLAN-015"
 chunk: "CHUNK-025"
 project: ""
 title: "Wire output_log file handle into BuiltinExecutor.execute_task"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
 executor: "onward-exec"
-depends_on: ["TASK-086"]
+depends_on:
+- "TASK-086"
 files: []
 acceptance: []
 created_at: "2026-03-21T03:40:00Z"
-updated_at: "2026-03-21T03:40:00Z"
+updated_at: "2026-03-21T03:56:19Z"
 ---
 
 # Context

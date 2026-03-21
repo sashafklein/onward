@@ -93,7 +93,7 @@ def test_work_require_success_ack_fails_when_exit_0_without_ack(tmp_path: Path, 
     capsys.readouterr()
 
     assert code == 1
-    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_jsons = list((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     assert len(run_jsons) == 1
     rec = json.loads(run_jsons[0].read_text(encoding="utf-8"))
     assert rec["status"] == "failed"
@@ -119,7 +119,7 @@ def test_work_require_success_ack_succeeds_with_executor_ack_line(tmp_path: Path
     assert code == 0
     assert "completed" in out
 
-    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_jsons = list((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     assert len(run_jsons) == 1
     rec = json.loads(run_jsons[0].read_text(encoding="utf-8"))
     assert rec["status"] == "completed"
@@ -197,7 +197,7 @@ def test_work_task_success_creates_run_and_completes_task(tmp_path: Path, capsys
     task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in task_raw
 
-    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_jsons = list((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
     parsed_run = json.loads(run_raw)
@@ -227,7 +227,7 @@ def test_work_task_failure_records_failed_run_and_sets_task_failed(tmp_path: Pat
     assert "run_count: 1" in task_raw
     assert "last_run_status" in task_raw
 
-    run_jsons = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_jsons = list((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     assert len(run_jsons) == 1
     run_raw = run_jsons[0].read_text(encoding="utf-8")
     assert json.loads(run_raw)["status"] == "failed"

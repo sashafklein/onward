@@ -252,12 +252,14 @@ def _make_prepared_run(root: Path, task_id: str, config: dict):
         "log_path": str(run_log),
         "error": "",
     }
+    output_log = root / f"{run_id}.output.log"
     return PreparedTaskRun(
         task=task,
         ctx=ctx,
         run_id=run_id,
         run_json=run_json,
         run_log=run_log,
+        output_log=output_log,
         run_record=run_record,
         model="test-model",
         log_sections=["$ test"],

@@ -38,8 +38,10 @@ from onward.executor_payload import with_schema_version
 from onward.util import (
     as_str_list,
     clean_string,
+    compute_files_changed,
     dump_run_json_record,
     dump_simple_yaml,
+    get_head_sha,
     now_iso,
     read_run_json_record,
     run_timestamp,
@@ -422,6 +424,7 @@ class PreparedTaskRun:
     run_id: str
     run_json: Path
     run_log: Path
+    output_log: Path
     run_record: dict[str, Any]
     model: str
     log_sections: list[str]
@@ -445,11 +448,14 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
     exec_cmd = clean_string(block.get("command"))
     executor_record = "builtin" if (not exec_cmd or exec_cmd.lower() == "builtin") else exec_cmd
 
-    run_id = f"RUN-{run_timestamp()}-{task_id}"
+    ts = run_timestamp()
+    run_id = f"RUN-{ts}-{task_id}"
     run_dir = root / ".onward/runs"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    run_json = run_dir / f"{run_id}.json"
-    run_log = run_dir / f"{run_id}.log"
+    task_dir = run_dir / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    run_json = task_dir / f"info-{ts}.json"
+    run_log = task_dir / f"summary-{ts}.log"
+    output_log = task_dir / f"output-{ts}.log"
 
     started_at = now_iso()
     run_record: dict[str, Any] = {
@@ -465,6 +471,8 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
         "finished_at": None,
         "log_path": str(run_log.relative_to(root)),
         "error": "",
+        "files_changed": [],
+        "token_usage": None,
     }
     run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
@@ -489,6 +497,7 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
         plan_context=plan_context,
         chunk_context=chunk_context,
         notes=notes if notes.strip() else None,
+        output_log=output_log,
     )
     log_sections: list[str] = [_executor_log_line(config)]
     return PreparedTaskRun(
@@ -497,6 +506,7 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
         run_id=run_id,
         run_json=run_json,
         run_log=run_log,
+        output_log=output_log,
         run_record=run_record,
         model=model,
         log_sections=log_sections,
@@ -513,11 +523,14 @@ def _finalize_task_run(
     ack_obj: dict[str, Any] | None,
     *,
     post_hook_lock: threading.Lock | None = None,
+    before_sha: str = "",
 ) -> tuple[str, bool]:
     """Write log, run JSON, artifact status, and remove ongoing entry for one completed task.
 
     ``post_hook_lock`` serializes ``post_task_shell`` and ``post_task_markdown`` hooks to
     prevent concurrent git commits from conflicting when ``max_parallel_tasks > 1``.
+    ``before_sha`` is the HEAD SHA captured before the executor ran; used to compute
+    ``files_changed`` via git diff after post hooks complete.
 
     Returns ``(run_id, ok)``.
     """
@@ -560,6 +573,8 @@ def _finalize_task_run(
                     ok = False
                     error = "post_task_markdown hook failed"
 
+    files_changed = compute_files_changed(root, before_sha)
+
     if error:
         log_sections.append(f"[error] {error}")
     run_log.write_text(
@@ -567,10 +582,14 @@ def _finalize_task_run(
         encoding="utf-8",
     )
 
+    token_usage = ex_result.token_usage if ex_result is not None else None
+
     finished_at = now_iso()
     run_record["status"] = "completed" if ok else "failed"
     run_record["finished_at"] = finished_at
     run_record["error"] = error
+    run_record["files_changed"] = files_changed
+    run_record["token_usage"] = token_usage
     if ack_obj is not None:
         run_record["success_ack"] = ack_obj
         run_record["task_result"] = parse_task_result(ack_obj)
@@ -630,11 +649,13 @@ def _run_one_task_with_hooks(
     ack_obj: dict[str, Any] | None = None
     ex_result: ExecutorResult | None = None
 
+    before_sha = ""
     if not pre_shell_ok:
         error = "pre_task_shell hook failed"
     elif not is_executor_enabled(config):
         error = "executor.enabled is false in .onward.config.yaml (executor disabled)"
     else:
+        before_sha = get_head_sha(root)
         with ongoing_lock:
             _register_active_run(root, run_id, task_id, model, run_log, str(run_record["started_at"]))
         ex_result = executor.execute_task(root, p.ctx)
@@ -649,7 +670,8 @@ def _run_one_task_with_hooks(
             ack_obj = ex_result.ack
 
     return _finalize_task_run(
-        root, config, p, ex_result, error, ok, ack_obj, post_hook_lock=post_hook_lock
+        root, config, p, ex_result, error, ok, ack_obj,
+        post_hook_lock=post_hook_lock, before_sha=before_sha,
     )
 
 
@@ -753,11 +775,13 @@ def _run_hooked_executor_batch(
         ack_obj: dict[str, Any] | None = None
         ex_result: ExecutorResult | None = None
 
+        before_sha = ""
         if not pre_shell_ok:
             error = "pre_task_shell hook failed"
         elif not is_executor_enabled(config):
             error = "executor.enabled is false in .onward.config.yaml (executor disabled)"
         else:
+            before_sha = get_head_sha(root)
             _register_active_run(
                 root,
                 run_id,
@@ -798,6 +822,9 @@ def _run_hooked_executor_batch(
                 ok = False
                 error = "post_task_markdown hook failed"
 
+        files_changed = compute_files_changed(root, before_sha)
+        token_usage = ex_result.token_usage if ex_result is not None else None
+
         if error:
             log_sections.append(f"[error] {error}")
         run_log.write_text(
@@ -809,6 +836,8 @@ def _run_hooked_executor_batch(
         run_record["status"] = "completed" if ok else "failed"
         run_record["finished_at"] = finished_at
         run_record["error"] = error
+        run_record["files_changed"] = files_changed
+        run_record["token_usage"] = token_usage
         if ack_obj is not None:
             run_record["success_ack"] = ack_obj
             run_record["task_result"] = parse_task_result(ack_obj)
@@ -1179,42 +1208,42 @@ def finalize_chunks_all_tasks_terminal(root: Path) -> tuple[list[str], list[str]
 # ---------------------------------------------------------------------------
 
 
+def _run_info_paths(run_dir: Path, target_id: str) -> list[Path]:
+    """Yield all run info JSON paths for ``target_id`` across both new and legacy layouts."""
+    paths: list[Path] = []
+    task_dir = run_dir / target_id
+    if task_dir.is_dir():
+        paths.extend(task_dir.glob("info-*.json"))
+    paths.extend(run_dir.glob(f"RUN-*-{target_id}.json"))
+    return paths
+
+
 def collect_runs_for_target(root: Path, target_id: str, *, limit: int = 10) -> list[dict[str, Any]]:
-    """Return run JSON records for ``target_id``, newest first (by ``started_at``), capped at ``limit``."""
+    """Return run JSON records for ``target_id``, newest first (by ``started_at``), capped at ``limit``.
+
+    Searches both new-layout ``runs/TASK-XXX/info-*.json`` and legacy ``runs/RUN-*-TASK-XXX.json``.
+    """
     run_dir = root / ".onward/runs"
     if not run_dir.exists():
         return []
-    pattern = f"RUN-*-{target_id}.json"
-    matches = list(run_dir.glob(pattern))
     records: list[dict[str, Any]] = []
-    for path in matches:
+    for path in _run_info_paths(run_dir, target_id):
         try:
             records.append(read_run_json_record(path.read_text(encoding="utf-8")))
         except Exception:  # noqa: BLE001
             continue
 
-    def _sort_key(rec: dict[str, Any]) -> str:
-        return str(rec.get("started_at") or "")
-
-    records.sort(key=_sort_key, reverse=True)
+    records.sort(key=lambda rec: str(rec.get("started_at") or ""), reverse=True)
     return records[:limit]
 
 
 def latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
-    run_dir = root / ".onward/runs"
-    if not run_dir.exists():
-        return None
-    pattern = f"RUN-*-{target_id}.json"
-    matches = sorted(run_dir.glob(pattern), reverse=True)
-    if not matches:
-        return None
-    try:
-        return read_run_json_record(matches[0].read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return None
+    runs = collect_runs_for_target(root, target_id, limit=1)
+    return runs[0] if runs else None
 
 
 def collect_run_records(root: Path) -> list[dict[str, Any]]:
+    """Return all run records across both legacy flat layout and new per-task layout."""
     run_dir = root / ".onward/runs"
     if not run_dir.exists():
         return []
@@ -1224,6 +1253,14 @@ def collect_run_records(root: Path) -> list[dict[str, Any]]:
             records.append(read_run_json_record(path.read_text(encoding="utf-8")))
         except Exception:  # noqa: BLE001
             continue
+    for task_dir in sorted(run_dir.iterdir()):
+        if not task_dir.is_dir() or not task_dir.name.startswith("TASK-"):
+            continue
+        for path in sorted(task_dir.glob("info-*.json")):
+            try:
+                records.append(read_run_json_record(path.read_text(encoding="utf-8")))
+            except Exception:  # noqa: BLE001
+                continue
     return records
 
 

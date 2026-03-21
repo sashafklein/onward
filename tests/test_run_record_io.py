@@ -86,7 +86,7 @@ def test_new_writes_are_json_files(tmp_path: Path, capsys):
     capsys.readouterr()
     assert cli.main(["work", "--root", str(tmp_path), "TASK-001"]) == 0
 
-    run_file = next((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_file = next((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     body = run_file.read_text(encoding="utf-8")
     json.loads(body)
     assert body.lstrip().startswith("{")
@@ -182,7 +182,7 @@ def test_run_record_builtin_executor_and_tier_resolved_model(tmp_path: Path, mon
 
     assert cli.main(["work", "--root", str(tmp_path), "TASK-001"]) == 0
 
-    run_file = next((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_file = next((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     rec = json.loads(run_file.read_text(encoding="utf-8"))
     assert rec["executor"] == "builtin"
     assert rec["model"] == "haiku-latest"
@@ -193,7 +193,8 @@ def test_run_record_builtin_executor_and_tier_resolved_model(tmp_path: Path, mon
     assert recorder.active_snapshots[0][0]["target"] == "TASK-001"
     assert recorder.active_snapshots[0][0]["id"] == rec["id"]
 
-    log_text = run_file.with_suffix(".log").read_text(encoding="utf-8")
+    summary_name = run_file.name.replace("info-", "summary-").replace(".json", ".log")
+    log_text = (run_file.parent / summary_name).read_text(encoding="utf-8")
     assert "$ builtin" in log_text
     assert "executor stdout line" in log_text
 

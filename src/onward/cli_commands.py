@@ -567,6 +567,58 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _format_duration(started_at: str | None, finished_at: str | None) -> str:
+    """Return a human-readable duration string like ``2m13s`` or ``-`` when unavailable."""
+    if not started_at or not finished_at:
+        return "-"
+    try:
+        from datetime import datetime, timezone
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+        s = datetime.strptime(started_at, fmt).replace(tzinfo=timezone.utc)
+        f = datetime.strptime(finished_at, fmt).replace(tzinfo=timezone.utc)
+        secs = int((f - s).total_seconds())
+        if secs < 0:
+            return "-"
+        minutes, seconds = divmod(secs, 60)
+        return f"{minutes}m{seconds:02d}s"
+    except Exception:  # noqa: BLE001
+        return "-"
+
+
+def _format_tokens(token_usage: dict[str, Any] | None) -> str:
+    """Return ``1.2k/4.5k tokens`` or ``-`` when unavailable."""
+    if not isinstance(token_usage, dict):
+        return "-"
+    inp = token_usage.get("input_tokens")
+    out = token_usage.get("output_tokens")
+    if inp is None and out is None:
+        return "-"
+    inp_s = f"{inp / 1000:.1f}k" if inp is not None else "?"
+    out_s = f"{out / 1000:.1f}k" if out is not None else "?"
+    return f"{inp_s}/{out_s} tokens"
+
+
+def _print_runs_table(root: Path, artifact_id: str) -> None:
+    """Print a tabular run history for ``artifact_id``."""
+    tty = sys.stdout.isatty()
+    runs = collect_runs_for_target(root, artifact_id, limit=20)
+    if not runs:
+        print(f"Runs for {artifact_id}: No runs yet")
+        return
+    runs_sorted = list(reversed(runs))
+    print(f"Runs for {artifact_id} ({len(runs_sorted)} run{'s' if len(runs_sorted) != 1 else ''}):")
+    for i, r in enumerate(runs_sorted, start=1):
+        st = str(r.get("status", ""))
+        st_disp = colorize(st, status_color(st), tty)
+        ts = str(r.get("started_at") or "-")
+        dur = _format_duration(str(r.get("started_at") or ""), str(r.get("finished_at") or ""))
+        model = str(r.get("model") or "-")
+        tok = _format_tokens(r.get("token_usage"))
+        fc = r.get("files_changed")
+        file_count = len(fc) if isinstance(fc, list) else 0
+        print(f"  #{i}  {ts}  {st_disp}  {dur}  {model}  {tok}  {file_count} files")
+
+
 def _print_task_show_extras(root: Path, artifact: Artifact) -> None:
     """Extra sections for ``onward show TASK-*`` (run history, structured result, deps)."""
     tty = sys.stdout.isatty()
@@ -680,6 +732,12 @@ def cmd_show(args: argparse.Namespace) -> int:
         if resolve_project(artifact, by_id) != project:
             print(f"Artifact not in project {project!r} (resolved)")
             return 1
+
+    show_runs = getattr(args, "runs", False)
+    if show_runs and str(artifact.metadata.get("type", "")) == "task":
+        task_id = str(artifact.metadata.get("id", ""))
+        _print_runs_table(root, task_id)
+        return 0
 
     print(f"# {artifact.metadata.get('id')} {artifact.metadata.get('title')}")
     print(f"type: {artifact.metadata.get('type')}")
@@ -1011,21 +1069,17 @@ def cmd_work(args: argparse.Namespace) -> int:
         else:
             print(f"{args.id} already completed")
         if ok and run_id and not getattr(args, "no_follow_ups", False):
-            run_path = root / ".onward/runs" / f"{run_id}.json"
-            if run_path.exists():
-                try:
-                    rec = json.loads(run_path.read_text(encoding="utf-8"))
-                except json.JSONDecodeError:
-                    rec = {}
-                tr = rec.get("task_result") or {}
-                fus = tr.get("follow_ups") or []
-                if isinstance(fus, list) and fus:
-                    parent = must_find_by_id(root, args.id)
-                    created, fu_warnings = create_follow_up_tasks(root, parent, fus)
-                    for w in fu_warnings:
-                        print(f"Warning: {w}")
-                    for cid in created:
-                        print(f"Created follow-up task {cid}")
+            rec = collect_runs_for_target(root, args.id, limit=1)
+            run_rec = rec[0] if rec else {}
+            tr = run_rec.get("task_result") or {}
+            fus = tr.get("follow_ups") or []
+            if isinstance(fus, list) and fus:
+                parent = must_find_by_id(root, args.id)
+                created, fu_warnings = create_follow_up_tasks(root, parent, fus)
+                for w in fu_warnings:
+                    print(f"Warning: {w}")
+                for cid in created:
+                    print(f"Created follow-up task {cid}")
         if ok:
             _, warnings = finalize_chunks_all_tasks_terminal(root)
             for w in warnings:
@@ -1424,19 +1478,26 @@ def cmd_report(args: argparse.Namespace) -> int:
     ]
     completed.sort(key=lambda a: str(a.metadata.get("updated_at", "")), reverse=True)
     if completed:
-        for artifact in completed[: args.limit]:
-            status = str(artifact.metadata.get("status", ""))
-            print(
-                "\t".join(
-                    [
-                        str(artifact.metadata.get("updated_at", "")),
-                        str(artifact.metadata.get("id", "")),
-                        str(artifact.metadata.get("type", "")),
-                        colorize(status, status_color(status), color_enabled),
-                        str(artifact.metadata.get("title", "")),
-                    ]
-                )
-            )
+        slice_ = completed[: args.limit]
+        rows = []
+        for artifact in slice_:
+            artifact_id = str(artifact.metadata.get("id", ""))
+            artifact_type = str(artifact.metadata.get("type", ""))
+            updated = str(artifact.metadata.get("updated_at", ""))
+            title = str(artifact.metadata.get("title", ""))
+            if artifact_type == "task":
+                chunk_id = str(artifact.metadata.get("chunk", "") or "")
+                plan_id = str(artifact.metadata.get("plan", "") or "")
+                parts = [p for p in [plan_id, chunk_id, artifact_id] if p]
+            elif artifact_type == "chunk":
+                plan_id = str(artifact.metadata.get("plan", "") or "")
+                parts = [p for p in [plan_id, artifact_id] if p]
+            else:
+                parts = [artifact_id]
+            rows.append((updated, " > ".join(parts), title))
+        col_width = max(len(breadcrumb) for _, breadcrumb, _ in rows)
+        for updated, breadcrumb, title in rows:
+            print(f"{updated}\t{breadcrumb:<{col_width}}\t{title}")
     else:
         print("none")
     print()
@@ -1445,8 +1506,54 @@ def cmd_report(args: argparse.Namespace) -> int:
     tree_lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=color_enabled)
     if not tree_lines:
         print("none")
-        return 0
-    for line in tree_lines:
-        print(line)
+    else:
+        for line in tree_lines:
+            print(line)
+
+    if getattr(args, "verbose", False):
+        print()
+        print(colorize("[Run stats]", "cyan", color_enabled))
+        task_ids = [
+            str(a.metadata.get("id", ""))
+            for a in artifacts
+            if str(a.metadata.get("type", "")) == "task"
+            and str(a.metadata.get("id", ""))
+            and (not project or resolve_project(a, by_id) == project)
+        ]
+        all_runs: list[dict[str, Any]] = []
+        for tid in task_ids:
+            all_runs.extend(collect_runs_for_target(root, tid, limit=100))
+        total = len(all_runs)
+        if total == 0:
+            print("  Total runs: 0")
+            print("  Pass rate: n/a")
+            print("  Total tokens: n/a")
+        else:
+            completed_count = sum(1 for r in all_runs if str(r.get("status", "")) == "completed")
+            failed_count = sum(1 for r in all_runs if str(r.get("status", "")) == "failed")
+            pass_rate = completed_count / total * 100
+            total_input = 0
+            total_output = 0
+            has_tokens = False
+            for r in all_runs:
+                tu = r.get("token_usage")
+                if isinstance(tu, dict):
+                    inp = tu.get("input_tokens")
+                    out = tu.get("output_tokens")
+                    if inp is not None:
+                        total_input += int(inp)
+                        has_tokens = True
+                    if out is not None:
+                        total_output += int(out)
+                        has_tokens = True
+            print(f"  Total runs: {total} ({completed_count} completed, {failed_count} failed)")
+            if has_tokens:
+                inp_s = f"{total_input / 1000:.1f}k"
+                out_s = f"{total_output / 1000:.1f}k"
+                print(f"  Total tokens: {inp_s} input / {out_s} output")
+            else:
+                print("  Total tokens: n/a")
+            print(f"  Pass rate: {pass_rate:.1f}%")
+
     return 0
 

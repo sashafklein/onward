@@ -5,7 +5,7 @@ plan: "PLAN-015"
 chunk: "CHUNK-024"
 project: ""
 title: "Update _prepare_task_run to per-task directory layout"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -14,7 +14,7 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T03:40:00Z"
-updated_at: "2026-03-21T03:40:00Z"
+updated_at: "2026-03-21T03:56:16Z"
 ---
 
 # Context

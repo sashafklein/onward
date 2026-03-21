@@ -5,16 +5,18 @@ plan: "PLAN-015"
 chunk: "CHUNK-028"
 project: ""
 title: "Implement onward show --runs run history table"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
 executor: "onward-exec"
-depends_on: ["TASK-085", "TASK-092"]
+depends_on:
+- "TASK-085"
+- "TASK-092"
 files: []
 acceptance: []
 created_at: "2026-03-21T03:40:00Z"
-updated_at: "2026-03-21T03:40:00Z"
+updated_at: "2026-03-21T03:56:25Z"
 ---
 
 # Context

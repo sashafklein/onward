@@ -35,6 +35,7 @@ EXECUTOR_BUILTIN_PY = ONWARD_PKG / "executor_builtin.py"
 EXECUTOR_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "onward-executor-stdin-v1.schema.json"
 SUCCESS_ACK_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "onward-task-success-ack-v1.schema.json"
 TASK_RESULT_V2_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "onward-task-result-v2.schema.json"
+TASK_RESULT_V3_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "onward-task-result-v3.schema.json"
 
 
 def _iter_onward_importfrom_aliases(tree: ast.AST) -> list[tuple[int, str | None, str, str | None]]:
@@ -354,8 +355,8 @@ def test_no_cross_module_private_onward_imports() -> None:
 
 
 def test_task_success_ack_schema_version_matches_code() -> None:
-    assert TASK_RESULT_V2_SCHEMA_PATH.is_file()
-    schema = json.loads(TASK_RESULT_V2_SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert TASK_RESULT_V3_SCHEMA_PATH.is_file()
+    schema = json.loads(TASK_RESULT_V3_SCHEMA_PATH.read_text(encoding="utf-8"))
     ver = schema["properties"]["onward_task_result"]["properties"]["schema_version"]["const"]
     assert ver == executor_ack_mod.SUCCESS_ACK_SCHEMA_VERSION
 

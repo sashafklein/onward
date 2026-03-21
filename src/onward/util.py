@@ -3,6 +3,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import subprocess
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -248,6 +250,51 @@ def _extract_markdown_list_items(section: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Git helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_head_sha(root: Path) -> str:
+    """Return current HEAD commit SHA, or empty string when git is unavailable or has no commits."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def _compute_files_changed(root: Path, before_sha: str) -> list[str]:
+    """Return list of files changed between ``before_sha`` and HEAD.
+
+    Falls back to an empty list when ``before_sha`` is empty, git is
+    unavailable, or the diff command fails.
+    """
+    if not before_sha:
+        return []
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", before_sha, "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return []
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Stable public names for cross-module use (PLAN-010 TASK-012).
 # ---------------------------------------------------------------------------
 
@@ -269,3 +316,5 @@ markdown_section = _markdown_section
 normalize_acceptance = _normalize_acceptance
 normalize_priority = _normalize_priority
 normalize_effort = _normalize_effort
+get_head_sha = _get_head_sha
+compute_files_changed = _compute_files_changed

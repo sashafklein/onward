@@ -3,12 +3,12 @@ id: "PLAN-015"
 type: "plan"
 project: ""
 title: "Rich run records with execution streams and token tracking"
-status: "open"
+status: "completed"
 description: "Restructure run records into per-task folders with live output streaming, multi-run support, and optional token usage tracking"
 priority: "medium"
 model: "opus-latest"
 created_at: "2026-03-21T00:21:37Z"
-updated_at: "2026-03-21T00:21:37Z"
+updated_at: "2026-03-21T03:56:55Z"
 ---
 
 # Summary

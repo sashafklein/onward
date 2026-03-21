@@ -207,14 +207,78 @@ def _combined_task_output(stdout: str, stderr: str) -> str:
     return output
 
 
-def _tee_stream(pipe: Any, tee_to: TextIO, buffer: list[str]) -> None:
+def _tee_stream(
+    pipe: Any,
+    tee_to: TextIO,
+    buffer: list[str],
+    file_out: TextIO | None = None,
+    file_lock: threading.Lock | None = None,
+) -> None:
     try:
         for line in iter(pipe.readline, ""):
             buffer.append(line)
             tee_to.write(line)
             tee_to.flush()
+            if file_out is not None:
+                if file_lock is not None:
+                    with file_lock:
+                        file_out.write(line)
+                        file_out.flush()
+                else:
+                    file_out.write(line)
+                    file_out.flush()
     finally:
         pipe.close()
+
+
+def extract_token_usage(stderr_output: str) -> dict[str, Any] | None:
+    """Parse token usage from Claude CLI stderr output (best-effort; returns None on failure)."""
+    import json as _json
+    import re as _re
+
+    try:
+        lines = stderr_output.strip().splitlines()
+        for line in reversed(lines):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                obj = _json.loads(stripped)
+                if isinstance(obj, dict):
+                    for usage_key in ("usage", "token_usage"):
+                        usage = obj.get(usage_key)
+                        if isinstance(usage, dict):
+                            inp = usage.get("input_tokens") or usage.get("input")
+                            out = usage.get("output_tokens") or usage.get("output")
+                            if inp is not None or out is not None:
+                                result: dict[str, Any] = {}
+                                if inp is not None:
+                                    result["input_tokens"] = int(inp)
+                                if out is not None:
+                                    result["output_tokens"] = int(out)
+                                if "input_tokens" in result and "output_tokens" in result:
+                                    result["total_tokens"] = result["input_tokens"] + result["output_tokens"]
+                                return result
+            except (ValueError, TypeError):
+                pass
+
+        for line in reversed(lines):
+            m = _re.search(
+                r"input[_ ]tokens?[:\s]+(\d+)[,\s]+output[_ ]tokens?[:\s]+(\d+)",
+                line,
+                _re.IGNORECASE,
+            )
+            if m:
+                inp_tok = int(m.group(1))
+                out_tok = int(m.group(2))
+                return {
+                    "input_tokens": inp_tok,
+                    "output_tokens": out_tok,
+                    "total_tokens": inp_tok + out_tok,
+                }
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 from onward.executor import Executor, ExecutorResult  # noqa: E402 — circular import; executor finishes ABCs first
@@ -249,6 +313,10 @@ class BuiltinExecutor(Executor):
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []
 
+        output_log_path = ctx.output_log
+        output_log_handle: Any = None
+        file_lock: threading.Lock | None = None
+
         try:
             proc = subprocess.Popen(
                 argv,
@@ -270,22 +338,40 @@ class BuiltinExecutor(Executor):
                 return_code=-1,
             )
 
-        assert proc.stdout is not None and proc.stderr is not None
-        t_out = threading.Thread(
-            target=_tee_stream,
-            args=(proc.stdout, sys.stdout, stdout_chunks),
-            daemon=True,
-        )
-        t_err = threading.Thread(
-            target=_tee_stream,
-            args=(proc.stderr, sys.stderr, stderr_chunks),
-            daemon=True,
-        )
-        t_out.start()
-        t_err.start()
-        return_code = int(proc.wait())
-        t_out.join()
-        t_err.join()
+        if output_log_path is not None:
+            try:
+                output_log_path.touch()
+                output_log_handle = output_log_path.open("w", encoding="utf-8")
+                file_lock = threading.Lock()
+            except OSError:
+                output_log_handle = None
+                file_lock = None
+
+        try:
+            assert proc.stdout is not None and proc.stderr is not None
+            t_out = threading.Thread(
+                target=_tee_stream,
+                args=(proc.stdout, sys.stdout, stdout_chunks),
+                kwargs={"file_out": output_log_handle, "file_lock": file_lock},
+                daemon=True,
+            )
+            t_err = threading.Thread(
+                target=_tee_stream,
+                args=(proc.stderr, sys.stderr, stderr_chunks),
+                kwargs={"file_out": output_log_handle, "file_lock": file_lock},
+                daemon=True,
+            )
+            t_out.start()
+            t_err.start()
+            return_code = int(proc.wait())
+            t_out.join()
+            t_err.join()
+        finally:
+            if output_log_handle is not None:
+                try:
+                    output_log_handle.close()
+                except OSError:
+                    pass
 
         stdout_text = "".join(stdout_chunks)
         stderr_text = "".join(stderr_chunks)
@@ -302,6 +388,16 @@ class BuiltinExecutor(Executor):
         else:
             error = f"executor exited with code {return_code}"
 
+        cli_usage = extract_token_usage(stderr_text)
+        ack_usage: dict[str, Any] | None = None
+        if ack_obj is not None:
+            otr = ack_obj.get("onward_task_result")
+            if isinstance(otr, dict):
+                raw_usage = otr.get("token_usage")
+                if isinstance(raw_usage, dict):
+                    ack_usage = raw_usage
+        token_usage = ack_usage if ack_usage is not None else cli_usage
+
         return ExecutorResult(
             task_id=task_id,
             run_id=run_id,
@@ -310,4 +406,5 @@ class BuiltinExecutor(Executor):
             error=error,
             ack=ack_obj,
             return_code=return_code,
+            token_usage=token_usage,
         )

@@ -5,16 +5,18 @@ plan: "PLAN-015"
 chunk: "CHUNK-026"
 project: ""
 title: "Capture before_sha and populate files_changed in run JSON"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
 executor: "onward-exec"
-depends_on: ["TASK-084", "TASK-088"]
+depends_on:
+- "TASK-084"
+- "TASK-088"
 files: []
 acceptance: []
 created_at: "2026-03-21T03:40:00Z"
-updated_at: "2026-03-21T03:40:00Z"
+updated_at: "2026-03-21T03:56:21Z"
 ---
 
 # Context

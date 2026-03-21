@@ -19,17 +19,61 @@ A daemon can be added later behind the same runtime files if needed.
 
 ## Runtime state layout
 
+New runs are stored in per-task subdirectories:
+
 ```txt
 .onward/
   ongoing.json
   runs/
-    RUN-<timestamp>-TASK-<id>.json
-    RUN-<timestamp>-TASK-<id>.log
+    TASK-020/
+      info-2026-03-21T00-30-00Z.json      ← run metadata (replaces RUN-*.json)
+      summary-2026-03-21T00-30-00Z.log    ← hook output + errors (replaces RUN-*.log)
+      output-2026-03-21T00-30-00Z.log     ← live executor stdout/stderr stream (new)
+      info-2026-03-21T01-15-00Z.json      ← retry run
+      summary-2026-03-21T01-15-00Z.log
+      output-2026-03-21T01-15-00Z.log
+    TASK-021/
+      ...
+    RUN-2026-03-20T22-27-57Z-TASK-060.json  ← legacy flat files (still readable)
+    RUN-2026-03-20T22-27-57Z-TASK-060.log
 ```
 
 - `.ongoing.json`: active run queue and current status for quick parent-agent visibility.
-- `.runs/*.json`: immutable run metadata snapshots (**JSON**; older workspaces may still have legacy simple-YAML-shaped files, which readers accept). Optional keys missing in old snapshots are defaulted on read; see [Format migration](FORMAT_MIGRATION.md).
-- `.runs/*.log`: raw executor output including hook phases and progress stream.
+- `runs/TASK-XXX/info-*.json`: run metadata snapshot (**JSON**). Contains `status`, `model`, `executor`, `started_at`, `finished_at`, `files_changed`, and `token_usage`.
+- `runs/TASK-XXX/summary-*.log`: post-hoc log written at completion — hook outputs, error messages, executor output summary.
+- `runs/TASK-XXX/output-*.log`: raw executor stdout/stderr stream written in real-time during execution. You can `tail -f` this file from another terminal to monitor a running task:
+  ```bash
+  tail -f .onward/runs/TASK-020/output-*.log
+  ```
+- Legacy `RUN-<timestamp>-TASK-<id>.json` / `.log` files from older runs remain in the flat `runs/` directory and are still readable by all `onward` commands.
+- Multiple runs per task (retries) each get their own timestamped triple inside the task directory.
+
+### Example `info-*.json`
+
+```json
+{
+  "id": "RUN-2026-03-21T00-30-00Z-TASK-020",
+  "type": "run",
+  "target": "TASK-020",
+  "plan": "PLAN-005",
+  "chunk": "CHUNK-010",
+  "status": "completed",
+  "model": "claude-sonnet-4-20250514",
+  "executor": "builtin",
+  "started_at": "2026-03-21T00:30:00Z",
+  "finished_at": "2026-03-21T00:32:13Z",
+  "log_path": ".onward/runs/TASK-020/summary-2026-03-21T00-30-00Z.log",
+  "error": "",
+  "files_changed": ["src/onward/execution.py", "tests/test_execution.py"],
+  "token_usage": {
+    "input_tokens": 12345,
+    "output_tokens": 6789,
+    "total_tokens": 19134
+  }
+}
+```
+
+`files_changed` is populated from `git diff` after post-task hooks run (not self-reported by the executor). `token_usage` is `null` when the executor does not provide it.
 
 ## Handoff packet
 
@@ -141,13 +185,31 @@ work:
 
 When **true**, exit code **0 alone is not enough**. The executor must also print a **single-line JSON object** (on stdout or stderr) that Onward can parse, containing a completed status. Onward scans **non-empty lines from bottom to top** in stdout, then stderr, and uses the **first** line that is valid JSON with an `onward_task_result` object.
 
-Required shape (version **`1`**): see [`schemas/onward-task-success-ack-v1.schema.json`](schemas/onward-task-success-ack-v1.schema.json).
+Accepted schema versions: **`1`**, **`2`**, **`3`**. See [`schemas/onward-task-success-ack-v1.schema.json`](schemas/onward-task-success-ack-v1.schema.json).
 
-Minimal example line:
+Minimal example line (v1):
 
 ```json
 {"onward_task_result":{"status":"completed","schema_version":1}}
 ```
+
+Schema v3 adds an optional `token_usage` field:
+
+```json
+{
+  "onward_task_result": {
+    "schema_version": 3,
+    "status": "completed",
+    "run_id": "RUN-2026-03-21T00-30-00Z-TASK-020",
+    "token_usage": {
+      "input_tokens": 12345,
+      "output_tokens": 6789
+    }
+  }
+}
+```
+
+`token_usage` is optional — omitting it or setting it to `null` is valid. When provided, Onward stores it in `info-*.json` under the `token_usage` key.
 
 If `onward_task_result.run_id` is present, it **must** equal `ONWARD_RUN_ID` (and the stdin `run_id`) or the run fails.
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-# Current acknowledgment schema version emitted by tooling; v1 remains accepted.
-SUCCESS_ACK_SCHEMA_VERSION = 2
+# Current acknowledgment schema version emitted by tooling; v1 and v2 remain accepted.
+SUCCESS_ACK_SCHEMA_VERSION = 3
 
 
 def _coerce_schema_version(raw: Any) -> int | None:
@@ -54,8 +54,8 @@ def _validate_ack_object(obj: dict[str, Any], expected_run_id: str) -> tuple[boo
         return False, "onward_task_result must be an object"
 
     ver = _coerce_schema_version(otr.get("schema_version", 1))
-    if ver is None or ver not in (1, 2):
-        return False, f"onward_task_result.schema_version must be 1 or 2 (got {otr.get('schema_version')!r})"
+    if ver is None or ver not in (1, 2, 3):
+        return False, f"onward_task_result.schema_version must be 1, 2, or 3 (got {otr.get('schema_version')!r})"
 
     status = str(otr.get("status", "")).lower().strip()
     if status != "completed":
@@ -68,7 +68,7 @@ def _validate_ack_object(obj: dict[str, Any], expected_run_id: str) -> tuple[boo
             f"onward_task_result.run_id mismatch (expected {expected_run_id!r}, got {rid!r})",
         )
 
-    if ver == 2:
+    if ver in (2, 3):
         err = _validate_v2_optional_fields(otr)
         if err:
             return False, err
@@ -77,13 +77,13 @@ def _validate_ack_object(obj: dict[str, Any], expected_run_id: str) -> tuple[boo
 
 
 def parse_task_result(obj: dict[str, Any]) -> dict[str, Any]:
-    """Normalize ``onward_task_result`` fields for storage and display (v1 and v2)."""
+    """Normalize ``onward_task_result`` fields for storage and display (v1, v2, and v3)."""
     otr = obj.get("onward_task_result")
     if not isinstance(otr, dict):
         return _empty_normalized_result()
 
     ver = _coerce_schema_version(otr.get("schema_version", 1))
-    if ver is None or ver not in (1, 2):
+    if ver is None or ver not in (1, 2, 3):
         ver = 1
 
     summary = ""
@@ -123,6 +123,11 @@ def parse_task_result(obj: dict[str, Any]) -> dict[str, Any]:
     if otr.get("run_id") is not None:
         rid_s = str(otr.get("run_id")).strip()
 
+    token_usage: dict[str, Any] | None = None
+    raw_tu = otr.get("token_usage")
+    if isinstance(raw_tu, dict):
+        token_usage = raw_tu
+
     return {
         "schema_version": ver,
         "status": str(otr.get("status", "")).lower().strip(),
@@ -133,6 +138,7 @@ def parse_task_result(obj: dict[str, Any]) -> dict[str, Any]:
         "acceptance_met": _acc("acceptance_met"),
         "acceptance_unmet": _acc("acceptance_unmet"),
         "notes": notes,
+        "token_usage": token_usage,
     }
 
 
@@ -147,6 +153,7 @@ def _empty_normalized_result() -> dict[str, Any]:
         "acceptance_met": [],
         "acceptance_unmet": [],
         "notes": "",
+        "token_usage": None,
     }
 
 

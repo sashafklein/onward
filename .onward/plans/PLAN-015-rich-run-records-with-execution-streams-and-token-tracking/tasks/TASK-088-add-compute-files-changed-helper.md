@@ -5,7 +5,7 @@ plan: "PLAN-015"
 chunk: "CHUNK-026"
 project: ""
 title: "Add compute_files_changed helper in util.py"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -14,7 +14,7 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T03:40:00Z"
-updated_at: "2026-03-21T03:40:00Z"
+updated_at: "2026-03-21T03:56:20Z"
 ---
 
 # Context

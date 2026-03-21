@@ -520,6 +520,7 @@ def _artifact_from_index_row(kind: str, row: dict[str, Any], root: Path) -> Arti
         "type": kind,
         "title": row.get("title"),
         "status": row.get("status"),
+        "updated_at": row.get("updated_at") or "",
     }
     if kind == "plan":
         meta["project"] = row.get("project") or ""
@@ -647,6 +648,7 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
             "id": m.get("id"),
             "title": m.get("title"),
             "status": m.get("status"),
+            "updated_at": m.get("updated_at") or "",
             "path": str(artifact.file_path.relative_to(root)),
         }
 

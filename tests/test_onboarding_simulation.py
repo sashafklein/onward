@@ -53,7 +53,7 @@ def test_onboarding_flow_init_doctor_new_next_report_work(tmp_path: Path, capsys
     assert len(task_paths) == 1
     assert 'status: "completed"' in task_paths[0].read_text(encoding="utf-8")
 
-    run_files = list((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    run_files = list((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     assert len(run_files) == 1
     assert json.loads(run_files[0].read_text(encoding="utf-8"))["status"] == "completed"
 
