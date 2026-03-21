@@ -365,3 +365,24 @@ def test_tree_hides_completed_tasks_and_chunks(tmp_path: Path, capsys):
     assert "PLAN-001" not in out, "plan with no active children should be excluded"
     assert "TASK-001" not in out
     assert "CHUNK-001" not in out
+
+
+def test_doctor_warns_on_files_and_acceptance_in_task_frontmatter(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "T"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    task_path.write_text(
+        raw.replace("depends_on: []", "depends_on: []\nfiles: []\nacceptance: []"),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "unknown task field 'files'" in out
+    assert "unknown task field 'acceptance'" in out

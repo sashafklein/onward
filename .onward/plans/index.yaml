@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T21:04:42Z"
-index_version: 318
+generated_at: "2026-03-21T21:06:31Z"
+index_version: 321
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -913,8 +913,8 @@ tasks:
   effort: "s"
 - id: "TASK-063"
   title: "Add KNOWN_FIELDS for tasks to artifacts.py and warn on unknown fields in validate_artifact"
-  status: "in_progress"
-  updated_at: "2026-03-21T21:04:42Z"
+  status: "completed"
+  updated_at: "2026-03-21T21:06:30Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-063-add-known-fields-for-tasks-to-artifacts-py-and-warn-on-unknown-fields-in-validate-artifact.md"
   plan: "PLAN-007"
   chunk: "CHUNK-017"
@@ -924,8 +924,8 @@ tasks:
   effort: "s"
 - id: "TASK-064"
   title: "Update tests to match new task frontmatter (no files/acceptance keys, plus doctor warnings)"
-  status: "open"
-  updated_at: "2026-03-21T20:25:46Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T21:06:31Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-064-update-tests-to-match-new-task-frontmatter-no-files-acceptance-keys-plus-doctor-warnings.md"
   plan: "PLAN-007"
   chunk: "CHUNK-017"
