@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T18:24:23Z"
-index_version: 204
+generated_at: "2026-03-21T18:35:44Z"
+index_version: 207
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -461,8 +461,8 @@ tasks:
   effort: "s"
 - id: "TASK-028"
   title: "Update existing tests to use layout-aware path construction"
-  status: "in_progress"
-  updated_at: "2026-03-21T18:24:23Z"
+  status: "completed"
+  updated_at: "2026-03-21T18:35:44Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-028-update-existing-tests-to-use-layout-aware-path-construction.md"
   plan: "PLAN-003"
   chunk: "CHUNK-008"
@@ -472,8 +472,8 @@ tasks:
   effort: "l"
 - id: "TASK-029"
   title: "Add new tests for single custom root and multi-root scenarios"
-  status: "open"
-  updated_at: "2026-03-21T15:49:56Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T18:35:44Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-029-add-new-tests-for-single-custom-root-and-multi-root-scenarios.md"
   plan: "PLAN-003"
   chunk: "CHUNK-008"

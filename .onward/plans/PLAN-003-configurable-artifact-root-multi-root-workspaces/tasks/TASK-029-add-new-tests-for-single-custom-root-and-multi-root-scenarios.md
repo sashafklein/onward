@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-008"
 project: ""
 title: "Add new tests for single custom root and multi-root scenarios"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "m"
-depends_on: ["TASK-028"]
+depends_on:
+- "TASK-028"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:56Z"
-updated_at: "2026-03-21T15:49:56Z"
+updated_at: "2026-03-21T18:35:44Z"
+run_count: 1
 ---
 
 # Context
