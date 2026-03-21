@@ -727,6 +727,42 @@ def test_work_rejects_non_task_chunk_plan(tmp_path: Path, capsys):
     assert "task, chunk, or plan" in out
 
 
+def test_work_task_preflight_rejects_bad_complexity(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    task_path.write_text(raw.replace("\n---\n", "\ncomplexity: banana\n---\n", 1), encoding="utf-8")
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+
+    assert code != 0
+    task_raw = task_path.read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
+
+
+def test_work_task_preflight_rejects_bad_model(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    task_path.write_text(raw.replace('model: "sonnet"', 'model: "nonexistent-model-xyz"'), encoding="utf-8")
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+
+    assert code != 0
+    task_raw = task_path.read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
+
+
 def test_post_task_shell_receives_onward_env_vars(tmp_path: Path, capsys, monkeypatch):
     """Default post_task_shell sees ONWARD_* (cleared in _init_workspace; re-enable for this test)."""
     assert cli.main(["init", "--root", str(tmp_path)]) == 0

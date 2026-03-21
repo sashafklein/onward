@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T20:46:17Z"
+generated_at: "2026-03-21T20:49:37Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -722,3 +722,15 @@ completed:
   - "TASK-048"
   human: false
   effort: "s"
+- id: "TASK-051"
+  title: "Unit tests for validate_artifact() field validators and unknown-field detection"
+  status: "completed"
+  updated_at: "2026-03-21T20:49:36Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-051-unit-tests-for-validate-artifact-field-validators-and-unknown-field-detection.md"
+  plan: "PLAN-007"
+  chunk: "CHUNK-015"
+  project: ""
+  depends_on:
+  - "TASK-048"
+  human: false
+  effort: "m"

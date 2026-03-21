@@ -5,7 +5,7 @@ plan: "PLAN-007"
 chunk: "CHUNK-015"
 project: ""
 title: "Unit tests for validate_artifact() field validators and unknown-field detection"
-status: "in_progress"
+status: "completed"
 description: "Create `tests/test_artifact_validation.py` with unit tests that exercise `validate_artifact()` in `onward.artifacts` directly, without a real filesystem workspace.\n\nUse `Artifact(file_path=Path('fake/TASK-001.md'), body='', metadata={...})` to construct test artifacts inline.\n\nCover:\n- Valid fully-formed task, chunk, and plan artifacts → no issues\n- Task with `status: garbage` → issue mentions 'status'\n- Task with `priority: urgent` → issue mentions 'priority'\n- Task with `effort: huge` → issue mentions 'effort'\n- Task with `complexity: banana` → issue mentions 'complexity'\n- Task with `model: nonexistent-model-xyz` → issue mentions 'model'\n- Task with `human: maybe` (string, not bool) → issue mentions 'human'\n- Task with unrecognized frontmatter key `foobar: 1` → issue mentions 'unknown field'\n- Task with valid optional fields (`effort: m`, `model: sonnet`, `human: true`, `priority: high`) → no issues\n- Artifact with unknown `type` field → existing behavior (issue about unknown type)"
 human: false
 model: "sonnet"
@@ -19,9 +19,10 @@ acceptance:
 - "No existing tests are broken"
 - "Tests are pure unit tests with no subprocess or filesystem I/O beyond constructing Path objects"
 created_at: "2026-03-21T20:20:59Z"
-updated_at: "2026-03-21T20:46:17Z"
+updated_at: "2026-03-21T20:49:36Z"
 effort: "m"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
