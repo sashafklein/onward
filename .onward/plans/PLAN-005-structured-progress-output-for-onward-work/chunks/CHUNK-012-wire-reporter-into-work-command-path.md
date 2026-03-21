@@ -4,12 +4,12 @@ type: "chunk"
 plan: "PLAN-005"
 project: ""
 title: "Wire reporter into work command path"
-status: "in_progress"
+status: "completed"
 description: ""
 priority: "medium"
 model: "opus"
 created_at: "2026-03-21T16:25:55Z"
-updated_at: "2026-03-21T19:03:50Z"
+updated_at: "2026-03-21T19:25:24Z"
 ---
 
 # Summary

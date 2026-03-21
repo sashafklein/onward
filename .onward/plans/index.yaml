@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T19:21:14Z"
-index_version: 249
+generated_at: "2026-03-21T19:25:25Z"
+index_version: 254
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -146,16 +146,16 @@ chunks:
   depends_on: []
 - id: "CHUNK-012"
   title: "Wire reporter into work command path"
-  status: "in_progress"
-  updated_at: "2026-03-21T19:03:50Z"
+  status: "completed"
+  updated_at: "2026-03-21T19:25:24Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-012-wire-reporter-into-work-command-path.md"
   plan: "PLAN-005"
   project: ""
   depends_on: []
 - id: "CHUNK-013"
   title: "Tests and polish"
-  status: "open"
-  updated_at: "2026-03-21T16:25:59Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T19:25:24Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-013-tests-and-polish.md"
   plan: "PLAN-005"
   project: ""
@@ -612,8 +612,8 @@ tasks:
   human: false
 - id: "TASK-040"
   title: "Wire WorkReporter into work_task and _finalize_task_run in execution.py"
-  status: "in_progress"
-  updated_at: "2026-03-21T19:21:14Z"
+  status: "completed"
+  updated_at: "2026-03-21T19:25:23Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-040-wire-workreporter-into-work-task-and-finalize-task-run-in-execution-py.md"
   plan: "PLAN-005"
   chunk: "CHUNK-012"
@@ -624,8 +624,8 @@ tasks:
   human: false
 - id: "TASK-041"
   title: "Add unit tests for WorkReporter formatting"
-  status: "open"
-  updated_at: "2026-03-21T16:26:57Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T19:25:25Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-041-add-unit-tests-for-workreporter-formatting.md"
   plan: "PLAN-005"
   chunk: "CHUNK-013"

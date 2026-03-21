@@ -5,16 +5,19 @@ plan: "PLAN-005"
 chunk: "CHUNK-013"
 project: ""
 title: "Add unit tests for WorkReporter formatting"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "sonnet"
 executor: "onward-exec"
-depends_on: ["TASK-037"]
-files: ["tests/test_reporter.py"]
+depends_on:
+- "TASK-037"
+files:
+- "tests/test_reporter.py"
 acceptance: []
 created_at: "2026-03-21T16:26:57Z"
-updated_at: "2026-03-21T16:26:57Z"
+updated_at: "2026-03-21T19:25:25Z"
+run_count: 1
 ---
 
 # Context
