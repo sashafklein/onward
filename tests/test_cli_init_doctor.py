@@ -298,3 +298,125 @@ def test_doctor_detects_duplicate_ids(tmp_path: Path, capsys):
 
     assert exit_code == 1
     assert "duplicate id found: PLAN-001" in out
+
+
+def test_doctor_validates_custom_root_directories(tmp_path: Path, capsys):
+    """Test that doctor validates directories under a custom artifact root."""
+    # Create config with custom root
+    config = (tmp_path / ".onward.config.yaml").write_text(
+        """version: 1
+root: nb
+
+sync:
+  mode: local
+  branch: onward
+  repo: null
+  worktree_path: nb/sync
+
+models:
+  default: opus-latest
+""",
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+
+    # Doctor should fail because nb/ doesn't exist
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "missing artifact root: nb/" in out
+
+
+def test_doctor_validates_multi_root_directories(tmp_path: Path, capsys):
+    """Test that doctor validates directories for each project in multi-root mode."""
+    # Create config with multiple roots
+    config = (tmp_path / ".onward.config.yaml").write_text(
+        """version: 1
+roots:
+  proj_a: .proj_a
+  proj_b: .proj_b
+
+sync:
+  mode: local
+  branch: onward
+  repo: null
+
+models:
+  default: opus-latest
+""",
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+
+    # Doctor should fail because neither root exists
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "missing artifact root [proj_a]: .proj_a/" in out
+    assert "missing artifact root [proj_b]: .proj_b/" in out
+
+
+def test_doctor_passes_with_custom_root_after_init(tmp_path: Path, capsys):
+    """Test that doctor passes with a custom root after proper initialization."""
+    # Create custom root directory structure manually
+    nb_root = tmp_path / "nb"
+    nb_root.mkdir()
+    (nb_root / "plans").mkdir()
+    (nb_root / "plans" / ".archive").mkdir()
+    (nb_root / "templates").mkdir()
+    (nb_root / "prompts").mkdir()
+    (nb_root / "hooks").mkdir()
+    (nb_root / "sync").mkdir()
+    (nb_root / "runs").mkdir()
+    (nb_root / "reviews").mkdir()
+    (nb_root / "notes").mkdir()
+
+    # Create required files
+    (tmp_path / ".onward.config.yaml").write_text(
+        """version: 1
+root: nb
+
+sync:
+  mode: local
+  branch: onward
+  repo: null
+  worktree_path: nb/sync
+
+models:
+  default: opus-latest
+""",
+        encoding="utf-8",
+    )
+    (nb_root / "templates" / "plan.md").write_text("# Plan template", encoding="utf-8")
+    (nb_root / "templates" / "chunk.md").write_text("# Chunk template", encoding="utf-8")
+    (nb_root / "templates" / "task.md").write_text("# Task template", encoding="utf-8")
+    (nb_root / "templates" / "run.md").write_text("# Run template", encoding="utf-8")
+    (nb_root / "prompts" / "split-plan.md").write_text("# Split plan prompt", encoding="utf-8")
+    (nb_root / "prompts" / "split-chunk.md").write_text("# Split chunk prompt", encoding="utf-8")
+    (nb_root / "plans" / "index.yaml").write_text("generated_at: null\nplans: []\n", encoding="utf-8")
+    (nb_root / "plans" / "recent.yaml").write_text("generated_at: null\ncompleted: []\n", encoding="utf-8")
+
+    # Create .gitignore with custom root entries
+    (tmp_path / ".gitignore").write_text(
+        """nb/plans/.archive/
+nb/sync/
+nb/runs/
+nb/reviews/
+nb/ongoing.json
+.dogfood/
+""",
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+
+    # Doctor should now pass
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Doctor check passed" in out

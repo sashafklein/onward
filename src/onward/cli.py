@@ -295,7 +295,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if getattr(args, "command", "") != "init":
+        # Skip workspace validation for init and doctor commands
+        # (init creates the workspace, doctor diagnoses workspace issues)
+        if getattr(args, "command", "") not in ("init", "doctor"):
             root_value = getattr(args, "root", ".")
             require_workspace(Path(root_value).resolve())
         return args.func(args)

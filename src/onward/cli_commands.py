@@ -76,6 +76,7 @@ from onward.scaffold import (
     default_files,
     gitignore_lines,
     require_workspace,
+    required_paths,
     update_gitignore,
     write_workspace_file,
 )
@@ -200,26 +201,73 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"Warning: {w}")
     issues.extend(validate_sync_config(root, config))
 
-    for rel_path in REQUIRED_PATHS:
-        path = root / rel_path
-        if not path.exists():
-            issues.append(f"missing required file: {rel_path}")
+    # Build layout to determine artifact root(s)
+    layout = WorkspaceLayout.from_config(root, config)
 
-    ongoing_path = root / ".onward/ongoing.json"
-    if ongoing_path.exists():
+    # Check each configured project root
+    for project_key in layout.all_project_keys():
         try:
-            json.loads(ongoing_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            issues.append(f"invalid json in .onward/ongoing.json: {exc}")
+            artifact_root_path = layout.artifact_root(project_key)
+        except ValueError as exc:
+            # Should not happen since we're iterating over known keys, but handle gracefully
+            issues.append(str(exc))
+            continue
 
-    gitignore_path = root / ".gitignore"
-    if not gitignore_path.exists():
-        issues.append("missing .gitignore")
-    else:
-        lines = set(gitignore_path.read_text(encoding="utf-8").splitlines())
-        for entry in GITIGNORE_LINES:
-            if entry not in lines:
-                issues.append(f"missing .gitignore entry: {entry}")
+        # Compute relative artifact root for display
+        artifact_root_rel = artifact_root_path.relative_to(root) if artifact_root_path.is_relative_to(root) else artifact_root_path
+        artifact_root_str = str(artifact_root_rel)
+
+        # Label for multi-root mode
+        project_label = f" [{project_key}]" if layout.is_multi_root and project_key else ""
+
+        # Check artifact root directory exists
+        if not artifact_root_path.exists():
+            issues.append(f"missing artifact root{project_label}: {artifact_root_str}/")
+            continue  # Skip subdirectory checks if root doesn't exist
+
+        # Check required subdirectories exist
+        required_subdirs = [
+            "plans",
+            "plans/.archive",
+            "templates",
+            "prompts",
+            "hooks",
+            "sync",
+            "runs",
+            "reviews",
+            "notes",
+        ]
+        for subdir in required_subdirs:
+            subdir_path = artifact_root_path / subdir
+            if not subdir_path.exists():
+                issues.append(f"missing directory{project_label}: {artifact_root_str}/{subdir}/")
+
+        # Check required files under this artifact root
+        for rel_path in required_paths(artifact_root_str):
+            path = root / rel_path
+            if not path.exists():
+                issues.append(f"missing required file{project_label}: {rel_path}")
+
+        # Check ongoing.json validity if it exists
+        ongoing_path = layout.ongoing_path(project_key)
+        if ongoing_path.exists():
+            try:
+                json.loads(ongoing_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                ongoing_rel = ongoing_path.relative_to(root) if ongoing_path.is_relative_to(root) else ongoing_path
+                issues.append(f"invalid json{project_label} in {ongoing_rel}: {exc}")
+
+        # Check .gitignore entries for this artifact root
+        gitignore_path = root / ".gitignore"
+        if not gitignore_path.exists():
+            if not layout.is_multi_root or project_key == layout.all_project_keys()[0]:
+                # Only report once for missing .gitignore
+                issues.append("missing .gitignore")
+        else:
+            lines = set(gitignore_path.read_text(encoding="utf-8").splitlines())
+            for entry in gitignore_lines(artifact_root_str):
+                if entry not in lines:
+                    issues.append(f"missing .gitignore entry{project_label}: {entry}")
 
     seen_ids: set[str] = set()
     blocked_by_warnings: list[str] = []
