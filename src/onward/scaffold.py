@@ -31,6 +31,16 @@ def default_files(artifact_root: str) -> dict[str, str]:
 # Schema version for future migrations.
 version: 1
 
+# Artifact root directory (default: .onward)
+# Uncomment to use a non-hidden directory (e.g., for Obsidian sync):
+# root: .onward
+#
+# Multi-root workspaces (separate artifact trees per project):
+# roots:
+#   frontend: .fe-plans
+#   backend: .be-plans
+# default_project: frontend
+
 # Artifact directories ({artifact_root}/, etc.) are fixed relative to the workspace root.
 
 sync:

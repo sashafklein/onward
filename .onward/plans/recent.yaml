@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T18:44:11Z"
+generated_at: "2026-03-21T18:49:51Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -84,6 +84,19 @@ completed:
   depends_on:
   - "CHUNK-005"
   effort: "m"
+- id: "CHUNK-008"
+  title: "Tests, docs, and migration guide"
+  status: "completed"
+  updated_at: "2026-03-21T18:49:51Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/chunks/CHUNK-008-tests-docs-and-migration-guide.md"
+  plan: "PLAN-003"
+  project: ""
+  depends_on:
+  - "CHUNK-005"
+  - "CHUNK-006"
+  - "CHUNK-007"
+  - "CHUNK-010"
+  effort: "l"
 - id: "CHUNK-009"
   title: "Add --md flag and markdown report formatter"
   status: "completed"
@@ -103,14 +116,6 @@ completed:
   depends_on:
   - "CHUNK-004"
   effort: "m"
-- id: "CHUNK-011"
-  title: "Implement WorkReporter class"
-  status: "completed"
-  updated_at: "2026-03-21T16:50:49Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-011-implement-workreporter-class.md"
-  plan: "PLAN-005"
-  project: ""
-  depends_on: []
 - id: "TASK-001"
   title: "Fix AI_OPERATOR.md anti-pattern #3 factual error"
   status: "completed"
@@ -438,6 +443,28 @@ completed:
   - "TASK-028"
   human: false
   effort: "m"
+- id: "TASK-030"
+  title: "Update docs (README, INSTALLATION, AI_OPERATOR, AGENTS) for configurable roots"
+  status: "completed"
+  updated_at: "2026-03-21T18:48:55Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-030-update-docs-readme-installation-ai-operator-agents-for-configurable-roots.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-008"
+  project: ""
+  depends_on: []
+  human: false
+  effort: "m"
+- id: "TASK-031"
+  title: "Update scaffold default config template with root option"
+  status: "completed"
+  updated_at: "2026-03-21T18:49:51Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-031-update-scaffold-default-config-template-with-root-option.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-008"
+  project: ""
+  depends_on: []
+  human: false
+  effort: "xs"
 - id: "TASK-032"
   title: "Add --md argument to report subparser in cli.py"
   status: "completed"

@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Tests, docs, and migration guide"
-status: "in_progress"
+status: "completed"
 description: "Update all tests for configurable roots, update docs, write migration guide"
 depends_on:
 - "CHUNK-005"
@@ -15,7 +15,7 @@ priority: "medium"
 effort: "l"
 model: "claude-sonnet-4-5"
 created_at: "2026-03-21T15:46:48Z"
-updated_at: "2026-03-21T18:24:22Z"
+updated_at: "2026-03-21T18:49:51Z"
 ---
 
 # Summary

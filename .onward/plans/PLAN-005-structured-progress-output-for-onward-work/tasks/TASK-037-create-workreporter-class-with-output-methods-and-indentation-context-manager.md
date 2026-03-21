@@ -14,9 +14,9 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T16:26:40Z"
-updated_at: "2026-03-21T16:59:32Z"
-run_count: 0
-last_run_status: "failed"
+updated_at: "2026-03-21T18:49:24Z"
+run_count: 1
+last_run_status: "model_error"
 ---
 
 # Context
