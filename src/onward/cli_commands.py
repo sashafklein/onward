@@ -1396,10 +1396,10 @@ def format_report_markdown(
     lines.append("")
     in_progress = report_rows(artifacts, root, status="in_progress", project=project, claimed_ids=active_claimed)
     if in_progress:
-        lines.append("| ID | Type | Status | Title | File |")
-        lines.append("|---|---|---|---|---|")
+        lines.append("| ID | Type | Status | Title |")
+        lines.append("|---|---|---|---|")
         for row in in_progress:
-            parts = row.split("\t")
+            parts = row.split("\t")[:4]
             lines.append("| " + " | ".join(parts) + " |")
     else:
         lines.append("*None*")
@@ -1410,10 +1410,10 @@ def format_report_markdown(
     lines.append("")
     upcoming = report_rows(artifacts, root, status="open", project=project, claimed_ids=active_claimed)
     if upcoming:
-        lines.append("| ID | Type | Status | Title | File |")
-        lines.append("|---|---|---|---|---|")
+        lines.append("| ID | Type | Status | Title |")
+        lines.append("|---|---|---|---|")
         for row in upcoming:
-            parts = row.split("\t")
+            parts = row.split("\t")[:4]
             lines.append("| " + " | ".join(parts) + " |")
     else:
         lines.append("*None*")
@@ -1425,10 +1425,10 @@ def format_report_markdown(
         lines.append("")
         c_rows = claimed_rows(artifacts, root, active_claimed, project=project)
         if c_rows:
-            lines.append("| ID | Type | Status | Title | File |")
-            lines.append("|---|---|---|---|---|")
+            lines.append("| ID | Type | Status | Title |")
+            lines.append("|---|---|---|---|")
             for row in c_rows:
-                parts = row.split("\t")
+                parts = row.split("\t")[:4]
                 lines.append("| " + " | ".join(parts) + " |")
         else:
             lines.append("*None*")
@@ -1443,9 +1443,7 @@ def format_report_markdown(
         artifact_id = str(nxt.metadata.get("id", ""))
         artifact_type = str(nxt.metadata.get("type", ""))
         title = str(nxt.metadata.get("title", ""))
-        file_path = str(nxt.file_path.relative_to(root))
         lines.append(f"- **{artifact_id}** ({artifact_type}, {status}): {title}")
-        lines.append(f"  - File: `{file_path}`")
     else:
         lines.append("*None*")
     lines.append("")
@@ -1453,7 +1451,7 @@ def format_report_markdown(
     # Blocking Human Tasks
     lines.append("## Blocking Human Tasks")
     lines.append("")
-    human_blockers: list[tuple[str, str, str, str, str]] = []
+    human_blockers: list[tuple[str, str, str, str]] = []
     for blocker_id in sorted(blockers):
         artifact = by_id.get(blocker_id)
         if not artifact:
@@ -1467,11 +1465,10 @@ def format_report_markdown(
             "task",
             str(artifact.metadata.get("status", "")),
             str(artifact.metadata.get("title", "")),
-            str(artifact.file_path.relative_to(root)),
         ))
     if human_blockers:
-        lines.append("| ID | Type | Status | Title | File |")
-        lines.append("|---|---|---|---|---|")
+        lines.append("| ID | Type | Status | Title |")
+        lines.append("|---|---|---|---|")
         for parts in human_blockers:
             lines.append("| " + " | ".join(parts) + " |")
     else:

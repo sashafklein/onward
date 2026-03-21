@@ -4,15 +4,15 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Scaffold and init for configurable roots"
-status: "open"
+status: "in_progress"
 description: "Update scaffold.py and cmd_init/cmd_doctor to create and validate configurable root directories"
 depends_on:
-  - "CHUNK-003"
+- "CHUNK-003"
 priority: "high"
 effort: "m"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:46:42Z"
-updated_at: "2026-03-21T15:46:42Z"
+updated_at: "2026-03-21T16:32:24Z"
 ---
 
 # Summary

@@ -4,13 +4,13 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Core path resolution layer (WorkspaceLayout)"
-status: "in_progress"
+status: "completed"
 description: "Introduce WorkspaceLayout dataclass and config keys for root/roots path resolution"
 priority: "high"
 effort: "l"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:46:40Z"
-updated_at: "2026-03-21T16:17:08Z"
+updated_at: "2026-03-21T16:25:04Z"
 ---
 
 # Summary
