@@ -388,31 +388,46 @@ completed: []
   "active_runs": []
 }
 """,
-}
+    }
+
 
 # Backward-compatible constant
 DEFAULT_FILES = default_files(".onward")
 
-GITIGNORE_LINES = [
-    ".onward/plans/.archive/",
-    ".onward/sync/",
-    ".onward/runs/",
-    ".onward/reviews/",
-    ".onward/ongoing.json",
-    ".dogfood/",
-]
 
-REQUIRED_PATHS = [
-    ".onward.config.yaml",
-    ".onward/templates/plan.md",
-    ".onward/templates/chunk.md",
-    ".onward/templates/task.md",
-    ".onward/templates/run.md",
-    ".onward/prompts/split-plan.md",
-    ".onward/prompts/split-chunk.md",
-    ".onward/plans/index.yaml",
-    ".onward/plans/recent.yaml",
-]
+def gitignore_lines(artifact_root: str) -> list[str]:
+    """Return the list of gitignore entries for the artifact root."""
+    return [
+        f"{artifact_root}/plans/.archive/",
+        f"{artifact_root}/sync/",
+        f"{artifact_root}/runs/",
+        f"{artifact_root}/reviews/",
+        f"{artifact_root}/ongoing.json",
+        ".dogfood/",
+    ]
+
+
+# Backward-compatible constant
+GITIGNORE_LINES = gitignore_lines(".onward")
+
+
+def required_paths(artifact_root: str) -> list[str]:
+    """Return the list of required paths for validation."""
+    return [
+        ".onward.config.yaml",
+        f"{artifact_root}/templates/plan.md",
+        f"{artifact_root}/templates/chunk.md",
+        f"{artifact_root}/templates/task.md",
+        f"{artifact_root}/templates/run.md",
+        f"{artifact_root}/prompts/split-plan.md",
+        f"{artifact_root}/prompts/split-chunk.md",
+        f"{artifact_root}/plans/index.yaml",
+        f"{artifact_root}/plans/recent.yaml",
+    ]
+
+
+# Backward-compatible constant
+REQUIRED_PATHS = required_paths(".onward")
 
 
 def write_workspace_file(path: Path, content: str, force: bool) -> bool:
@@ -423,7 +438,16 @@ def write_workspace_file(path: Path, content: str, force: bool) -> bool:
     return True
 
 
-def update_gitignore(root: Path) -> bool:
+def update_gitignore(root: Path, artifact_root: str = ".onward") -> bool:
+    """Update .gitignore with artifact root entries.
+
+    Args:
+        root: Workspace root directory
+        artifact_root: Artifact root path (default: ".onward")
+
+    Returns:
+        True if .gitignore was modified, False otherwise
+    """
     gitignore = root / ".gitignore"
     existing = []
     if gitignore.exists():
@@ -431,7 +455,7 @@ def update_gitignore(root: Path) -> bool:
 
     changed = False
     lines = existing.copy()
-    for entry in GITIGNORE_LINES:
+    for entry in gitignore_lines(artifact_root):
         if entry not in lines:
             lines.append(entry)
             changed = True
@@ -443,16 +467,34 @@ def update_gitignore(root: Path) -> bool:
     return True
 
 
-def _is_workspace_root(root: Path) -> bool:
+def _is_workspace_root(root: Path, artifact_root: str = ".onward") -> bool:
+    """Check if a directory is a valid Onward workspace root.
+
+    Args:
+        root: Workspace root directory
+        artifact_root: Artifact root path (default: ".onward")
+
+    Returns:
+        True if the directory appears to be a valid workspace
+    """
     return (
         (root / ".onward.config.yaml").exists()
-        and (root / ".onward").exists()
-        and (root / ".onward/plans").exists()
+        and (root / artifact_root).exists()
+        and (root / artifact_root / "plans").exists()
     )
 
 
-def require_workspace(root: Path) -> None:
-    if _is_workspace_root(root):
+def require_workspace(root: Path, artifact_root: str = ".onward") -> None:
+    """Require that a directory is a valid Onward workspace.
+
+    Args:
+        root: Workspace root directory
+        artifact_root: Artifact root path (default: ".onward")
+
+    Raises:
+        ValueError: If the directory is not a valid workspace
+    """
+    if _is_workspace_root(root, artifact_root):
         return
     raise ValueError(
         f"not an Onward workspace: {root}. Run `onward init` here (or pass --root <workspace>)"

@@ -416,6 +416,35 @@ def validate_chunk_dag(
 
 
 # ---------------------------------------------------------------------------
+# Model-error detection
+# ---------------------------------------------------------------------------
+
+_MODEL_ERROR_PATTERNS = [
+    "issue with the selected model",
+    "model not found",
+    "not a valid model",
+    "invalid model",
+    "does not exist or you do not have access",
+    "may not exist or you may not have access",
+    "is not available",
+    "unknown model",
+]
+
+
+def _is_model_error(ex_result: ExecutorResult | None, error: str) -> bool:
+    """Return True when a failed executor run looks like a model configuration error.
+
+    Checks both the executor error string and captured output against known
+    patterns from Claude CLI / Cursor / other backends.
+    """
+    haystack = (error or "").lower()
+    if ex_result is not None:
+        haystack += " " + (ex_result.output or "").lower()
+        haystack += " " + (ex_result.error or "").lower()
+    return any(pat in haystack for pat in _MODEL_ERROR_PATTERNS)
+
+
+# ---------------------------------------------------------------------------
 # Task execution
 # ---------------------------------------------------------------------------
 
@@ -613,9 +642,21 @@ def _finalize_task_run(
     ongoing["active_runs"] = remaining
     _write_ongoing(root, ongoing)
 
+    model_err = not ok and _is_model_error(ex_result, error)
+    if model_err:
+        print(
+            f"Model error for {task_id}: {error}\n"
+            f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
+            f"  Task reverted to open (not marked as failed)."
+        )
+
     refreshed = must_find_by_id(root, task_id)
-    refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
-    update_artifact_status(root, refreshed, "completed" if ok else "failed")
+    if model_err:
+        refreshed.metadata["last_run_status"] = "model_error"
+        update_artifact_status(root, refreshed, "open")
+    else:
+        refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
+        update_artifact_status(root, refreshed, "completed" if ok else "failed")
 
     return run_id, ok
 
