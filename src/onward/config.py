@@ -34,7 +34,7 @@ CONFIG_SECTION_KEYS: dict[str, frozenset[str]] = {
         "review_default",
     }),
     "review": frozenset({"double_review", "reviewers"}),
-    "work": frozenset({"sequential_by_default", "require_success_ack", "max_retries", "claim_timeout_minutes"}),
+    "work": frozenset({"sequential_by_default", "require_success_ack", "max_retries", "claim_timeout_minutes", "max_parallel_tasks"}),
     "hooks": frozenset({
         "pre_task_shell",
         "post_task_shell",
@@ -427,6 +427,21 @@ def work_claim_timeout_minutes(config: dict[str, Any]) -> int:
     except (TypeError, ValueError):
         return 120
     return max(0, n)
+
+
+def work_max_parallel_tasks(config: dict[str, Any]) -> int:
+    """Max tasks to dispatch concurrently within a chunk. Default 1 (serial). Minimum 1."""
+    work = config.get("work", {})
+    if not isinstance(work, dict) or "max_parallel_tasks" not in work:
+        return 1
+    raw = work.get("max_parallel_tasks")
+    if raw is None or raw == "":
+        return 1
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, n)
 
 
 def model_setting(config: dict[str, Any], key: str, fallback: str) -> str:

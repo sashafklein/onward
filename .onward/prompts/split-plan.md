@@ -21,6 +21,11 @@ If you are unsure of paths, use coarse entries (e.g. src/onward/) rather than om
 - Output **depends_on_index**: a JSON array of **0-based indices** into your chunks array pointing to chunks that must complete before this one.
 - Only reference earlier or independent chunks; never create cycles. A chunk must not depend on a later index.
 - Use an empty array when the chunk has no chunk-level dependencies.
+- Reason explicitly about whether each chunk requires outputs or side-effects from another chunk. Common patterns that require `depends_on_index`:
+  - Chunk B uses a module, schema, or interface introduced by Chunk A.
+  - Chunk B writes integration tests for code delivered in Chunk A.
+  - Chunk B documents or exposes functionality built in Chunk A.
+- Chunks that are fully independent (disjoint files, no shared outputs) should have empty `depends_on_index` — accurate edges enable future parallel chunk dispatch.
 
 ## Acceptance and testing
 

@@ -12,16 +12,19 @@ executor:
   enabled: true
 
 models:
-  default: composer-2
+  default: sonnet-latest
   high: opus-latest
   medium: sonnet-latest
   low: haiku-latest
-  split:
+  split: sonnet-latest
   review_1: codex-latest
   review_2:
 
 work:
   sequential_by_default: true
+  # max_parallel_tasks: 1  # Dispatch up to N independent tasks concurrently within a chunk.
+  #                         # Default 1 (serial). Set to 3+ to enable parallel execution.
+  #                         # post_task_shell hooks are serialized to avoid git-commit conflicts.
 
 hooks:
   pre_task_shell: []

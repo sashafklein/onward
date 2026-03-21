@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +27,7 @@ from onward.config import (
     resolve_executor,
     resolve_model_for_task,
     work_claim_timeout_minutes,
+    work_max_parallel_tasks,
     work_max_retries,
     work_sequential_by_default,
 )
@@ -350,6 +353,58 @@ def claimed_task_ids(root: Path) -> set[str]:
 
 
 # ---------------------------------------------------------------------------
+# DAG validation
+# ---------------------------------------------------------------------------
+
+
+def validate_chunk_dag(tasks: list[Artifact]) -> list[str]:
+    """Return list of error strings (empty = valid DAG).
+
+    Checks:
+    - All IDs referenced in ``depends_on`` exist within the chunk (dangling refs
+      to tasks outside the chunk that are not ``completed`` are also flagged).
+    - No cycles (Kahn's algorithm).
+    """
+    errors: list[str] = []
+    task_ids = {str(t.metadata.get("id", "")) for t in tasks}
+    status_by_id = {str(t.metadata.get("id", "")): str(t.metadata.get("status", "")) for t in tasks}
+
+    adjacency: dict[str, list[str]] = {str(t.metadata.get("id", "")): [] for t in tasks}
+    in_degree: dict[str, int] = {str(t.metadata.get("id", "")): 0 for t in tasks}
+
+    for task in tasks:
+        tid = str(task.metadata.get("id", ""))
+        deps = as_str_list(task.metadata.get("depends_on")) + as_str_list(task.metadata.get("blocked_by"))
+        for dep in deps:
+            if dep not in task_ids:
+                if status_by_id.get(dep) != "completed":
+                    errors.append(
+                        f"{tid} depends_on {dep!r} which is not in this chunk and not completed"
+                    )
+            else:
+                adjacency[dep].append(tid)
+                in_degree[tid] = in_degree.get(tid, 0) + 1
+
+    if errors:
+        return errors
+
+    queue = [tid for tid, deg in in_degree.items() if deg == 0]
+    visited = 0
+    while queue:
+        node = queue.pop(0)
+        visited += 1
+        for neighbor in adjacency.get(node, []):
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited != len(tasks):
+        errors.append("depends_on graph contains a cycle — cannot execute chunk")
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
 # Task execution
 # ---------------------------------------------------------------------------
 
@@ -448,13 +503,217 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
     )
 
 
+def _finalize_task_run(
+    root: Path,
+    config: dict[str, Any],
+    p: PreparedTaskRun,
+    ex_result: ExecutorResult | None,
+    error: str,
+    ok: bool,
+    ack_obj: dict[str, Any] | None,
+    *,
+    post_hook_lock: threading.Lock | None = None,
+) -> tuple[str, bool]:
+    """Write log, run JSON, artifact status, and remove ongoing entry for one completed task.
+
+    ``post_hook_lock`` serializes ``post_task_shell`` and ``post_task_markdown`` hooks to
+    prevent concurrent git commits from conflicting when ``max_parallel_tasks > 1``.
+
+    Returns ``(run_id, ok)``.
+    """
+    hook_cmd = _stdin_json_executor_argv(config)
+    post_shell = _hook_commands(config, "post_task_shell")
+    post_md = _hook_markdown_path(config, "post_task_markdown")
+
+    task = p.task
+    task_id = str(task.metadata.get("id", ""))
+    run_id = p.run_id
+    model = p.model
+    run_record = p.run_record
+    run_json = p.run_json
+    run_log = p.run_log
+    log_sections = p.log_sections
+
+    if ex_result is not None and ex_result.output.strip():
+        log_sections.append(ex_result.output.rstrip())
+
+    hook_env = {
+        "ONWARD_RUN_ID": run_id,
+        "ONWARD_TASK_ID": task_id,
+        "ONWARD_TASK_TITLE": str(task.metadata.get("title", "")),
+    }
+
+    if ok and not error:
+        lock_ctx = post_hook_lock if post_hook_lock is not None else threading.Lock()
+        with lock_ctx:
+            post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell", hook_env)
+            log_sections.append(post_shell_log)
+            if not post_shell_ok:
+                ok = False
+                error = "post_task_shell hook failed"
+            if ok:
+                post_md_ok, post_md_log = _run_markdown_hook(
+                    root, hook_cmd, post_md, "post_task_markdown", model, task, run_id
+                )
+                log_sections.append(post_md_log)
+                if not post_md_ok:
+                    ok = False
+                    error = "post_task_markdown hook failed"
+
+    if error:
+        log_sections.append(f"[error] {error}")
+    run_log.write_text(
+        "\n\n".join(section.rstrip() for section in log_sections if section).rstrip() + "\n",
+        encoding="utf-8",
+    )
+
+    finished_at = now_iso()
+    run_record["status"] = "completed" if ok else "failed"
+    run_record["finished_at"] = finished_at
+    run_record["error"] = error
+    if ack_obj is not None:
+        run_record["success_ack"] = ack_obj
+        run_record["task_result"] = parse_task_result(ack_obj)
+    run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
+
+    ongoing = load_ongoing(root)
+    remaining = [
+        item
+        for item in ongoing.get("active_runs", [])
+        if str(item.get("id", "")) != run_id
+    ]
+    ongoing["active_runs"] = remaining
+    _write_ongoing(root, ongoing)
+
+    refreshed = must_find_by_id(root, task_id)
+    refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
+    update_artifact_status(root, refreshed, "completed" if ok else "failed")
+
+    return run_id, ok
+
+
+def _run_one_task_with_hooks(
+    root: Path,
+    config: dict[str, Any],
+    executor: Executor,
+    p: PreparedTaskRun,
+    *,
+    ongoing_lock: threading.Lock,
+    post_hook_lock: threading.Lock,
+) -> tuple[str, bool]:
+    """Run pre-hooks, executor, and finalize for a single task. Thread-safe for parallel use.
+
+    ``ongoing_lock`` serializes writes to ``ongoing.json``.
+    ``post_hook_lock`` serializes ``post_task_shell`` / ``post_task_markdown`` hooks.
+    Returns ``(run_id, ok)``.
+    """
+    task = p.task
+    task_id = str(task.metadata.get("id", ""))
+    run_id = p.run_id
+    model = p.model
+    run_record = p.run_record
+    run_log = p.run_log
+    log_sections = p.log_sections
+
+    hook_env = {
+        "ONWARD_RUN_ID": run_id,
+        "ONWARD_TASK_ID": task_id,
+        "ONWARD_TASK_TITLE": str(task.metadata.get("title", "")),
+    }
+    pre_shell = _hook_commands(config, "pre_task_shell")
+
+    pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell", hook_env)
+    log_sections.append(pre_shell_log)
+
+    error = ""
+    ok = False
+    ack_obj: dict[str, Any] | None = None
+    ex_result: ExecutorResult | None = None
+
+    if not pre_shell_ok:
+        error = "pre_task_shell hook failed"
+    elif not is_executor_enabled(config):
+        error = "executor.enabled is false in .onward.config.yaml (executor disabled)"
+    else:
+        with ongoing_lock:
+            _register_active_run(root, run_id, task_id, model, run_log, str(run_record["started_at"]))
+        ex_result = executor.execute_task(root, p.ctx)
+        if ex_result.task_id != task_id:
+            error = f"executor result task_id mismatch ({ex_result.task_id!r} != {task_id!r})"
+        elif ex_result.run_id != run_id:
+            error = f"executor result run_id mismatch ({ex_result.run_id!r} != {run_id!r})"
+        else:
+            ok = ex_result.success
+            if not ok:
+                error = ex_result.error or f"executor exited with code {ex_result.return_code}"
+            ack_obj = ex_result.ack
+
+    return _finalize_task_run(
+        root, config, p, ex_result, error, ok, ack_obj, post_hook_lock=post_hook_lock
+    )
+
+
+def parallel_execute(
+    root: Path,
+    config: dict[str, Any],
+    executor: Executor,
+    prepared_list: list[PreparedTaskRun],
+    max_workers: int,
+) -> tuple[bool, list[tuple[str, bool]]]:
+    """Dispatch up to ``max_workers`` tasks concurrently using :class:`~concurrent.futures.ThreadPoolExecutor`.
+
+    Pre/post hooks and executor calls run in parallel threads. ``post_task_shell`` and
+    ``post_task_markdown`` hooks are serialized via a shared lock so concurrent git commits
+    do not conflict.
+
+    If any task fails, in-flight siblings are allowed to finish but no new tasks are submitted.
+    Returns ``(all_ok, [(run_id, ok), ...])``.
+    """
+    ongoing_lock = threading.Lock()
+    post_hook_lock = threading.Lock()
+
+    outcomes: list[tuple[str, bool]] = []
+    wave_ok = True
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures: dict[Future[tuple[str, bool]], PreparedTaskRun] = {}
+        for p in prepared_list:
+            future = pool.submit(
+                _run_one_task_with_hooks,
+                root,
+                config,
+                executor,
+                p,
+                ongoing_lock=ongoing_lock,
+                post_hook_lock=post_hook_lock,
+            )
+            futures[future] = p
+
+        for future in as_completed(futures):
+            try:
+                run_id, ok = future.result()
+            except Exception as exc:  # noqa: BLE001
+                p = futures[future]
+                run_id = p.run_id
+                ok = False
+                outcomes.append((run_id, ok))
+                wave_ok = False
+                _ = exc
+                continue
+            outcomes.append((run_id, ok))
+            if not ok:
+                wave_ok = False
+
+    return wave_ok, outcomes
+
+
 def _run_hooked_executor_batch(
     root: Path,
     config: dict[str, Any],
     executor: Executor,
     prepared_list: list[PreparedTaskRun],
 ) -> tuple[bool, list[tuple[str, bool]]]:
-    """Pre/post hooks per task; one :meth:`~onward.executor.Executor.execute_batch` iterator for executor steps.
+    """Pre/post hooks per task; sequential execution via :meth:`~onward.executor.Executor.execute_batch`.
 
     For each task: run ``pre_task_shell``, then consume one step from ``execute_batch`` (which runs
     the executor for that task), then post hooks on success. Stops the wave on first failure.
@@ -769,7 +1028,29 @@ def work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
 
 
 def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequential: bool) -> int:
-    """Inner task loop for work_chunk (separated so claim try/finally is clean)."""
+    """Inner task loop for work_chunk (separated so claim try/finally is clean).
+
+    When ``work.max_parallel_tasks > 1``, ready tasks are dispatched concurrently up to
+    the configured limit. ``depends_on`` edges are validated once before the loop starts.
+    When ``max_parallel_tasks == 1`` and ``sequential`` is False, the legacy one-task-per-
+    invocation behaviour is preserved.
+    """
+    max_parallel = work_max_parallel_tasks(config)
+
+    all_chunk_tasks = [
+        a
+        for a in collect_artifacts(root)
+        if str(a.metadata.get("type", "")) == "task"
+        and str(a.metadata.get("chunk", "")) == chunk_id
+    ]
+    dag_errors = validate_chunk_dag(all_chunk_tasks)
+    if dag_errors:
+        for err in dag_errors:
+            print(f"DAG error: {err}")
+        return 1
+
+    executor = resolve_executor(config)
+
     while True:
         ready_tasks, all_resolved = ordered_ready_chunk_tasks(root, chunk_id)
         if not ready_tasks:
@@ -799,8 +1080,10 @@ def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequenti
             )
             return 1
 
-        if not sequential:
+        if not sequential and max_parallel == 1:
             eligible = eligible[:1]
+        else:
+            eligible = eligible[:max_parallel]
 
         wave: list[PreparedTaskRun] = []
         for fresh in eligible:
@@ -808,8 +1091,10 @@ def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequenti
             update_artifact_status(root, fresh, "in_progress")
             wave.append(_prepare_task_run(root, must_find_by_id(root, tid), config))
 
-        executor = resolve_executor(config)
-        ok, outcomes = _run_hooked_executor_batch(root, config, executor, wave)
+        if max_parallel > 1 and len(wave) > 1:
+            ok, outcomes = parallel_execute(root, config, executor, wave, max_workers=max_parallel)
+        else:
+            ok, outcomes = _run_hooked_executor_batch(root, config, executor, wave)
         for run_id, task_ok in outcomes:
             print(f"Run {run_id}: {'completed' if task_ok else 'failed'}")
         if not ok:
@@ -820,7 +1105,7 @@ def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequenti
             )
             return 1
 
-        if not sequential:
+        if not sequential and max_parallel == 1:
             ready_again, all_resolved_again = ordered_ready_chunk_tasks(root, chunk_id)
             if ready_again:
                 print(

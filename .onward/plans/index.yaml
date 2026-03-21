@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T03:18:01Z"
-index_version: 135
+generated_at: "2026-03-21T03:35:30Z"
+index_version: 156
 plans:
 - id: "PLAN-001"
   title: "Core artifact engine and CLI foundations"
@@ -68,7 +68,7 @@ plans:
   project: ""
 - id: "PLAN-014"
   title: "Dependency-aware parallel task execution"
-  status: "open"
+  status: "completed"
   path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/plan.md"
   project: ""
 - id: "PLAN-015"
@@ -244,6 +244,55 @@ chunks:
   depends_on:
   - "CHUNK-019"
   - "CHUNK-020"
+- id: "CHUNK-022"
+  title: "Config, DAG validation, and parallel executor"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/chunks/CHUNK-022-config-dag-validation-and-parallel-executor.md"
+  plan: "PLAN-014"
+  project: ""
+  depends_on: []
+- id: "CHUNK-023"
+  title: "Split prompts and reporting"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/chunks/CHUNK-023-split-prompts-and-reporting.md"
+  plan: "PLAN-014"
+  project: ""
+  depends_on: []
+- id: "CHUNK-024"
+  title: "Run directory restructure and backward compat"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/chunks/CHUNK-024-run-directory-restructure-and-backward-compat.md"
+  plan: "PLAN-015"
+  project: ""
+  depends_on: []
+- id: "CHUNK-025"
+  title: "Live output streaming to output-*.log"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/chunks/CHUNK-025-live-output-streaming.md"
+  plan: "PLAN-015"
+  project: ""
+  depends_on: []
+- id: "CHUNK-026"
+  title: "Reliable files_changed via git diff"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/chunks/CHUNK-026-reliable-files-changed-via-git-diff.md"
+  plan: "PLAN-015"
+  project: ""
+  depends_on: []
+- id: "CHUNK-027"
+  title: "Token usage tracking"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/chunks/CHUNK-027-token-usage-tracking.md"
+  plan: "PLAN-015"
+  project: ""
+  depends_on: []
+- id: "CHUNK-028"
+  title: "Reporting improvements and tests"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/chunks/CHUNK-028-reporting-and-tests.md"
+  plan: "PLAN-015"
+  project: ""
+  depends_on: []
 tasks:
 - id: "TASK-001"
   title: "Produce prioritized repo design assessment"
@@ -969,6 +1018,215 @@ tasks:
   - "TASK-074"
   human: false
   effort: "m"
+- id: "TASK-076"
+  title: "Add work.max_parallel_tasks config key"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-076-add-work-max-parallel-tasks-config-key.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-077"
+  title: "Add validate_chunk_dag for cycle and dangling-ref detection"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-077-add-validate-chunk-dag-for-cycle-and-dangling-ref-detection.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-078"
+  title: "Implement parallel_execute with ThreadPoolExecutor"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-078-implement-parallel-execute-with-threadpoolexecutor.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-079"
+  title: "Update work_chunk loop to dispatch tasks in parallel"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-079-update-work-chunk-loop-to-dispatch-tasks-in-parallel.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-080"
+  title: "Unit tests for DAG validation and parallel dispatch"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-080-unit-tests-for-dag-validation-and-parallel-dispatch.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-081"
+  title: "Update split-chunk.md prompt with dependency reasoning"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-081-update-split-chunk-md-prompt-with-dependency-reasoning.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-023"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-082"
+  title: "Update split-plan.md prompt with chunk dependency instructions"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-082-update-split-plan-md-prompt-with-chunk-dependency-instructions.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-023"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-083"
+  title: "Document max_parallel_tasks in CAPABILITIES.md and .onward.config.yaml"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-083-document-max-parallel-tasks-in-capabilities-md-and-onward-config-yaml.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-023"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-084"
+  title: "Update _prepare_task_run to per-task directory layout"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-084-update-prepare-task-run-to-per-task-directory-layout.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-024"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-085"
+  title: "Update run readers for backward compat with legacy flat files"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-085-update-run-readers-for-backward-compat.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-024"
+  project: ""
+  depends_on:
+  - "TASK-084"
+  human: false
+- id: "TASK-086"
+  title: "Extend _tee_stream with optional file_out parameter"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-086-extend-tee-stream-with-file-output.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-025"
+  project: ""
+  depends_on:
+  - "TASK-084"
+  human: false
+- id: "TASK-087"
+  title: "Wire output_log file handle into BuiltinExecutor.execute_task"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-087-wire-output-log-into-builtinexecutor.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-025"
+  project: ""
+  depends_on:
+  - "TASK-086"
+  human: false
+- id: "TASK-088"
+  title: "Add compute_files_changed helper in util.py"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-088-add-compute-files-changed-helper.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-026"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-089"
+  title: "Capture before_sha and populate files_changed in run JSON"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-089-capture-before-sha-and-populate-files-changed.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-026"
+  project: ""
+  depends_on:
+  - "TASK-084"
+  - "TASK-088"
+  human: false
+- id: "TASK-090"
+  title: "Extend ExecutorResult and ack schema v3 with token_usage"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-090-extend-executor-result-and-ack-schema-with-token-usage.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-027"
+  project: ""
+  depends_on:
+  - "TASK-084"
+  human: false
+- id: "TASK-091"
+  title: "Add token usage parser for Claude CLI output"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-091-add-token-usage-parser-for-claude-cli-output.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-027"
+  project: ""
+  depends_on:
+  - "TASK-090"
+  human: false
+- id: "TASK-092"
+  title: "Write token_usage to info-*.json in execution.py"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-092-write-token-usage-to-run-info-json.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-027"
+  project: ""
+  depends_on:
+  - "TASK-090"
+  - "TASK-091"
+  human: false
+- id: "TASK-093"
+  title: "Implement onward show --runs run history table"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-093-implement-onward-show-runs-history-table.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-028"
+  project: ""
+  depends_on:
+  - "TASK-085"
+  - "TASK-092"
+  human: false
+- id: "TASK-094"
+  title: "Add verbose run stats to onward report --verbose"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-094-add-verbose-run-stats-to-onward-report.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-028"
+  project: ""
+  depends_on:
+  - "TASK-085"
+  - "TASK-092"
+  human: false
+- id: "TASK-095"
+  title: "Update WORK_HANDOFF.md for new run layout and ack schema v3"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-095-update-work-handoff-doc-for-new-run-layout.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-028"
+  project: ""
+  depends_on:
+  - "TASK-084"
+  - "TASK-090"
+  human: false
+- id: "TASK-096"
+  title: "Tests: run directory layout, backward compat, streaming, git diff, and token parsing"
+  status: "open"
+  path: ".onward/plans/PLAN-015-rich-run-records-with-execution-streams-and-token-tracking/tasks/TASK-096-tests-for-run-records-layout-streaming-and-compat.md"
+  plan: "PLAN-015"
+  chunk: "CHUNK-028"
+  project: ""
+  depends_on:
+  - "TASK-085"
+  - "TASK-087"
+  - "TASK-089"
+  - "TASK-091"
+  - "TASK-092"
+  human: false
 runs:
 - id: "RUN-2026-03-20T17-50-34Z-TASK-034"
   target: "TASK-034"

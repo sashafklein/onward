@@ -17,6 +17,21 @@ You decompose a **chunk** into **tasks** small enough for one focused execution 
 - **model**: haiku-latest for trivial edits; sonnet-latest for typical work; opus-latest for deep refactors or cross-cutting design.
 - **effort**: xs | s | m | l | xl — rough size (optional but preferred).
 
+## Dependency reasoning (critical for parallel execution)
+
+Onward can run independent tasks concurrently. Accurate `depends_on_index` edges are essential:
+
+- For each task, evaluate whether it requires the **output or side-effects** of any other task in the chunk.
+  - If yes: add the blocking task's index to `depends_on_index`.
+  - If no: leave `depends_on_index` empty — this allows parallel dispatch.
+- Common dependency patterns that **require** `depends_on_index`:
+  - Writing a module → writing tests for that module (tests depend on the module)
+  - Defining a schema or interface → implementing code that uses it
+  - Refactoring a shared interface → updating all callers
+  - Generating a file that a later task reads or processes
+- Tasks that touch **disjoint files or concepts** are typically independent and should have empty `depends_on_index`.
+- Do **not** add spurious ordering constraints — unnecessary edges prevent parallelism.
+
 ## Ordering within the chunk
 
 - **depends_on_index**: 0-based indices into your tasks array for tasks that must finish before this one. No cycles. Empty array if none.

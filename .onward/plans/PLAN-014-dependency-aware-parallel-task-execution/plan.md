@@ -3,12 +3,12 @@ id: "PLAN-014"
 type: "plan"
 project: ""
 title: "Dependency-aware parallel task execution"
-status: "open"
+status: "completed"
 description: "Execute independent tasks within a chunk concurrently, respecting dependency edges and a configurable parallelism limit"
 priority: "medium"
 model: "opus-latest"
 created_at: "2026-03-21T00:21:31Z"
-updated_at: "2026-03-21T00:21:31Z"
+updated_at: "2026-03-21T03:35:29Z"
 ---
 
 # Summary

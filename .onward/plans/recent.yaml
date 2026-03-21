@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T03:18:02Z"
+generated_at: "2026-03-21T03:35:30Z"
 completed:
 - id: "PLAN-001"
   title: "Core artifact engine and CLI foundations"
@@ -64,6 +64,11 @@ completed:
   title: "Task claiming for chunk and plan execution"
   status: "completed"
   path: ".onward/plans/PLAN-013-task-claiming-for-chunk-and-plan-execution/plan.md"
+  project: ""
+- id: "PLAN-014"
+  title: "Dependency-aware parallel task execution"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/plan.md"
   project: ""
 - id: "CHUNK-001"
   title: "Assess architecture and AI boundary"
@@ -232,6 +237,20 @@ completed:
   depends_on:
   - "CHUNK-019"
   - "CHUNK-020"
+- id: "CHUNK-022"
+  title: "Config, DAG validation, and parallel executor"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/chunks/CHUNK-022-config-dag-validation-and-parallel-executor.md"
+  plan: "PLAN-014"
+  project: ""
+  depends_on: []
+- id: "CHUNK-023"
+  title: "Split prompts and reporting"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/chunks/CHUNK-023-split-prompts-and-reporting.md"
+  plan: "PLAN-014"
+  project: ""
+  depends_on: []
 - id: "TASK-001"
   title: "Produce prioritized repo design assessment"
   status: "completed"
@@ -956,3 +975,75 @@ completed:
   - "TASK-074"
   human: false
   effort: "m"
+- id: "TASK-076"
+  title: "Add work.max_parallel_tasks config key"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-076-add-work-max-parallel-tasks-config-key.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-077"
+  title: "Add validate_chunk_dag for cycle and dangling-ref detection"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-077-add-validate-chunk-dag-for-cycle-and-dangling-ref-detection.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-078"
+  title: "Implement parallel_execute with ThreadPoolExecutor"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-078-implement-parallel-execute-with-threadpoolexecutor.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-079"
+  title: "Update work_chunk loop to dispatch tasks in parallel"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-079-update-work-chunk-loop-to-dispatch-tasks-in-parallel.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-080"
+  title: "Unit tests for DAG validation and parallel dispatch"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-080-unit-tests-for-dag-validation-and-parallel-dispatch.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-022"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-081"
+  title: "Update split-chunk.md prompt with dependency reasoning"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-081-update-split-chunk-md-prompt-with-dependency-reasoning.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-023"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-082"
+  title: "Update split-plan.md prompt with chunk dependency instructions"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-082-update-split-plan-md-prompt-with-chunk-dependency-instructions.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-023"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-083"
+  title: "Document max_parallel_tasks in CAPABILITIES.md and .onward.config.yaml"
+  status: "completed"
+  path: ".onward/plans/PLAN-014-dependency-aware-parallel-task-execution/tasks/TASK-083-document-max-parallel-tasks-in-capabilities-md-and-onward-config-yaml.md"
+  plan: "PLAN-014"
+  chunk: "CHUNK-023"
+  project: ""
+  depends_on: []
+  human: false
