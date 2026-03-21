@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-003"
 project: ""
 title: "Project enforcement and multi-root commands"
-status: "in_progress"
+status: "completed"
 description: "Enforce --project on all commands when roots is configured; combined multi-project report"
 depends_on:
 - "CHUNK-005"
@@ -12,7 +12,7 @@ priority: "high"
 effort: "l"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:46:44Z"
-updated_at: "2026-03-21T17:37:30Z"
+updated_at: "2026-03-21T18:04:46Z"
 ---
 
 # Summary

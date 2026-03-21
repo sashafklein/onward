@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T17:56:28Z"
+generated_at: "2026-03-21T18:09:19Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -64,6 +64,16 @@ completed:
   - "CHUNK-003"
   - "CHUNK-004"
   effort: "xl"
+- id: "CHUNK-006"
+  title: "Project enforcement and multi-root commands"
+  status: "completed"
+  updated_at: "2026-03-21T18:04:46Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/chunks/CHUNK-006-project-enforcement-and-multi-root-commands.md"
+  plan: "PLAN-003"
+  project: ""
+  depends_on:
+  - "CHUNK-005"
+  effort: "l"
 - id: "CHUNK-009"
   title: "Add --md flag and markdown report formatter"
   status: "completed"
@@ -347,6 +357,30 @@ completed:
   project: ""
   depends_on:
   - "TASK-023"
+  human: false
+  effort: "m"
+- id: "TASK-025"
+  title: "Cross-root ID uniqueness for artifact creation"
+  status: "completed"
+  updated_at: "2026-03-21T18:04:46Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-025-cross-root-id-uniqueness-for-artifact-creation.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-006"
+  project: ""
+  depends_on:
+  - "TASK-018"
+  human: false
+  effort: "s"
+- id: "TASK-026"
+  title: "Migrate sync.py hardcoded paths to WorkspaceLayout"
+  status: "completed"
+  updated_at: "2026-03-21T18:09:19Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-026-migrate-sync-py-hardcoded-paths-to-workspacelayout.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-007"
+  project: ""
+  depends_on:
+  - "TASK-012"
   human: false
   effort: "m"
 - id: "TASK-032"
