@@ -5,17 +5,20 @@ plan: "PLAN-003"
 chunk: "CHUNK-003"
 project: ""
 title: "Unit tests for WorkspaceLayout"
-status: "open"
+status: "done"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "m"
-depends_on: ["TASK-012", "TASK-013"]
+depends_on:
+- "TASK-012"
+- "TASK-013"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:14Z"
-updated_at: "2026-03-21T15:49:14Z"
+updated_at: "2026-03-21T16:23:23Z"
+run_count: 1
 ---
 
 # Context
