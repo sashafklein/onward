@@ -129,7 +129,7 @@ def _set_builtin_executor(root: Path) -> None:
 
 
 def _prepare_task_for_tier_low_model(task_path: Path) -> None:
-    """Drop explicit ``model`` (``onward new task`` defaults to sonnet-4-6) and set tier effort."""
+    """Drop explicit ``model`` (``onward new task`` defaults to sonnet-latest) and set tier effort."""
     lines = task_path.read_text(encoding="utf-8").splitlines()
     filtered = [ln for ln in lines if not ln.lstrip().startswith("model:")]
     text = "\n".join(filtered)

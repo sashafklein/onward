@@ -1,20 +1,20 @@
 ---
-id: "TASK-009"
+id: "TASK-046"
 type: "task"
-plan: "PLAN-002"
-chunk: "CHUNK-002"
-project: "onward"
-title: "Move PROVIDER_REGISTRY to archive"
-status: "completed"
+plan: "PLAN-006"
+chunk: "CHUNK-014"
+project: ""
+title: "Update defaults, scaffold, prompts, and docs to use short aliases"
+status: "open"
 description: ""
 human: false
-model: "sonnet-latest"
+model: "sonnet-4-6"
 executor: "onward-exec"
 depends_on: []
 files: []
 acceptance: []
-created_at: "2026-03-21T04:20:03Z"
-updated_at: "2026-03-21T04:30:27Z"
+created_at: "2026-03-21T18:55:26Z"
+updated_at: "2026-03-21T18:55:26Z"
 ---
 
 # Context

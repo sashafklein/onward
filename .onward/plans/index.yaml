@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T18:49:51Z"
-index_version: 221
+generated_at: "2026-03-21T18:55:30Z"
+index_version: 230
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -28,8 +28,14 @@ plans:
 - id: "PLAN-005"
   title: "Structured progress output for onward work"
   status: "in_progress"
-  updated_at: "2026-03-21T18:49:20Z"
+  updated_at: "2026-03-21T18:55:25Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/plan.md"
+  project: ""
+- id: "PLAN-006"
+  title: "Simple model aliases (opus, sonnet, haiku, codex)"
+  status: "open"
+  updated_at: "2026-03-21T18:54:50Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/plan.md"
   project: ""
 chunks:
 - id: "CHUNK-001"
@@ -133,7 +139,7 @@ chunks:
 - id: "CHUNK-011"
   title: "Implement WorkReporter class"
   status: "in_progress"
-  updated_at: "2026-03-21T18:49:21Z"
+  updated_at: "2026-03-21T18:55:26Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-011-implement-workreporter-class.md"
   plan: "PLAN-005"
   project: ""
@@ -152,6 +158,14 @@ chunks:
   updated_at: "2026-03-21T16:25:59Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-013-tests-and-polish.md"
   plan: "PLAN-005"
+  project: ""
+  depends_on: []
+- id: "CHUNK-014"
+  title: "Implement model alias resolution"
+  status: "open"
+  updated_at: "2026-03-21T18:55:19Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/chunks/CHUNK-014-implement-model-alias-resolution.md"
+  plan: "PLAN-006"
   project: ""
   depends_on: []
 tasks:
@@ -566,7 +580,7 @@ tasks:
 - id: "TASK-037"
   title: "Create WorkReporter class with output methods and indentation context manager"
   status: "open"
-  updated_at: "2026-03-21T18:49:24Z"
+  updated_at: "2026-03-21T18:55:30Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-037-create-workreporter-class-with-output-methods-and-indentation-context-manager.md"
   plan: "PLAN-005"
   chunk: "CHUNK-011"
@@ -649,6 +663,36 @@ tasks:
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-044-detect-model-errors-at-runtime-and-revert-task-to-open-instead-of-failed.md"
   plan: "PLAN-003"
   chunk: "CHUNK-004"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-045"
+  title: "Add resolve_model_alias and wire into executor"
+  status: "open"
+  updated_at: "2026-03-21T18:55:25Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-045-add-resolve-model-alias-and-wire-into-executor.md"
+  plan: "PLAN-006"
+  chunk: "CHUNK-014"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-046"
+  title: "Update defaults, scaffold, prompts, and docs to use short aliases"
+  status: "open"
+  updated_at: "2026-03-21T18:55:26Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-046-update-defaults-scaffold-prompts-and-docs-to-use-short-aliases.md"
+  plan: "PLAN-006"
+  chunk: "CHUNK-014"
+  project: ""
+  depends_on: []
+  human: false
+- id: "TASK-047"
+  title: "Update tests for model alias changes"
+  status: "open"
+  updated_at: "2026-03-21T18:55:27Z"
+  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-047-update-tests-for-model-alias-changes.md"
+  plan: "PLAN-006"
+  chunk: "CHUNK-014"
   project: ""
   depends_on: []
   human: false

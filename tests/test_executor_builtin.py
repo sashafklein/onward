@@ -47,7 +47,7 @@ def onward_exec_ref() -> Any:
 
 def test_route_opus_and_sonnet_to_claude() -> None:
     assert route_model_to_backend("opus-latest").name == "claude"
-    assert route_model_to_backend("sonnet-4-6").name == "claude"
+    assert route_model_to_backend("sonnet-latest").name == "claude"
 
 
 def test_route_cursor_and_gemini_to_cursor() -> None:
@@ -95,7 +95,7 @@ def test_route_case_insensitive() -> None:
     ("model", "expected"),
     [
         ("opus-latest", "claude"),
-        ("sonnet-4-6", "claude"),
+        ("sonnet-latest", "claude"),
         ("cursor-fast", "cursor"),
         ("unknown-model", "claude"),
     ],

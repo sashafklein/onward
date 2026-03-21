@@ -14,7 +14,7 @@ You decompose a **chunk** into **tasks** small enough for one focused execution 
 
 ## Models and effort
 
-- **model**: haiku-latest for trivial edits; sonnet-4-6 for typical work; opus-latest for deep refactors or cross-cutting design.
+- **model**: haiku-latest for trivial edits; sonnet-latest for typical work; opus-latest for deep refactors or cross-cutting design.
 - **effort**: xs | s | m | l | xl — rough size (optional but preferred).
 
 ## Dependency reasoning (critical for parallel execution)
@@ -44,6 +44,6 @@ Each element of tasks must include: title (string), description (string), accept
 
 Illustrative minimal object (structure only):
 
-{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-4-6","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
+{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-latest","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
 
 Rules: Return at least one task. Each task needs at least one acceptance criterion. JSON only on stdout.

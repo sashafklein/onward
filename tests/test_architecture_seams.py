@@ -122,8 +122,8 @@ def test_resolve_model_for_tier_split_null_falls_to_default() -> None:
 
 
 def test_resolve_model_for_tier_legacy_split_default_only() -> None:
-    cfg = {"models": {"default": "D", "split_default": "sonnet-4-6"}}
-    assert resolve_model_for_tier(cfg, "split") == "sonnet-4-6"
+    cfg = {"models": {"default": "D", "split_default": "sonnet-latest"}}
+    assert resolve_model_for_tier(cfg, "split") == "sonnet-latest"
 
 
 def test_resolve_model_for_tier_legacy_review_default_only() -> None:
@@ -145,7 +145,7 @@ def test_config_raw_deprecation_warnings_legacy_model_keys() -> None:
     raw = {
         "models": {
             "default": "opus-latest",
-            "task_default": "sonnet-4-6",
+            "task_default": "sonnet-latest",
             "split_default": "haiku-latest",
             "review_default": "opus-latest",
         },
@@ -176,7 +176,7 @@ def test_validate_config_contract_accepts_legacy_model_keys() -> None:
             "version": 1,
             "models": {
                 "default": "opus-latest",
-                "split_default": "sonnet-4-6",
+                "split_default": "sonnet-latest",
                 "review_default": "opus-latest",
                 "task_default": "haiku-latest",
             },

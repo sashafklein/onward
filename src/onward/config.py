@@ -282,6 +282,24 @@ _TIER_LEGACY_MODEL_KEY: dict[str, str] = {
 }
 
 
+MODEL_ALIASES: dict[str, str] = {
+    "opus": "claude-opus-4-6",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4",
+    "codex": "codex-5-3",
+}
+
+
+def resolve_model_alias(model: str) -> str:
+    """Resolve a short alias to a canonical model identifier.
+
+    Lookup is case-insensitive.  Unknown strings are returned unchanged.
+    """
+    if not model:
+        return model
+    return MODEL_ALIASES.get(model.strip().lower(), model)
+
+
 def _nonempty_model_string(raw: Any) -> str:
     if raw is None:
         return ""
