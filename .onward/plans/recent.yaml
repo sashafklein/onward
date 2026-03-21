@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T16:17:25Z"
+generated_at: "2026-03-21T16:20:49Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -12,6 +12,12 @@ completed:
   updated_at: "2026-03-21T04:30:32Z"
   path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/plan.md"
   project: "onward"
+- id: "PLAN-004"
+  title: "Markdown report output (--md flag)"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:49Z"
+  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/plan.md"
+  project: ""
 - id: "CHUNK-001"
   title: "Fix doc errors and stale references"
   status: "completed"
@@ -28,6 +34,15 @@ completed:
   plan: "PLAN-002"
   project: "onward"
   depends_on: []
+- id: "CHUNK-009"
+  title: "Add --md flag and markdown report formatter"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:49Z"
+  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/chunks/CHUNK-009-add-md-flag-and-markdown-report-formatter.md"
+  plan: "PLAN-004"
+  project: ""
+  depends_on: []
+  effort: "m"
 - id: "TASK-001"
   title: "Fix AI_OPERATOR.md anti-pattern #3 factual error"
   status: "completed"
@@ -161,3 +176,15 @@ completed:
   - "TASK-032"
   human: false
   effort: "m"
+- id: "TASK-034"
+  title: "Wire --md into cmd_report and add tests"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:49Z"
+  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-034-wire-md-into-cmd-report-and-add-tests.md"
+  plan: "PLAN-004"
+  chunk: "CHUNK-009"
+  project: ""
+  depends_on:
+  - "TASK-033"
+  human: false
+  effort: "s"

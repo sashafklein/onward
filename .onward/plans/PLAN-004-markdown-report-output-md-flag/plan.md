@@ -3,12 +3,12 @@ id: "PLAN-004"
 type: "plan"
 project: ""
 title: "Markdown report output (--md flag)"
-status: "in_progress"
+status: "completed"
 description: ""
 priority: "medium"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:44:38Z"
-updated_at: "2026-03-21T16:10:57Z"
+updated_at: "2026-03-21T16:20:49Z"
 ---
 
 # Summary

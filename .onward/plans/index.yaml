@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T16:17:25Z"
-index_version: 93
+generated_at: "2026-03-21T16:20:49Z"
+index_version: 96
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -21,8 +21,8 @@ plans:
   project: ""
 - id: "PLAN-004"
   title: "Markdown report output (--md flag)"
-  status: "in_progress"
-  updated_at: "2026-03-21T16:10:57Z"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:49Z"
   path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/plan.md"
   project: ""
 chunks:
@@ -107,8 +107,8 @@ chunks:
   effort: "l"
 - id: "CHUNK-009"
   title: "Add --md flag and markdown report formatter"
-  status: "in_progress"
-  updated_at: "2026-03-21T16:10:57Z"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:49Z"
   path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/chunks/CHUNK-009-add-md-flag-and-markdown-report-formatter.md"
   plan: "PLAN-004"
   project: ""
@@ -499,8 +499,8 @@ tasks:
   effort: "m"
 - id: "TASK-034"
   title: "Wire --md into cmd_report and add tests"
-  status: "in_progress"
-  updated_at: "2026-03-21T16:17:25Z"
+  status: "completed"
+  updated_at: "2026-03-21T16:20:49Z"
   path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-034-wire-md-into-cmd-report-and-add-tests.md"
   plan: "PLAN-004"
   chunk: "CHUNK-009"

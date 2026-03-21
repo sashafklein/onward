@@ -4,13 +4,13 @@ type: "chunk"
 plan: "PLAN-004"
 project: ""
 title: "Add --md flag and markdown report formatter"
-status: "in_progress"
+status: "completed"
 description: "Add --md argument, implement markdown formatter, wire into cmd_report, add tests"
 priority: "medium"
 effort: "m"
 model: "claude-sonnet-4-5"
 created_at: "2026-03-21T15:46:49Z"
-updated_at: "2026-03-21T16:10:57Z"
+updated_at: "2026-03-21T16:20:49Z"
 ---
 
 # Summary

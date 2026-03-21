@@ -24,8 +24,9 @@ acceptance:
 - "--md with --verbose includes run stats"
 - "--md with --no-color does not error"
 created_at: "2026-03-21T15:50:10Z"
-updated_at: "2026-03-21T16:17:25Z"
+updated_at: "2026-03-21T16:20:49Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
