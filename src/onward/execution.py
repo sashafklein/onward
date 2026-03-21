@@ -73,6 +73,42 @@ def _hook_markdown_path(config: dict[str, Any], key: str) -> str:
     return str(value or "").strip()
 
 
+def _resolve_hook_path(
+    layout: WorkspaceLayout,
+    hook_rel_path: str,
+    project: str | None = None,
+) -> tuple[Path, str]:
+    """Resolve hook path with project-specific and shared fallback.
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/hooks/<filename>`
+    2. Configured path: `<hook_rel_path>` (usually `.onward/hooks/<filename>`)
+
+    Args:
+        layout: WorkspaceLayout for path resolution
+        hook_rel_path: Relative hook path from config (e.g., ".onward/hooks/post-task.md")
+        project: Project key for multi-root workspaces (optional)
+
+    Returns:
+        Tuple of (resolved_path, display_path) where display_path is for error messages
+    """
+    if not hook_rel_path:
+        return layout.workspace_root / "", ""
+
+    # Extract the filename from the configured path
+    filename = Path(hook_rel_path).name
+
+    # Primary: project-specific hooks directory (only in multi-root mode with a project)
+    if layout.is_multi_root and project is not None:
+        project_hook_path = layout.hooks_dir(project) / filename
+        if project_hook_path.exists():
+            return project_hook_path, f"{project}/hooks/{filename}"
+
+    # Fallback: the configured path (relative to workspace root)
+    configured_path = layout.workspace_root / hook_rel_path
+    return configured_path, hook_rel_path
+
+
 def _run_shell_hooks(
     root: Path,
     commands: list[str],
@@ -153,20 +189,35 @@ def _run_markdown_hook(
     model: str,
     task: Artifact,
     run_id: str,
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
 ) -> tuple[bool, str]:
+    """Run a markdown hook with project-specific and shared fallback.
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/hooks/<filename>`
+    2. Configured path: `<hook_rel_path>` (usually `.onward/hooks/<filename>`)
+    """
     if not hook_rel_path:
         return True, f"[{phase}]\n(no hook)"
 
-    hook_path = root / hook_rel_path
+    # Resolve hook path with fallback if layout is provided
+    if layout is not None:
+        hook_path, display_path = _resolve_hook_path(layout, hook_rel_path, project)
+    else:
+        # Backward compatibility: use configured path directly
+        hook_path = root / hook_rel_path
+        display_path = hook_rel_path
+
     if not hook_path.exists():
-        return False, f"[{phase}]\n[error] hook file not found: {hook_rel_path}"
+        return False, f"[{phase}]\n[error] hook file not found: {display_path}"
 
     payload = {
         "type": "hook",
         "phase": phase,
         "run_id": run_id,
         "model": model,
-        "hook_path": hook_rel_path,
+        "hook_path": display_path,
         "hook_body": hook_path.read_text(encoding="utf-8"),
         "task": task.metadata,
         "task_body": task.body,
@@ -608,7 +659,8 @@ def _finalize_task_run(
                 error = "post_task_shell hook failed"
             if ok:
                 post_md_ok, post_md_log = _run_markdown_hook(
-                    layout.workspace_root, hook_cmd, post_md, "post_task_markdown", model, task, run_id
+                    layout.workspace_root, hook_cmd, post_md, "post_task_markdown", model, task, run_id,
+                    layout=layout, project=project
                 )
                 log_sections.append(post_md_log)
                 if not post_md_ok:
@@ -874,7 +926,8 @@ def _run_hooked_executor_batch(
                 error = "post_task_shell hook failed"
         if ok and not error:
             post_md_ok, post_md_log = _run_markdown_hook(
-                layout.workspace_root, hook_cmd, post_md, "post_task_markdown", model, task, run_id
+                layout.workspace_root, hook_cmd, post_md, "post_task_markdown", model, task, run_id,
+                layout=layout, project=project
             )
             log_sections.append(post_md_log)
             if not post_md_ok:
@@ -1033,14 +1086,20 @@ def ordered_ready_chunk_tasks(layout: WorkspaceLayout, chunk_id: str, project: s
 
 
 def run_chunk_post_markdown_hook(layout: WorkspaceLayout, chunk: Artifact, project: str | None = None) -> tuple[bool, str]:
+    """Run chunk post-markdown hook with project-specific and shared fallback.
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/hooks/<filename>`
+    2. Configured path: `<hook_rel_path>` (usually `.onward/hooks/<filename>`)
+    """
     config = load_workspace_config(layout.workspace_root)
     hook_rel_path = _hook_markdown_path(config, "post_chunk_markdown")
     if not hook_rel_path:
         return True, "(no hook)"
 
-    hook_path = layout.workspace_root / hook_rel_path
+    hook_path, display_path = _resolve_hook_path(layout, hook_rel_path, project)
     if not hook_path.exists():
-        return False, f"hook file not found: {hook_rel_path}"
+        return False, f"hook file not found: {display_path}"
 
     if not is_executor_enabled(config):
         return False, "executor.enabled is false in .onward.config.yaml (executor disabled)"
@@ -1062,7 +1121,7 @@ def run_chunk_post_markdown_hook(layout: WorkspaceLayout, chunk: Artifact, proje
         "type": "hook",
         "phase": "post_chunk_markdown",
         "model": model,
-        "hook_path": hook_rel_path,
+        "hook_path": display_path,
         "hook_body": hook_path.read_text(encoding="utf-8"),
         "chunk": chunk.metadata,
         "chunk_body": chunk.body,

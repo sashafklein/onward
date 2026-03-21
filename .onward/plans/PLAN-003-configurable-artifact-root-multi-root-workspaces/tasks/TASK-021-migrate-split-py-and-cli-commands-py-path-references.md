@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-005"
 project: ""
 title: "Migrate split.py and cli_commands.py path references"
-status: "in_progress"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -18,8 +18,9 @@ depends_on:
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:32Z"
-updated_at: "2026-03-21T17:21:42Z"
+updated_at: "2026-03-21T17:33:10Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context

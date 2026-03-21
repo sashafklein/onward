@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-005"
 project: ""
 title: "Implement per-project template/prompt/hook fallback"
-status: "open"
+status: "done"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "m"
-depends_on: ["TASK-020"]
+depends_on:
+- "TASK-020"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:33Z"
-updated_at: "2026-03-21T15:49:33Z"
+updated_at: "2026-03-21T17:33:10Z"
+run_count: 1
 ---
 
 # Context

@@ -874,6 +874,57 @@ def build_plan_review_slots(config: dict[str, Any]) -> tuple[list[PlanReviewSlot
     return slots, None
 
 
+def _resolve_with_fallback(
+    layout: WorkspaceLayout,
+    project: str | None,
+    subdir: str,
+    filename: str,
+) -> Path:
+    """Resolve a file path with project-specific and shared fallback.
+
+    Lookup order:
+    1. Project-specific directory (e.g., `<project_root>/templates/task.md`)
+    2. Shared fallback directory (`.onward/<subdir>/<filename>`)
+    3. FileNotFoundError if not found in either location
+
+    Args:
+        layout: WorkspaceLayout to use for path resolution
+        project: Project key for multi-root workspaces (optional)
+        subdir: Subdirectory name (e.g., "templates", "prompts", "hooks")
+        filename: Filename to look up
+
+    Returns:
+        Path to the file (may or may not exist; caller should check/read)
+
+    Raises:
+        FileNotFoundError: If file not found in project-specific or shared location
+    """
+    # Primary: project-specific location
+    if subdir == "templates":
+        primary = layout.templates_dir(project) / filename
+    elif subdir == "prompts":
+        primary = layout.prompts_dir(project) / filename
+    elif subdir == "hooks":
+        primary = layout.hooks_dir(project) / filename
+    else:
+        # Unknown subdir, just construct the path
+        primary = layout.artifact_root(project) / subdir / filename
+
+    if primary.exists():
+        return primary
+
+    # Fallback: shared .onward/ directory (only in multi-root mode)
+    if layout.is_multi_root:
+        fallback = layout.workspace_root / ".onward" / subdir / filename
+        if fallback.exists():
+            return fallback
+
+    # If primary doesn't exist and we're in single-root mode, or fallback doesn't exist
+    # in multi-root mode, return the primary path. The caller will get FileNotFoundError
+    # when they try to read it, with the project-specific path in the error message.
+    return primary
+
+
 def load_artifact_template(
     root: Path,
     artifact_type: str,
@@ -881,6 +932,11 @@ def load_artifact_template(
     project: str | None = None,
 ) -> str:
     """Load an artifact template (plan, chunk, task).
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/templates/{artifact_type}.md`
+    2. Shared fallback: `.onward/templates/{artifact_type}.md`
+    3. FileNotFoundError if not found
 
     Args:
         root: Workspace root directory (where .onward.config.yaml lives)
@@ -898,7 +954,7 @@ def load_artifact_template(
             roots={None: root / ".onward"},
             default_project=None,
         )
-    template_path = layout.templates_dir(project) / f"{artifact_type}.md"
+    template_path = _resolve_with_fallback(layout, project, "templates", f"{artifact_type}.md")
     return template_path.read_text(encoding="utf-8")
 
 
@@ -909,6 +965,11 @@ def _load_prompt(
     project: str | None = None,
 ) -> str:
     """Load a prompt file (split.md, review.md, etc.).
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/prompts/{prompt_name}`
+    2. Shared fallback: `.onward/prompts/{prompt_name}`
+    3. FileNotFoundError if not found
 
     Args:
         root: Workspace root directory (where .onward.config.yaml lives)
@@ -926,5 +987,5 @@ def _load_prompt(
             roots={None: root / ".onward"},
             default_project=None,
         )
-    prompt_path = layout.prompts_dir(project) / prompt_name
+    prompt_path = _resolve_with_fallback(layout, project, "prompts", prompt_name)
     return prompt_path.read_text(encoding="utf-8")

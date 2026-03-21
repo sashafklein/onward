@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T17:21:42Z"
-index_version: 168
+generated_at: "2026-03-21T17:33:11Z"
+index_version: 171
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -375,8 +375,8 @@ tasks:
   effort: "s"
 - id: "TASK-021"
   title: "Migrate split.py and cli_commands.py path references"
-  status: "in_progress"
-  updated_at: "2026-03-21T17:21:42Z"
+  status: "completed"
+  updated_at: "2026-03-21T17:33:10Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-021-migrate-split-py-and-cli-commands-py-path-references.md"
   plan: "PLAN-003"
   chunk: "CHUNK-005"
@@ -389,8 +389,8 @@ tasks:
   effort: "m"
 - id: "TASK-022"
   title: "Implement per-project template/prompt/hook fallback"
-  status: "open"
-  updated_at: "2026-03-21T15:49:33Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T17:33:10Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-022-implement-per-project-template-prompt-hook-fallback.md"
   plan: "PLAN-003"
   chunk: "CHUNK-005"
