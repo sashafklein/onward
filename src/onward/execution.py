@@ -1116,7 +1116,7 @@ def run_chunk_post_markdown_hook(layout: WorkspaceLayout, chunk: Artifact, proje
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
-    model = model_setting(config, "review_default", model_setting(config, "default", "opus-latest"))
+    model = model_setting(config, "review_default", model_setting(config, "default", "opus"))
     payload = {
         "type": "hook",
         "phase": "post_chunk_markdown",

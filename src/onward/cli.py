@@ -94,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("title", help="Plan title")
     plan_parser.add_argument("--description", default="", help="Plan description")
     plan_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
-    plan_parser.add_argument("--model", default="opus-latest", help="Default model")
+    plan_parser.add_argument("--model", default="opus", help="Default model")
     plan_parser.add_argument("--project", default=None, help="Optional project key (omit for empty)")
     plan_parser.set_defaults(func=cmd_new_plan)
 
@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("title", help="Chunk title")
     chunk_parser.add_argument("--description", default="", help="Chunk description")
     chunk_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
-    chunk_parser.add_argument("--model", default="opus-latest", help="Default model")
+    chunk_parser.add_argument("--model", default="opus", help="Default model")
     chunk_parser.add_argument(
         "--project",
         default=None,
@@ -142,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="With --batch: validate and print planned tasks without writing files",
     )
     task_parser.add_argument("--description", default="", help="Task description")
-    task_parser.add_argument("--model", default="sonnet-latest", help="Model")
+    task_parser.add_argument("--model", default="sonnet", help="Model")
     task_parser.add_argument(
         "--project",
         default=None,

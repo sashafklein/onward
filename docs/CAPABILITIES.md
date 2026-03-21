@@ -72,7 +72,7 @@ When `review.reviewers` is a **non-empty** list, Onward ignores `double_review` 
 | Field      | Required | Meaning                                                                                                                                               |
 | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `label`    | no       | Stable name for logs and `--reviewer` (default `reviewer-1`, `reviewer-2`, …).                                                                        |
-| `model`    | yes      | Logical model (aliases like `sonnet-latest` are resolved).                                                                                               |
+| `model`    | yes      | Logical model (aliases like `sonnet` are resolved).                                                                                                   |
 | `command`  | no       | Executor argv0 for this slot only; default is `executor.command`.                                                                                     |
 | `args`     | no       | Extra argv for this slot (list); default `[]` if `command` is set, else `executor.args`.                                                              |
 | `fallback` | no       | Ordered list of alternates: string = model only (inherits this slot’s `command` / `args`), or a mapping with `model` and optional `command` / `args`. |
@@ -85,13 +85,13 @@ Example (OpenClaw-style primary, global default executor fallback — adjust bin
 review:
   reviewers:
     - label: openclaw
-      model: sonnet-latest
+      model: sonnet
       command: openclaw
       args: [run, model]
       fallback:
-        - sonnet-latest
+        - sonnet
     - label: claude-cli
-      model: opus-latest
+      model: opus
       command: claude
       args: [--print]
 ```

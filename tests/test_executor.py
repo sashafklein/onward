@@ -143,7 +143,7 @@ def _subprocess_ctx(
             "task body",
             {"id": task_id, "title": "T", "chunk": "CHUNK-1", "plan": "PLAN-1"},
         ),
-        model="opus-latest",
+        model="opus",
         run_id=run_id,
         plan_context=plan,
         chunk_context=chunk,

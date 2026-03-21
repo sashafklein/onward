@@ -8,7 +8,7 @@ title: "Add unit tests for WorkReporter formatting"
 status: "open"
 description: ""
 human: false
-model: "sonnet-latest"
+model: "sonnet"
 executor: "onward-exec"
 depends_on: ["TASK-037"]
 files: ["tests/test_reporter.py"]

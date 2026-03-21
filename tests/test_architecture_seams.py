@@ -17,8 +17,10 @@ import onward.executor_payload as executor_payload_mod
 from onward.config import (
     CONFIG_SECTION_KEYS,
     CONFIG_TOP_LEVEL_KEYS,
+    MODEL_ALIASES,
     config_raw_deprecation_warnings,
     config_validation_warnings,
+    resolve_model_alias,
     resolve_model_for_task,
     resolve_model_for_tier,
     validate_config_contract_issues,
@@ -85,13 +87,13 @@ def test_resolve_model_for_tier_only_default_chains_all_tiers() -> None:
         assert resolve_model_for_tier(cfg, tier) == "ONLY"
 
 
-def test_resolve_model_for_tier_missing_models_uses_opus_latest() -> None:
-    assert resolve_model_for_tier({}, "default") == "opus-latest"
-    assert resolve_model_for_tier({}, "low") == "opus-latest"
+def test_resolve_model_for_tier_missing_models_uses_opus() -> None:
+    assert resolve_model_for_tier({}, "default") == "opus"
+    assert resolve_model_for_tier({}, "low") == "opus"
 
 
 def test_resolve_model_for_tier_models_not_dict() -> None:
-    assert resolve_model_for_tier({"models": None}, "medium") == "opus-latest"  # type: ignore[dict-item]
+    assert resolve_model_for_tier({"models": None}, "medium") == "opus"  # type: ignore[dict-item]
 
 
 def test_resolve_model_for_tier_all_intermediate_nulls_walk_to_default() -> None:
@@ -122,13 +124,13 @@ def test_resolve_model_for_tier_split_null_falls_to_default() -> None:
 
 
 def test_resolve_model_for_tier_legacy_split_default_only() -> None:
-    cfg = {"models": {"default": "D", "split_default": "sonnet-latest"}}
-    assert resolve_model_for_tier(cfg, "split") == "sonnet-latest"
+    cfg = {"models": {"default": "D", "split_default": "sonnet"}}
+    assert resolve_model_for_tier(cfg, "split") == "sonnet"
 
 
 def test_resolve_model_for_tier_legacy_review_default_only() -> None:
-    cfg = {"models": {"default": "D", "review_default": "opus-latest"}}
-    assert resolve_model_for_tier(cfg, "review_1") == "opus-latest"
+    cfg = {"models": {"default": "D", "review_default": "opus"}}
+    assert resolve_model_for_tier(cfg, "review_1") == "opus"
 
 
 def test_resolve_model_for_tier_split_key_wins_over_split_default() -> None:
@@ -141,13 +143,39 @@ def test_resolve_model_for_tier_review_1_wins_over_review_default() -> None:
     assert resolve_model_for_tier(cfg, "review_1") == "Y"
 
 
+def test_resolve_model_alias_known_aliases() -> None:
+    assert resolve_model_alias("opus") == "claude-opus-4-6"
+    assert resolve_model_alias("sonnet") == "claude-sonnet-4-6"
+    assert resolve_model_alias("haiku") == "claude-haiku-4"
+    assert resolve_model_alias("codex") == "codex-5-3"
+
+
+def test_resolve_model_alias_case_insensitive() -> None:
+    assert resolve_model_alias("OPUS") == "claude-opus-4-6"
+    assert resolve_model_alias("Sonnet") == "claude-sonnet-4-6"
+
+
+def test_resolve_model_alias_passthrough_for_unknown() -> None:
+    assert resolve_model_alias("claude-opus-4-6") == "claude-opus-4-6"
+    assert resolve_model_alias("weird-custom-id") == "weird-custom-id"
+
+
+def test_resolve_model_alias_empty_and_whitespace() -> None:
+    assert resolve_model_alias("") == ""
+    assert resolve_model_alias("  opus  ") == "claude-opus-4-6"
+
+
+def test_model_aliases_dict_has_expected_keys() -> None:
+    assert set(MODEL_ALIASES.keys()) == {"opus", "sonnet", "haiku", "codex"}
+
+
 def test_config_raw_deprecation_warnings_legacy_model_keys() -> None:
     raw = {
         "models": {
-            "default": "opus-latest",
-            "task_default": "sonnet-latest",
-            "split_default": "haiku-latest",
-            "review_default": "opus-latest",
+            "default": "opus",
+            "task_default": "sonnet",
+            "split_default": "haiku",
+            "review_default": "opus",
         },
     }
     msgs = config_raw_deprecation_warnings(raw)
@@ -175,10 +203,10 @@ def test_validate_config_contract_accepts_legacy_model_keys() -> None:
         {
             "version": 1,
             "models": {
-                "default": "opus-latest",
-                "split_default": "sonnet-latest",
-                "review_default": "opus-latest",
-                "task_default": "haiku-latest",
+                "default": "opus",
+                "split_default": "sonnet",
+                "review_default": "opus",
+                "task_default": "haiku",
             },
         },
     )
@@ -186,7 +214,7 @@ def test_validate_config_contract_accepts_legacy_model_keys() -> None:
 
 
 def test_resolve_model_for_task_explicit_model_wins() -> None:
-    cfg = {"models": {"default": "opus-latest", "low": "haiku-latest"}}
+    cfg = {"models": {"default": "opus", "low": "haiku"}}
     assert resolve_model_for_task(cfg, {"model": "custom-model"}) == "custom-model"
     assert resolve_model_for_task(cfg, {"model": "custom-model", "effort": "low"}) == "custom-model"
 
@@ -256,34 +284,34 @@ def test_validate_config_contract_flags_unknown_nested_key() -> None:
 
 
 def test_validate_config_contract_flags_unknown_models_key() -> None:
-    issues = validate_config_contract_issues({"version": 1, "models": {"default": "opus-latest", "made_up_tier": "x"}})
+    issues = validate_config_contract_issues({"version": 1, "models": {"default": "opus", "made_up_tier": "x"}})
     assert issues, "expected unknown models.* key to be rejected"
     assert any("made_up_tier" in msg or "models.made_up_tier" in msg for msg in issues)
 
 
 def test_validate_config_contract_rejects_non_string_model_values() -> None:
-    issues = validate_config_contract_issues({"version": 1, "models": {"default": "opus-latest", "low": 99}})
+    issues = validate_config_contract_issues({"version": 1, "models": {"default": "opus", "low": 99}})
     assert any("config.models.low" in msg and "string or null" in msg for msg in issues)
 
 
 def test_validate_config_contract_rejects_empty_string_model_when_set() -> None:
-    issues = validate_config_contract_issues({"version": 1, "models": {"default": "opus-latest", "low": "  "}})
+    issues = validate_config_contract_issues({"version": 1, "models": {"default": "opus", "low": "  "}})
     assert any("config.models.low" in msg and "non-empty string" in msg for msg in issues)
 
 
 def test_config_validation_warnings_missing_models_default() -> None:
-    msgs = config_validation_warnings({"models": {"low": "haiku-latest"}})
+    msgs = config_validation_warnings({"models": {"low": "haiku"}})
     assert any("models.default is unset" in m for m in msgs)
 
 
 def test_config_validation_warnings_ambiguous_model_string() -> None:
-    msgs = config_validation_warnings({"models": {"default": "opus-latest", "low": "weird-custom"}})
+    msgs = config_validation_warnings({"models": {"default": "opus", "low": "weird-custom"}})
     assert any("config.models.low" in m and "routing hints" in m for m in msgs)
 
 
 def test_config_validation_warnings_builtin_no_ai_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("onward.config.shutil.which", lambda _n: None)
-    cfg = {"executor": {"enabled": True, "command": "builtin"}, "models": {"default": "opus-latest"}}
+    cfg = {"executor": {"enabled": True, "command": "builtin"}, "models": {"default": "opus"}}
     msgs = config_validation_warnings(cfg)
     assert any("built-in executor" in m and "PATH" in m for m in msgs)
 
@@ -292,7 +320,7 @@ def test_config_validation_warnings_skips_cli_check_when_executor_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("onward.config.shutil.which", lambda _n: None)
-    cfg = {"executor": {"enabled": False, "command": "builtin"}, "models": {"default": "opus-latest"}}
+    cfg = {"executor": {"enabled": False, "command": "builtin"}, "models": {"default": "opus"}}
     msgs = config_validation_warnings(cfg)
     assert not any("built-in executor" in m and "PATH" in m for m in msgs)
 

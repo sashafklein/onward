@@ -7,7 +7,7 @@ title: "Implement model alias resolution"
 status: "open"
 description: ""
 priority: "medium"
-model: "opus-latest"
+model: "opus"
 created_at: "2026-03-21T18:55:19Z"
 updated_at: "2026-03-21T18:55:19Z"
 ---

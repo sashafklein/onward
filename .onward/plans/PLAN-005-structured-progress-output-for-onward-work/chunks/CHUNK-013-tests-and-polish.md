@@ -7,7 +7,7 @@ title: "Tests and polish"
 status: "open"
 description: ""
 priority: "medium"
-model: "opus-latest"
+model: "opus"
 created_at: "2026-03-21T16:25:59Z"
 updated_at: "2026-03-21T16:25:59Z"
 ---

@@ -333,7 +333,7 @@ def test_split_invokes_executor_with_split_payload(monkeypatch, tmp_path: Path, 
         return subprocess.CompletedProcess(
             cmd,
             0,
-            '{"chunks":[{"title":"One","description":"Body","priority":"medium","model":"opus-latest"}]}',
+            '{"chunks":[{"title":"One","description":"Body","priority":"medium","model":"opus"}]}',
             "",
         )
 

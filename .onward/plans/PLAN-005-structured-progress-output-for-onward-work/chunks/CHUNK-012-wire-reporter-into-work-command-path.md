@@ -7,7 +7,7 @@ title: "Wire reporter into work command path"
 status: "in_progress"
 description: ""
 priority: "medium"
-model: "opus-latest"
+model: "opus"
 created_at: "2026-03-21T16:25:55Z"
 updated_at: "2026-03-21T16:50:49Z"
 ---

@@ -8,7 +8,7 @@ title: "Detect model errors at runtime and revert task to open instead of failed
 status: "completed"
 description: ""
 human: false
-model: "sonnet-latest"
+model: "sonnet"
 executor: "onward-exec"
 depends_on: []
 files: []

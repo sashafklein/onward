@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T18:55:30Z"
-index_version: 230
+generated_at: "2026-03-21T19:03:22Z"
+index_version: 234
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -28,7 +28,7 @@ plans:
 - id: "PLAN-005"
   title: "Structured progress output for onward work"
   status: "in_progress"
-  updated_at: "2026-03-21T18:55:25Z"
+  updated_at: "2026-03-21T19:03:20Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/plan.md"
   project: ""
 - id: "PLAN-006"
@@ -139,7 +139,7 @@ chunks:
 - id: "CHUNK-011"
   title: "Implement WorkReporter class"
   status: "in_progress"
-  updated_at: "2026-03-21T18:55:26Z"
+  updated_at: "2026-03-21T19:03:21Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-011-implement-workreporter-class.md"
   plan: "PLAN-005"
   project: ""
@@ -579,8 +579,8 @@ tasks:
   effort: "s"
 - id: "TASK-037"
   title: "Create WorkReporter class with output methods and indentation context manager"
-  status: "open"
-  updated_at: "2026-03-21T18:55:30Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T19:03:22Z"
   path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-037-create-workreporter-class-with-output-methods-and-indentation-context-manager.md"
   plan: "PLAN-005"
   chunk: "CHUNK-011"

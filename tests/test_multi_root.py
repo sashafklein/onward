@@ -77,7 +77,7 @@ executor:
   post_task_markdown: null
 
 models:
-  default: opus-latest
+  default: opus
 """
 
 
@@ -101,7 +101,7 @@ executor:
   post_task_markdown: null
 
 models:
-  default: opus-latest
+  default: opus
 """
 
 
@@ -384,7 +384,7 @@ sync:
   repo: null
 
 models:
-  default: opus-latest
+  default: opus
 """
     _write_config(tmp_path, config_text)
     capsys.readouterr()

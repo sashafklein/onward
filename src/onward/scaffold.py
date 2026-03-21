@@ -64,16 +64,16 @@ executor:
   enabled: true
 
 models:
-  # Ultimate fallback and baseline tier (required logically; empty uses opus-latest).
-  default: opus-latest
+  # Ultimate fallback and baseline tier (required logically; empty uses opus).
+  default: opus
   # Tiered defaults with automatic fallbacks (null/blank walks the chain — see docs/CAPABILITIES.md).
-  high: opus-latest
-  medium: sonnet-latest
-  low: haiku-latest
+  high: opus
+  medium: sonnet
+  low: haiku
   # Split decomposition; blank falls back through split -> default.
   split:
   # Plan review slots; blank falls back review_1/review_2 -> high -> default.
-  review_1: codex-latest
+  review_1: codex
   review_2:
 
 review:
@@ -250,7 +250,7 @@ If you are unsure of paths, use coarse entries (e.g. src/onward/) rather than om
 ## Priority and model
 
 - **priority**: low, medium, or high (default medium).
-- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-latest, opus-latest, etc.).
+- **model**: suggest an executor model alias for work in this chunk (haiku, sonnet, opus, etc.).
 
 ## Output format
 
@@ -260,7 +260,7 @@ Each element of chunks must include: title (string), description (string), prior
 
 Illustrative minimal object (structure only):
 
-{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-latest","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
+{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
 
 Rules: Return at least one chunk. Keep titles short and concrete. JSON only on stdout.
 """,
@@ -280,7 +280,7 @@ Rules: Return at least one chunk. Keep titles short and concrete. JSON only on s
 
 ## Models and effort
 
-- **model**: haiku-latest for trivial edits; sonnet-latest for typical work; opus-latest for deep refactors or cross-cutting design.
+- **model**: haiku for trivial edits; sonnet for typical work; opus for deep refactors or cross-cutting design.
 - **effort**: xs | s | m | l | xl — rough size (optional but preferred).
 
 ## Ordering within the chunk
@@ -295,7 +295,7 @@ Each element of tasks must include: title (string), description (string), accept
 
 Illustrative minimal object (structure only):
 
-{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-latest","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
+{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
 
 Rules: Return at least one task. Each task needs at least one acceptance criterion. JSON only on stdout.
 """,
@@ -337,7 +337,7 @@ Any broader observations about the approach, architecture, or patterns that don'
 id: HOOK-post-task
 type: hook
 trigger: task.completed
-model: opus-latest
+model: opus
 executor: onward-exec
 scope: repo
 ---
@@ -362,7 +362,7 @@ Summarize what changed and propose next tasks.
 id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
-model: opus-latest
+model: opus
 executor: onward-exec
 scope: repo
 ---

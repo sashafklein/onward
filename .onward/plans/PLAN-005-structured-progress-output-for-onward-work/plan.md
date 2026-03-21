@@ -6,9 +6,9 @@ title: "Structured progress output for onward work"
 status: "in_progress"
 description: ""
 priority: "medium"
-model: "opus-latest"
+model: "opus"
 created_at: "2026-03-21T16:25:02Z"
-updated_at: "2026-03-21T18:55:25Z"
+updated_at: "2026-03-21T19:03:20Z"
 ---
 
 # Summary
@@ -47,6 +47,7 @@ Running `onward work PLAN-001` produces sparse output like `Run run_20250301_...
 # Context
 
 The work command flow lives in two files:
+
 - `src/onward/cli_commands.py`: `cmd_work`, `_work_plan` (plan loop, ~80 lines)
 - `src/onward/execution.py`: `work_chunk`, `_work_chunk_loop`, `work_task`, `_finalize_task_run` (chunk/task execution, ~300 lines)
 
@@ -106,16 +107,16 @@ Functions that currently take no reporter get an `Optional[WorkReporter] = None`
 
 All ~20 `print()` calls in the work path get replaced with the appropriate reporter method. Mapping:
 
-| Current print | Reporter method |
-|---|---|
-| `"Plan {id} already completed"` | `reporter.info(...)` |
-| `"Plan {id} has no chunks"` | `reporter.warning(...)` |
+| Current print                               | Reporter method              |
+| ------------------------------------------- | ---------------------------- |
+| `"Plan {id} already completed"`             | `reporter.info(...)`         |
+| `"Plan {id} has no chunks"`                 | `reporter.warning(...)`      |
 | `"Plan {id} completed (N chunks, N tasks)"` | `reporter.plan_summary(...)` |
-| `"Run {run_id}: completed"` | `reporter.completed(...)` |
-| `"Run {run_id}: failed"` | `reporter.failed(...)` |
-| `"Stopping plan work..."` | `reporter.warning(...)` |
-| `"Created follow-up task {id}"` | `reporter.info(...)` |
-| Preflight errors | `reporter.warning(...)` |
+| `"Run {run_id}: completed"`                 | `reporter.completed(...)`    |
+| `"Run {run_id}: failed"`                    | `reporter.failed(...)`       |
+| `"Stopping plan work..."`                   | `reporter.warning(...)`      |
+| `"Created follow-up task {id}"`             | `reporter.info(...)`         |
+| Preflight errors                            | `reporter.warning(...)`      |
 
 ## 4. Title resolution
 

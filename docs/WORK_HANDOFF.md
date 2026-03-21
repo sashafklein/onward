@@ -117,7 +117,7 @@ The `chunk` and `plan` fields give the executor full context about the parent sc
 
 **Split / flags:** `--model` on `onward split` overrides the resolved **split** tier model after CLI parsing.
 
-**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet-latest`) to vendor IDs.
+**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet`) to vendor IDs.
 
 **Built-in executor:** The same string selects **Claude Code** vs **Cursor agent** via heuristics in code (`route_model_to_backend`); the CLI then interprets the model id.
 

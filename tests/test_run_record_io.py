@@ -129,7 +129,7 @@ def _set_builtin_executor(root: Path) -> None:
 
 
 def _prepare_task_for_tier_low_model(task_path: Path) -> None:
-    """Drop explicit ``model`` (``onward new task`` defaults to sonnet-latest) and set tier effort."""
+    """Drop explicit ``model`` (``onward new task`` defaults to sonnet) and set tier effort."""
     lines = task_path.read_text(encoding="utf-8").splitlines()
     filtered = [ln for ln in lines if not ln.lstrip().startswith("model:")]
     text = "\n".join(filtered)
@@ -186,7 +186,7 @@ def test_run_record_builtin_executor_and_tier_resolved_model(tmp_path: Path, mon
     run_file = next((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     rec = json.loads(run_file.read_text(encoding="utf-8"))
     assert rec["executor"] == "builtin"
-    assert rec["model"] == "haiku-latest"
+    assert rec["model"] == "haiku"
     assert rec["status"] == "completed"
 
     assert len(recorder.active_snapshots) == 1

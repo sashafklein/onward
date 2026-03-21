@@ -7,9 +7,9 @@ title: "Implement WorkReporter class"
 status: "in_progress"
 description: ""
 priority: "medium"
-model: "opus-latest"
+model: "opus"
 created_at: "2026-03-21T16:25:51Z"
-updated_at: "2026-03-21T18:55:26Z"
+updated_at: "2026-03-21T19:03:21Z"
 ---
 
 # Summary

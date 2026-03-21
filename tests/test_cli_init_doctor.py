@@ -115,7 +115,7 @@ def test_doctor_fails_on_unknown_nested_config_key(tmp_path: Path, capsys):
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
     cfg = tmp_path / ".onward.config.yaml"
     raw = cfg.read_text(encoding="utf-8")
-    raw = raw.replace("  review_1: codex-latest\n", "  review_1: codex-latest\n  typo_key: x\n")
+    raw = raw.replace("  review_1: codex\n", "  review_1: codex\n  typo_key: x\n")
     cfg.write_text(raw, encoding="utf-8")
     capsys.readouterr()
 
@@ -131,7 +131,7 @@ def test_doctor_warns_when_models_default_missing(tmp_path: Path, capsys):
     cfg = tmp_path / ".onward.config.yaml"
     raw = cfg.read_text(encoding="utf-8")
     raw = raw.replace(
-        "  # Ultimate fallback and baseline tier (required logically; empty uses opus-latest).\n  default: opus-latest\n",
+        "  # Ultimate fallback and baseline tier (required logically; empty uses opus).\n  default: opus\n",
         "",
         1,
     )
@@ -221,7 +221,7 @@ def test_doctor_warns_on_legacy_model_keys(tmp_path: Path, capsys):
     raw = cfg.read_text(encoding="utf-8")
     raw = raw.replace(
         "models:",
-        "models:\n  split_default: sonnet-latest\n  review_default: opus-latest\n  task_default: haiku-latest\n",
+        "models:\n  split_default: sonnet\n  review_default: opus\n  task_default: haiku\n",
         1,
     )
     cfg.write_text(raw, encoding="utf-8")
@@ -245,7 +245,7 @@ def test_doctor_warns_when_split_and_split_default_both_set(tmp_path: Path, caps
     # Non-empty split + split_default triggers the conflict warning (empty split does not).
     raw = raw.replace(
         "  split:\n",
-        "  split: sonnet-latest\n  split_default: legacy-model\n",
+        "  split: sonnet\n  split_default: legacy-model\n",
         1,
     )
     cfg.write_text(raw, encoding="utf-8")
@@ -262,7 +262,7 @@ def test_doctor_warns_when_split_and_split_default_both_set(tmp_path: Path, caps
 def test_config_raw_deprecation_split_only_no_duplicate_conflict_message() -> None:
     """Only split_default set should not emit the 'ignored because split is set' line."""
     msgs = config_raw_deprecation_warnings(
-        {"models": {"default": "D", "split_default": "sonnet-latest"}},
+        {"models": {"default": "D", "split_default": "sonnet"}},
     )
     assert any("rename to models.split" in m for m in msgs)
     assert not any("ignored because models.split" in m for m in msgs)
@@ -314,7 +314,7 @@ sync:
   worktree_path: nb/sync
 
 models:
-  default: opus-latest
+  default: opus
 """,
         encoding="utf-8",
     )
@@ -344,7 +344,7 @@ sync:
   repo: null
 
 models:
-  default: opus-latest
+  default: opus
 """,
         encoding="utf-8",
     )
@@ -387,7 +387,7 @@ sync:
   worktree_path: nb/sync
 
 models:
-  default: opus-latest
+  default: opus
 """,
         encoding="utf-8",
     )

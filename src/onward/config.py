@@ -319,12 +319,12 @@ def _tier_effective_model_string(models: dict[str, Any], tier_key: str) -> str:
 
 
 def effective_default_model(config: dict[str, Any]) -> str:
-    """Resolved ``models.default``, or ``opus-latest`` when unset or empty."""
+    """Resolved ``models.default``, or ``opus`` when unset or empty."""
     models = config.get("models", {})
     if not isinstance(models, dict):
-        return "opus-latest"
+        return "opus"
     s = _nonempty_model_string(models.get("default"))
-    return s if s else "opus-latest"
+    return s if s else "opus"
 
 
 def resolve_model_for_tier(config: dict[str, Any], tier_name: str) -> str:
@@ -333,8 +333,8 @@ def resolve_model_for_tier(config: dict[str, Any], tier_name: str) -> str:
     Legacy ``models.split_default`` / ``models.review_default`` are used when ``split`` /
     ``review_1`` are empty (non-empty tier keys win). ``task_default`` is not a tier alias here.
 
-    ``models.default`` is required logically; when missing or empty, ``opus-latest`` is used
-    as the ultimate default (same as historical ``model_setting(..., "default", "opus-latest")``).
+    ``models.default`` is required logically; when missing or empty, ``opus`` is used
+    as the ultimate default (same as historical ``model_setting(..., "default", "opus")``).
     """
     models = config.get("models", {})
     if not isinstance(models, dict):
@@ -584,7 +584,7 @@ def config_validation_warnings(config: dict[str, Any]) -> list[str]:
 
     if not _nonempty_model_string(models.get("default")):
         out.append(
-            "config.models.default is unset or empty; Onward falls back to opus-latest. "
+            "config.models.default is unset or empty; Onward falls back to opus. "
             "Set models.default explicitly.",
         )
 

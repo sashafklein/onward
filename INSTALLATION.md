@@ -345,7 +345,7 @@ version: 1
 # Artifact root configuration (optional)
 # Default: .onward/ (used when neither root nor roots is set)
 # Use `root` for a single custom artifact directory:
-root: notebooks  # all artifacts go here instead of .onward/
+root: notebooks # all artifacts go here instead of .onward/
 
 # OR use `roots` for multi-project workspaces with separate artifact trees:
 # roots:
@@ -370,12 +370,12 @@ executor:
 
 models:
   # Tiered model keys with automatic fallback chains (see docs/CAPABILITIES.md).
-  default: opus-latest # ultimate fallback
-  high: opus-latest # effort: high tasks
-  medium: sonnet-latest # effort: medium tasks (and default for new tasks)
-  low: haiku-latest # effort: low tasks
-  split: sonnet-latest # split decomposition (blank → falls through to default)
-  review_1: codex-latest # first plan reviewer
+  default: opus # ultimate fallback
+  high: opus # effort: high tasks
+  medium: sonnet # effort: medium tasks (and default for new tasks)
+  low: haiku # effort: low tasks
+  split: sonnet # split decomposition (blank → falls through to default)
+  review_1: codex # first plan reviewer
   review_2: # second reviewer (blank → falls through high → default)
 
 review:
@@ -407,11 +407,13 @@ hooks:
 **Default behavior:** When neither `root` nor `roots` is set, Onward uses `.onward/` as the artifact root (backward compatible).
 
 **Single custom root (`root`):** Set this to change where all artifacts are stored. Useful for:
+
 - Making plans visible in tools like Obsidian (non-hidden directories)
 - Keeping artifacts in a specific location for organizational reasons
 - Example: `root: notebooks` → artifacts live in `./notebooks/plans/`, `./notebooks/runs/`, etc.
 
 **Multi-root workspaces (`roots`):** Use this when managing multiple projects with separate artifact trees:
+
 ```yaml
 roots:
   frontend: .fe-plans
@@ -420,6 +422,7 @@ default_project: frontend
 ```
 
 With multi-root configuration:
+
 - Every artifact-touching command requires `--project <key>` unless `default_project` is set
 - Each project gets its own `index.yaml`, `recent.yaml`, `ongoing.json`
 - `onward report` without `--project` shows a combined view across all projects
@@ -427,6 +430,7 @@ With multi-root configuration:
 - Templates, prompts, and hooks can be per-project (check project dir first) with shared fallback
 
 **Rules:**
+
 - `root` and `roots` are mutually exclusive (doctor error if both set)
 - All paths are relative to the workspace root
 - Run `onward init` after changing roots to scaffold new directories
@@ -457,15 +461,15 @@ With **`sync.mode: local`** there is no sync checkout. **`onward sync status`** 
 ### Model Aliases
 
 Onward supports short aliases so you don't have to remember full model identifiers.
-Use `<family>-latest` to always get the current best version of a model family:
+Use `<family>` to always get the current best version of a model family:
 
-| Alias                     | Resolves to         |
-| ------------------------- | ------------------- |
-| `opus-latest` or `opus`   | `claude-opus-4-6`   |
-| `sonnet-latest` or `sonnet`  | `claude-sonnet-latest` |
-| `haiku-latest` or `haiku` | `claude-haiku-4`    |
-| `codex-latest` or `codex` | `codex-5-3`         |
-| `gpt5`                    | `gpt-5`             |
+| Alias                | Resolves to       |
+| -------------------- | ----------------- |
+| `opus` or `opus`     | `claude-opus-4-6` |
+| `sonnet` or `sonnet` | `claude-sonnet`   |
+| `haiku` or `haiku`   | `claude-haiku-4`  |
+| `codex` or `codex`   | `codex-5-3`       |
+| `gpt5`               | `gpt-5`           |
 
 You can also use full model identifiers directly (e.g., `claude-opus-4-6`). Aliases are resolved
 at execution time, so updating Onward automatically picks up new model versions.

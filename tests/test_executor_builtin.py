@@ -46,8 +46,10 @@ def onward_exec_ref() -> Any:
 
 
 def test_route_opus_and_sonnet_to_claude() -> None:
-    assert route_model_to_backend("opus-latest").name == "claude"
-    assert route_model_to_backend("sonnet-latest").name == "claude"
+    assert route_model_to_backend("opus").name == "claude"
+    assert route_model_to_backend("sonnet").name == "claude"
+    assert route_model_to_backend("claude-opus-4-6").name == "claude"
+    assert route_model_to_backend("claude-sonnet-4-6").name == "claude"
 
 
 def test_route_cursor_and_gemini_to_cursor() -> None:
@@ -60,12 +62,14 @@ def test_route_unknown_defaults_to_claude() -> None:
 
 
 def test_route_codex_substring_to_claude() -> None:
-    assert route_model_to_backend("codex-latest").name == "claude"
+    assert route_model_to_backend("codex").name == "claude"
+    assert route_model_to_backend("codex-5-3").name == "claude"
 
 
 def test_model_string_matches_cli_routing_hint() -> None:
-    assert model_string_matches_cli_routing_hint("opus-latest")
-    assert model_string_matches_cli_routing_hint("codex-latest")
+    assert model_string_matches_cli_routing_hint("opus")
+    assert model_string_matches_cli_routing_hint("codex")
+    assert model_string_matches_cli_routing_hint("claude-opus-4-6")
     assert model_string_matches_cli_routing_hint("cursor-fast")
     assert model_string_matches_cli_routing_hint("gemini-2")
     assert not model_string_matches_cli_routing_hint("weird-custom-id")
@@ -78,7 +82,8 @@ def test_route_claude_substring_to_claude() -> None:
 
 
 def test_route_haiku_prefix_to_claude() -> None:
-    assert route_model_to_backend("haiku-latest").name == "claude"
+    assert route_model_to_backend("haiku").name == "claude"
+    assert route_model_to_backend("claude-haiku-4").name == "claude"
 
 
 def test_route_empty_model_to_claude() -> None:
@@ -94,8 +99,9 @@ def test_route_case_insensitive() -> None:
 @pytest.mark.parametrize(
     ("model", "expected"),
     [
-        ("opus-latest", "claude"),
-        ("sonnet-latest", "claude"),
+        ("opus", "claude"),
+        ("sonnet", "claude"),
+        ("claude-opus-4-6", "claude"),
         ("cursor-fast", "cursor"),
         ("unknown-model", "claude"),
     ],
@@ -105,8 +111,8 @@ def test_route_model_to_backend_acceptance(model: str, expected: str) -> None:
 
 
 def test_claude_build_argv() -> None:
-    argv = ClaudeBackend().build_argv("opus-latest", "do X")
-    assert argv == ["claude", "--model", "opus-latest", "-p", "do X"]
+    argv = ClaudeBackend().build_argv("claude-opus-4-6", "do X")
+    assert argv == ["claude", "--model", "claude-opus-4-6", "-p", "do X"]
 
 
 def test_cursor_build_argv_uses_agent_subcommand() -> None:
@@ -147,7 +153,7 @@ def _task_context_from_payload(payload: dict[str, Any]) -> TaskContext:
             body=str(payload.get("body", "") or ""),
             metadata=meta,
         ),
-        model="opus-latest",
+        model="opus",
         run_id="run-test",
         plan_context=plan if isinstance(plan, dict) else None,
         chunk_context=chunk if isinstance(chunk, dict) else None,
@@ -277,7 +283,7 @@ class _FakeProc:
         return self._return_code
 
 
-def _run_ctx(tmp_path: Path, *, model: str = "opus-latest", run_id: str = "RUN-1-TASK-001") -> TaskContext:
+def _run_ctx(tmp_path: Path, *, model: str = "opus", run_id: str = "RUN-1-TASK-001") -> TaskContext:
     return TaskContext(
         task=Artifact(
             tmp_path / "TASK-001.md",
@@ -315,7 +321,7 @@ def test_builtin_spawns_claude_argv(mock_popen: MagicMock, tmp_path: Path) -> No
     mock_popen.assert_called_once()
     args, kwargs = mock_popen.call_args
     argv = args[0]
-    assert argv == [monkey_exe, "--model", "opus-latest", "-p", expected_prompt]
+    assert argv == [monkey_exe, "--model", "claude-opus-4-6", "-p", expected_prompt]
     assert kwargs["cwd"] == tmp_path
     assert kwargs["stdin"] == subprocess.DEVNULL
     assert kwargs["text"] is True

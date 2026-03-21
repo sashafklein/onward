@@ -8,7 +8,7 @@ title: "Wire WorkReporter into cmd_work and _work_plan in cli_commands.py"
 status: "open"
 description: ""
 human: false
-model: "sonnet-latest"
+model: "sonnet"
 executor: "onward-exec"
 depends_on: ["TASK-037"]
 files: ["src/onward/cli_commands.py"]
