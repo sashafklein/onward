@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T21:01:12Z"
-index_version: 315
+generated_at: "2026-03-21T21:04:42Z"
+index_version: 318
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -902,8 +902,8 @@ tasks:
   effort: "s"
 - id: "TASK-062"
   title: "Remove files and acceptance from task frontmatter in split.py and cli_commands.py"
-  status: "in_progress"
-  updated_at: "2026-03-21T21:01:12Z"
+  status: "completed"
+  updated_at: "2026-03-21T21:04:41Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-062-remove-files-and-acceptance-from-task-frontmatter-in-split-py-and-cli-commands-py.md"
   plan: "PLAN-007"
   chunk: "CHUNK-017"
@@ -913,8 +913,8 @@ tasks:
   effort: "s"
 - id: "TASK-063"
   title: "Add KNOWN_FIELDS for tasks to artifacts.py and warn on unknown fields in validate_artifact"
-  status: "open"
-  updated_at: "2026-03-21T20:25:46Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T21:04:42Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-063-add-known-fields-for-tasks-to-artifacts-py-and-warn-on-unknown-fields-in-validate-artifact.md"
   plan: "PLAN-007"
   chunk: "CHUNK-017"

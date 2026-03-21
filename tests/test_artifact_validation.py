@@ -118,7 +118,7 @@ def test_bad_human_string():
 
 def test_unknown_field():
     issues = validate_artifact(_task(foobar=1))
-    assert any("unknown field" in i and "foobar" in i for i in issues), issues
+    assert any("unknown task field" in i and "foobar" in i for i in issues), issues
 
 
 # ---------------------------------------------------------------------------

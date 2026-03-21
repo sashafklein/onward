@@ -292,7 +292,7 @@ def validate_artifact(artifact: Artifact) -> list[str]:
     known = set(required) | set(KNOWN_FIELDS.get(artifact_type, []))
     for key in artifact.metadata:
         if key not in known:
-            issues.append(f"{artifact.file_path}: unknown field '{key}'")
+            issues.append(f"{artifact.file_path}: unknown {artifact_type} field '{key}'")
 
     return issues
 

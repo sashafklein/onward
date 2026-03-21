@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T21:01:12Z"
+generated_at: "2026-03-21T21:04:42Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -872,6 +872,17 @@ completed:
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-061-docs-update-effort-complexity-references-in-documentation.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"
+  project: ""
+  depends_on: []
+  human: false
+  effort: "s"
+- id: "TASK-062"
+  title: "Remove files and acceptance from task frontmatter in split.py and cli_commands.py"
+  status: "completed"
+  updated_at: "2026-03-21T21:04:41Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-062-remove-files-and-acceptance-from-task-frontmatter-in-split-py-and-cli-commands-py.md"
+  plan: "PLAN-007"
+  chunk: "CHUNK-017"
   project: ""
   depends_on: []
   human: false
