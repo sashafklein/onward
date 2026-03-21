@@ -5,7 +5,7 @@ plan: "PLAN-007"
 chunk: "CHUNK-016"
 project: ""
 title: "util.py: rename normalize_effort → normalize_complexity, accept low|medium|high"
-status: "in_progress"
+status: "completed"
 description: "In `src/onward/util.py`:\n1. Rename `_normalize_effort` to `_normalize_complexity`. Change the accepted value set from `{\"xs\", \"s\", \"m\", \"l\", \"xl\"}` to `{\"low\", \"medium\", \"high\"}`.\n2. At the bottom of the file (public aliases section), replace `normalize_effort = _normalize_effort` with `normalize_complexity = _normalize_complexity`. Remove the old `normalize_effort` alias entirely — callers in split.py, cli_commands.py will be updated in their own tasks.\n\nThe new function signature is unchanged: `_normalize_complexity(value: Any) -> str` — returns the canonical string if valid, else `\"\"`.\n\nExample: `normalize_complexity('high') == 'high'`, `normalize_complexity('xl') == ''`, `normalize_complexity('') == ''`."
 human: false
 model: "haiku"
@@ -23,9 +23,10 @@ acceptance:
 - "normalize_complexity is exported from util.py; normalize_effort is removed"
 - "Zero grep matches for normalize_effort in src/onward/util.py"
 created_at: "2026-03-21T20:23:52Z"
-updated_at: "2026-03-21T20:51:33Z"
+updated_at: "2026-03-21T20:51:52Z"
 effort: "xs"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
