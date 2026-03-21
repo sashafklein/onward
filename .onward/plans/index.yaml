@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T20:54:34Z"
-index_version: 298
+generated_at: "2026-03-21T20:56:34Z"
+index_version: 301
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -836,8 +836,8 @@ tasks:
   effort: "xs"
 - id: "TASK-057"
   title: "cli_commands.py: update all effort→complexity call sites"
-  status: "in_progress"
-  updated_at: "2026-03-21T20:54:34Z"
+  status: "completed"
+  updated_at: "2026-03-21T20:56:32Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-057-cli-commands-py-update-all-effort-complexity-call-sites.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"
@@ -850,8 +850,8 @@ tasks:
   effort: "s"
 - id: "TASK-058"
   title: "split.py: update normalize_effort → normalize_complexity and metadata key"
-  status: "open"
-  updated_at: "2026-03-21T20:23:52Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T20:56:34Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-058-split-py-update-normalize-effort-normalize-complexity-and-metadata-key.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"

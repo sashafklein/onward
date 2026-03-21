@@ -20,7 +20,7 @@ from onward.util import (
     markdown_section,
     normalize_acceptance,
     normalize_bool,
-    normalize_effort,
+    normalize_complexity,
     normalize_priority,
     now_iso,
     slugify,
@@ -127,7 +127,7 @@ def _heuristic_split_chunk_payload(artifact: Artifact, default_model: str) -> di
                 "human": False,
                 "depends_on_index": [],
                 "files": [],
-                "effort": "",
+                "complexity": "",
             }
         )
     return {"tasks": tasks}
@@ -323,7 +323,7 @@ def normalize_task_candidates(items: list[dict[str, Any]], default_model: str) -
         idx0 = i - 1
         depends_on_index = _coerce_dep_indices(item.get("depends_on_index"), n, idx0)
         files = _normalize_task_files_list(item.get("files"))
-        effort = normalize_effort(item.get("effort"))
+        complexity = normalize_complexity(item.get("complexity") or item.get("effort", ""))
         out.append(
             {
                 "title": title,
@@ -333,7 +333,7 @@ def normalize_task_candidates(items: list[dict[str, Any]], default_model: str) -
                 "human": normalize_bool(item.get("human")),
                 "depends_on_index": depends_on_index,
                 "files": files,
-                "effort": effort,
+                "complexity": complexity,
             }
         )
     return out
@@ -442,9 +442,9 @@ def prepare_chunk_writes(
             "created_at": now,
             "updated_at": now,
         }
-        ceff = normalize_effort(candidate.get("effort", ""))
-        if ceff:
-            metadata["effort"] = ceff
+        ccpx = normalize_complexity(candidate.get("complexity", ""))
+        if ccpx:
+            metadata["complexity"] = ccpx
         cefn = candidate.get("estimated_files")
         if isinstance(cefn, int) and cefn >= 0:
             metadata["estimated_files"] = cefn
@@ -525,9 +525,9 @@ def prepare_task_writes(
             "created_at": now,
             "updated_at": now,
         }
-        effort = normalize_effort(candidate.get("effort", ""))
-        if effort:
-            metadata["effort"] = effort
+        complexity = normalize_complexity(candidate.get("complexity", ""))
+        if complexity:
+            metadata["complexity"] = complexity
         acceptance_lines = "\n".join(f"- {item}" for item in candidate["acceptance"])
         if t_files:
             files_lines = "\n".join(f"- `{p}`" for p in t_files)
