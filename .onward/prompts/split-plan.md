@@ -34,7 +34,7 @@ If you are unsure of paths, use coarse entries (e.g. src/onward/) rather than om
 ## Priority and model
 
 - **priority**: low, medium, or high (default medium).
-- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-4.6, opus-latest, etc.).
+- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-4-6, opus-latest, etc.).
 
 ## Output format
 
@@ -44,6 +44,6 @@ Each element of chunks must include: title (string), description (string), prior
 
 Illustrative minimal object (structure only):
 
-{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-4.6","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
+{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-4-6","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
 
 Rules: Return at least one chunk. Keep titles short and concrete. JSON only on stdout.

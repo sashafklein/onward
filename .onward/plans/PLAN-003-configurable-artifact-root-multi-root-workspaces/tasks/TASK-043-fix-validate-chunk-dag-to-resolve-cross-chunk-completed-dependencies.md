@@ -8,7 +8,7 @@ title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
 status: "completed"
 description: ""
 human: false
-model: "sonnet-4.6"
+model: "sonnet-4-6"
 executor: "onward-exec"
 depends_on: []
 files: []

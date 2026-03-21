@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-004"
 project: ""
 title: "Parameterize scaffold.py path lists and functions"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "m"
-depends_on: ["TASK-012"]
+depends_on:
+- "TASK-012"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:18Z"
-updated_at: "2026-03-21T15:49:18Z"
+updated_at: "2026-03-21T16:47:29Z"
+run_count: 1
 ---
 
 # Context

@@ -25,7 +25,7 @@ from onward.artifacts import (
 from onward.util import clean_string, dump_simple_yaml
 
 MODEL_MAP = {
-    "sonnet-4.6": "sonnet",
+    "sonnet-4-6": "sonnet",
     "opus-latest": "opus",
     "haiku-latest": "haiku",
     "codex-latest": "codex",
@@ -131,7 +131,7 @@ def get_ordered_tasks(root: Path, chunk_id: str, from_task: str | None = None) -
 
 def run_task(root: Path, task_id: str, dry_run: bool = False) -> bool:
     task = must_find_by_id(root, task_id)
-    model = resolve_model(clean_string(task.metadata.get("model")) or "sonnet-4.6")
+    model = resolve_model(clean_string(task.metadata.get("model")) or "sonnet-4-6")
     prompt = build_prompt(root, task)
     title = task.metadata.get("title", "")
 
@@ -214,7 +214,7 @@ def main() -> None:
     print(f"\n  Chunk {chunk_id}: {len(task_ids)} task(s) to execute\n")
     for i, tid in enumerate(task_ids, 1):
         task = must_find_by_id(root, tid)
-        model = resolve_model(clean_string(task.metadata.get("model")) or "sonnet-4.6")
+        model = resolve_model(clean_string(task.metadata.get("model")) or "sonnet-4-6")
         deps = task.metadata.get("depends_on", [])
         dep_str = f" (depends on: {', '.join(deps)})" if deps else ""
         print(f"  {i}. {tid} [{model}] {task.metadata.get('title')}{dep_str}")

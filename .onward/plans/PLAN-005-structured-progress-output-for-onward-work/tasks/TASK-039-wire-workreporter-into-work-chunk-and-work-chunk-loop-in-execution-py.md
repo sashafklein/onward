@@ -8,7 +8,7 @@ title: "Wire WorkReporter into work_chunk and _work_chunk_loop in execution.py"
 status: "open"
 description: ""
 human: false
-model: "sonnet-4.6"
+model: "sonnet-4-6"
 executor: "onward-exec"
 depends_on: ["TASK-037", "TASK-038"]
 files: ["src/onward/execution.py"]

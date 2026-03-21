@@ -8,7 +8,7 @@ title: "Fix regressions in existing tests from print-to-reporter migration"
 status: "open"
 description: ""
 human: false
-model: "sonnet-4.6"
+model: "sonnet-4-6"
 executor: "onward-exec"
 depends_on: ["TASK-038", "TASK-039", "TASK-040"]
 files: []

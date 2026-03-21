@@ -12,7 +12,7 @@ priority: "high"
 effort: "m"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:46:42Z"
-updated_at: "2026-03-21T16:32:24Z"
+updated_at: "2026-03-21T16:47:28Z"
 ---
 
 # Summary

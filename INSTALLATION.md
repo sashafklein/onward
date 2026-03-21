@@ -358,9 +358,9 @@ models:
   # Tiered model keys with automatic fallback chains (see docs/CAPABILITIES.md).
   default: opus-latest # ultimate fallback
   high: opus-latest # effort: high tasks
-  medium: sonnet-4.6 # effort: medium tasks (and default for new tasks)
+  medium: sonnet-4-6 # effort: medium tasks (and default for new tasks)
   low: haiku-latest # effort: low tasks
-  split: sonnet-4.6 # split decomposition (blank → falls through to default)
+  split: sonnet-4-6 # split decomposition (blank → falls through to default)
   review_1: codex-latest # first plan reviewer
   review_2: # second reviewer (blank → falls through high → default)
 
@@ -416,7 +416,7 @@ Use `<family>-latest` to always get the current best version of a model family:
 | Alias                     | Resolves to         |
 | ------------------------- | ------------------- |
 | `opus-latest` or `opus`   | `claude-opus-4-6`   |
-| `sonnet-4.6` or `sonnet`  | `claude-sonnet-4-6` |
+| `sonnet-4-6` or `sonnet`  | `claude-sonnet-4-6` |
 | `haiku-latest` or `haiku` | `claude-haiku-4`    |
 | `codex-latest` or `codex` | `codex-5-3`         |
 | `gpt5`                    | `gpt-5`             |

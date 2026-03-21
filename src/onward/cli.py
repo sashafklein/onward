@@ -131,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="With --batch: validate and print planned tasks without writing files",
     )
     task_parser.add_argument("--description", default="", help="Task description")
-    task_parser.add_argument("--model", default="sonnet-4.6", help="Model")
+    task_parser.add_argument("--model", default="sonnet-4-6", help="Model")
     task_parser.add_argument(
         "--project",
         default=None,
