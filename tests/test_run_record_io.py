@@ -133,8 +133,8 @@ def _prepare_task_for_tier_low_model(task_path: Path) -> None:
     lines = task_path.read_text(encoding="utf-8").splitlines()
     filtered = [ln for ln in lines if not ln.lstrip().startswith("model:")]
     text = "\n".join(filtered)
-    if 'effort: "low"' not in text:
-        text = text.replace('type: "task"\n', 'type: "task"\neffort: "low"\n', 1)
+    if 'complexity: "low"' not in text:
+        text = text.replace('type: "task"\n', 'type: "task"\ncomplexity: "low"\n', 1)
     task_path.write_text(text.rstrip() + "\n", encoding="utf-8")
 
 

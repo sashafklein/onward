@@ -13,7 +13,7 @@ from onward.artifacts import (
     regenerate_indexes,
     resolve_project,
 )
-from onward.util import normalize_effort
+from onward.util import normalize_complexity
 from tests.conftest import make_default_layout
 
 
@@ -31,9 +31,11 @@ def _null_post_chunk_hook(root: Path) -> None:
     p.write_text(raw, encoding="utf-8")
 
 
-def test_normalize_effort_case_insensitive() -> None:
-    assert normalize_effort("M") == "m"
-    assert normalize_effort("invalid") == ""
+def test_normalize_complexity_case_insensitive() -> None:
+    assert normalize_complexity("M") == ""
+    assert normalize_complexity("medium") == "medium"
+    assert normalize_complexity("MEDIUM") == "medium"
+    assert normalize_complexity("invalid") == ""
 
 
 def test_batch_creates_tasks_sequential_ids(tmp_path: Path, capsys) -> None:
@@ -150,7 +152,7 @@ def test_ready_no_tasks_message(tmp_path: Path, capsys) -> None:
     assert "No ready tasks" in capsys.readouterr().out
 
 
-def test_new_task_effort_stored(tmp_path: Path) -> None:
+def test_new_task_complexity_stored(tmp_path: Path) -> None:
     _init_workspace(tmp_path)
     assert cli.main(["new", "--root", str(tmp_path), "plan", "P"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "C"]) == 0
@@ -165,15 +167,15 @@ def test_new_task_effort_stored(tmp_path: Path) -> None:
                 "T",
                 "--description",
                 "d",
-                "--effort",
-                "m",
+                "--complexity",
+                "medium",
             ]
         )
         == 0
     )
     task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
     art = parse_artifact(task_path)
-    assert art.metadata.get("effort") == "m"
+    assert art.metadata.get("complexity") == "medium"
 
 
 def test_project_inheritance_on_new_chunk_and_task(tmp_path: Path) -> None:

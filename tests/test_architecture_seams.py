@@ -216,10 +216,10 @@ def test_validate_config_contract_accepts_legacy_model_keys() -> None:
 def test_resolve_model_for_task_explicit_model_wins() -> None:
     cfg = {"models": {"default": "opus", "low": "haiku"}}
     assert resolve_model_for_task(cfg, {"model": "custom-model"}) == "custom-model"
-    assert resolve_model_for_task(cfg, {"model": "custom-model", "effort": "low"}) == "custom-model"
+    assert resolve_model_for_task(cfg, {"model": "custom-model", "complexity": "low"}) == "custom-model"
 
 
-def test_resolve_model_for_task_effort_tiers() -> None:
+def test_resolve_model_for_task_complexity_tiers() -> None:
     cfg = {
         "models": {
             "default": "D",
@@ -228,10 +228,10 @@ def test_resolve_model_for_task_effort_tiers() -> None:
             "low": "L",
         },
     }
-    assert resolve_model_for_task(cfg, {"effort": "low"}) == "L"
-    assert resolve_model_for_task(cfg, {"effort": "medium"}) == "M"
-    assert resolve_model_for_task(cfg, {"effort": "high"}) == "H"
-    assert resolve_model_for_task(cfg, {"effort": "LOW"}) == "L"
+    assert resolve_model_for_task(cfg, {"complexity": "low"}) == "L"
+    assert resolve_model_for_task(cfg, {"complexity": "medium"}) == "M"
+    assert resolve_model_for_task(cfg, {"complexity": "high"}) == "H"
+    assert resolve_model_for_task(cfg, {"complexity": "LOW"}) == "L"
 
 
 def test_resolve_model_for_task_empty_metadata_uses_default_tier() -> None:
@@ -239,17 +239,22 @@ def test_resolve_model_for_task_empty_metadata_uses_default_tier() -> None:
     assert resolve_model_for_task(cfg, {}) == "D"
 
 
-def test_resolve_model_for_task_unknown_effort_falls_back_to_default_tier() -> None:
+def test_resolve_model_for_task_unknown_complexity_falls_back_to_default_tier() -> None:
     cfg = {"models": {"default": "D", "low": "L"}}
-    assert resolve_model_for_task(cfg, {"effort": "xl"}) == "D"
-    assert resolve_model_for_task(cfg, {"effort": ""}) == "D"
+    assert resolve_model_for_task(cfg, {"complexity": "xl"}) == "D"
+    assert resolve_model_for_task(cfg, {"complexity": ""}) == "D"
+
+
+def test_resolve_model_for_task_effort_compat_fallback() -> None:
+    cfg = {"models": {"default": "D", "high": "H", "medium": "M", "low": "L"}}
+    assert resolve_model_for_task(cfg, {"effort": "low"}) == "L"
 
 
 def test_resolve_model_for_task_whitespace_only_model_ignored() -> None:
     """Blank or whitespace ``model`` is not explicit; resolution continues to effort / default."""
     cfg = {"models": {"default": "D", "low": "L"}}
     assert resolve_model_for_task(cfg, {"model": "   "}) == "D"
-    assert resolve_model_for_task(cfg, {"model": "", "effort": "low"}) == "L"
+    assert resolve_model_for_task(cfg, {"model": "", "complexity": "low"}) == "L"
 
 
 def test_scaffold_default_config_yaml_matches_config_allowlists() -> None:

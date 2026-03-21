@@ -14,8 +14,8 @@ def _create_test_artifacts(root: Path) -> None:
     # Create first plan with tasks
     assert cli.main(["new", "--root", str(root), "plan", "Alpha Project"]) == 0
     assert cli.main(["new", "--root", str(root), "chunk", "PLAN-001", "Backend API"]) == 0
-    assert cli.main(["new", "--root", str(root), "task", "CHUNK-001", "Add schema", "--effort", "m"]) == 0
-    assert cli.main(["new", "--root", str(root), "task", "CHUNK-001", "Add validation", "--effort", "s"]) == 0
+    assert cli.main(["new", "--root", str(root), "task", "CHUNK-001", "Add schema", "--complexity", "medium"]) == 0
+    assert cli.main(["new", "--root", str(root), "task", "CHUNK-001", "Add validation", "--complexity", "low"]) == 0
 
     # Create second plan for project filtering tests
     assert cli.main(["new", "--root", str(root), "plan", "Beta Project", "--project", "beta"]) == 0
@@ -53,7 +53,7 @@ def test_md_has_valid_structure(tmp_path: Path, capsys):
     assert "# Onward Report" in out
 
     # Check for all required section headers
-    assert "## Effort Remaining" in out
+    assert "## Complexity Remaining" in out
     assert "## In Progress" in out
     assert "## Upcoming" in out
     assert "## Next" in out
@@ -175,8 +175,8 @@ def test_md_tables_have_proper_format(tmp_path: Path, capsys):
 
     assert code == 0
 
-    # Effort Remaining table
-    assert "| xs | s | m | l | xl | unestimated |" in out
+    # Complexity Remaining table
+    assert "| low | medium | high | unestimated |" in out
 
     # Check for table separators (all tables should have these)
     separator_pattern = re.compile(r'\|[-]+\|')
