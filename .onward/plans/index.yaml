@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T18:09:19Z"
-index_version: 188
+generated_at: "2026-03-21T18:09:35Z"
+index_version: 191
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -438,7 +438,7 @@ tasks:
 - id: "TASK-026"
   title: "Migrate sync.py hardcoded paths to WorkspaceLayout"
   status: "completed"
-  updated_at: "2026-03-21T18:09:19Z"
+  updated_at: "2026-03-21T18:09:34Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-026-migrate-sync-py-hardcoded-paths-to-workspacelayout.md"
   plan: "PLAN-003"
   chunk: "CHUNK-007"
@@ -449,8 +449,8 @@ tasks:
   effort: "m"
 - id: "TASK-027"
   title: "Add --project to sync subcommands"
-  status: "open"
-  updated_at: "2026-03-21T15:49:50Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T18:09:35Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-027-add-project-to-sync-subcommands.md"
   plan: "PLAN-003"
   chunk: "CHUNK-007"

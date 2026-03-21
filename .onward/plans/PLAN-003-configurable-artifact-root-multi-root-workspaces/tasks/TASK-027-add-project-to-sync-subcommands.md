@@ -5,17 +5,19 @@ plan: "PLAN-003"
 chunk: "CHUNK-007"
 project: ""
 title: "Add --project to sync subcommands"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
 executor: "onward-exec"
 effort: "s"
-depends_on: ["TASK-026"]
+depends_on:
+- "TASK-026"
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:50Z"
-updated_at: "2026-03-21T15:49:50Z"
+updated_at: "2026-03-21T18:09:35Z"
+run_count: 1
 ---
 
 # Context

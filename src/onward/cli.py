@@ -67,12 +67,15 @@ def build_parser() -> argparse.ArgumentParser:
     sync_sub = sync_parser.add_subparsers(dest="sync_command", required=True)
 
     sync_status_parser = sync_sub.add_parser("status", help="Compare local plans with sync target")
+    sync_status_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     sync_status_parser.set_defaults(func=cmd_sync_status)
 
     sync_push_parser = sync_sub.add_parser("push", help="Copy local plans to sync target, commit, and push")
+    sync_push_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     sync_push_parser.set_defaults(func=cmd_sync_push)
 
     sync_pull_parser = sync_sub.add_parser("pull", help="Fast-forward sync target and copy plans locally")
+    sync_pull_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     sync_pull_parser.set_defaults(func=cmd_sync_pull)
 
     new_parser = subparsers.add_parser("new", help="Create new artifacts")

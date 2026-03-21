@@ -327,7 +327,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     seen_ids: set[str] = set()
     blocked_by_warnings: list[str] = []
-    for path in artifact_glob(root):
+    for path in artifact_glob(layout):
         try:
             artifact = parse_artifact(path)
         except Exception as exc:  # noqa: BLE001
@@ -363,7 +363,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_sync_status(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    code, lines = _cmd_sync_status(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout)
+    code, lines = _cmd_sync_status(root, project)
     for line in lines:
         print(line)
     return code
@@ -371,7 +374,10 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
 
 def cmd_sync_push(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    code, lines = _cmd_sync_push(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout)
+    code, lines = _cmd_sync_push(root, project)
     for line in lines:
         print(line)
     return code
@@ -379,7 +385,10 @@ def cmd_sync_push(args: argparse.Namespace) -> int:
 
 def cmd_sync_pull(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    code, lines = _cmd_sync_pull(root)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout)
+    code, lines = _cmd_sync_pull(root, project)
     for line in lines:
         print(line)
     return code

@@ -26,7 +26,7 @@ def _sync_section(config: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def parse_sync_settings(config: dict[str, Any], layout: WorkspaceLayout) -> SyncSettings:
+def parse_sync_settings(config: dict[str, Any], layout: WorkspaceLayout, project: str | None = None) -> SyncSettings:
     sec = _sync_section(config)
     mode = clean_string(sec.get("mode", "local")).lower() or "local"
     if mode not in {"local", "branch", "repo"}:
@@ -38,7 +38,13 @@ def parse_sync_settings(config: dict[str, Any], layout: WorkspaceLayout) -> Sync
         repo = str(repo_val).strip()
 
     # Default worktree path uses the configured artifact root
-    default_worktree = str(layout.sync_dir().relative_to(layout.workspace_root))
+    # In multi-root mode, use first project if no project specified (for validation only)
+    sync_project = project
+    if layout.is_multi_root and sync_project is None:
+        # Use first available project for default path computation
+        all_keys = layout.all_project_keys()
+        sync_project = next((k for k in all_keys if k is not None), None)
+    default_worktree = str(layout.sync_dir(sync_project).relative_to(layout.workspace_root))
     worktree_rel = clean_string(sec.get("worktree_path", default_worktree)) or default_worktree
     return SyncSettings(mode=mode, branch=branch, repo=repo, worktree_rel=worktree_rel)
 
@@ -110,7 +116,7 @@ def _remove_if_empty_dir(path: Path) -> None:
         path.rmdir()
 
 
-def ensure_branch_worktree(root: Path, settings: SyncSettings, layout: WorkspaceLayout) -> Path:
+def ensure_branch_worktree(root: Path, settings: SyncSettings, layout: WorkspaceLayout, project: str | None = None) -> Path:
     if settings.mode != "branch":
         raise ValueError("internal: ensure_branch_worktree in non-branch mode")
     if not _inside_git_repo(root):
@@ -147,13 +153,13 @@ def ensure_branch_worktree(root: Path, settings: SyncSettings, layout: Workspace
         raise ValueError(f"git worktree add failed: {err}")
 
     # Worktree mirrors workspace layout: get the relative path from workspace root
-    artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+    artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
     plans = wt / artifact_root_rel / "plans"
     plans.mkdir(parents=True, exist_ok=True)
     return wt
 
 
-def ensure_repo_clone(root: Path, settings: SyncSettings, layout: WorkspaceLayout) -> Path:
+def ensure_repo_clone(root: Path, settings: SyncSettings, layout: WorkspaceLayout, project: str | None = None) -> Path:
     if settings.mode != "repo":
         raise ValueError("internal: ensure_repo_clone in non-repo mode")
 
@@ -179,25 +185,25 @@ def ensure_repo_clone(root: Path, settings: SyncSettings, layout: WorkspaceLayou
         raise ValueError(f"git clone failed: {err}")
 
     # Worktree mirrors workspace layout: get the relative path from workspace root
-    artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+    artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
     plans = wt / artifact_root_rel / "plans"
     plans.mkdir(parents=True, exist_ok=True)
     return wt
 
 
-def remote_plans_path(root: Path, settings: SyncSettings, layout: WorkspaceLayout) -> Path:
+def remote_plans_path(root: Path, settings: SyncSettings, layout: WorkspaceLayout, project: str | None = None) -> Path:
     if settings.mode == "branch":
-        wt = ensure_branch_worktree(root, settings, layout)
+        wt = ensure_branch_worktree(root, settings, layout, project)
     elif settings.mode == "repo":
-        wt = ensure_repo_clone(root, settings, layout)
+        wt = ensure_repo_clone(root, settings, layout, project)
     else:
         raise ValueError("remote plans requested in local mode")
     # Worktree mirrors workspace layout
-    artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+    artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
     return wt / artifact_root_rel / "plans"
 
 
-def _remote_plans_path_if_ready(root: Path, settings: SyncSettings, layout: WorkspaceLayout) -> Path | None:
+def _remote_plans_path_if_ready(root: Path, settings: SyncSettings, layout: WorkspaceLayout, project: str | None = None) -> Path | None:
     """Return remote plans dir only if sync checkout already exists (no clone/worktree side effects)."""
     if settings.mode not in {"branch", "repo"}:
         return None
@@ -205,7 +211,7 @@ def _remote_plans_path_if_ready(root: Path, settings: SyncSettings, layout: Work
     if not (wt / ".git").exists():
         return None
     # Worktree mirrors workspace layout
-    artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+    artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
     return wt / artifact_root_rel / "plans"
 
 
@@ -281,9 +287,9 @@ def mirror_plans(src: Path, dst: Path) -> None:
             pass
 
 
-def git_commit_plans_if_changed(wt: Path, message: str, layout: WorkspaceLayout) -> bool:
+def git_commit_plans_if_changed(wt: Path, message: str, layout: WorkspaceLayout, project: str | None = None) -> bool:
     # Git paths are relative to worktree root (which mirrors workspace layout)
-    artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+    artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
     plans_rel = str(artifact_root_rel / "plans")
     _git(["add", "-A", plans_rel], wt, check=True)
     st = _git(["status", "--porcelain", "--", plans_rel], wt, check=True)
@@ -313,19 +319,19 @@ def git_pull_ff_only(wt: Path) -> None:
         )
 
 
-def cmd_sync_status(root: Path) -> tuple[int, list[str]]:
+def cmd_sync_status(root: Path, project: str | None = None) -> tuple[int, list[str]]:
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    settings = parse_sync_settings(config, layout)
+    settings = parse_sync_settings(config, layout, project)
     lines: list[str] = []
-    local = plans_dir(layout)
+    local = plans_dir(layout, project)
 
     if settings.mode == "local":
         lines.append(f"Sync mode: local (no remote target). Plans: {local.relative_to(root)}")
         lines.append("Local vs remote: n/a")
         return 0, lines
 
-    remote_plans = _remote_plans_path_if_ready(root, settings, layout)
+    remote_plans = _remote_plans_path_if_ready(root, settings, layout, project)
     if remote_plans is None:
         lines.append(f"Sync mode: {settings.mode}")
         lines.append(f"Local plans: {local.relative_to(root)}")
@@ -349,23 +355,23 @@ def cmd_sync_status(root: Path) -> tuple[int, list[str]]:
     return 0, lines
 
 
-def cmd_sync_push(root: Path) -> tuple[int, list[str]]:
+def cmd_sync_push(root: Path, project: str | None = None) -> tuple[int, list[str]]:
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    settings = parse_sync_settings(config, layout)
+    settings = parse_sync_settings(config, layout, project)
     if settings.mode == "local":
         return 1, ["sync push skipped: sync.mode is local. Set sync.mode to branch or repo in .onward.config.yaml"]
 
-    local = plans_dir(layout)
+    local = plans_dir(layout, project)
     lines: list[str] = []
 
     try:
         if settings.mode == "branch":
-            wt = ensure_branch_worktree(root, settings, layout)
+            wt = ensure_branch_worktree(root, settings, layout, project)
         else:
-            wt = ensure_repo_clone(root, settings, layout)
+            wt = ensure_repo_clone(root, settings, layout, project)
         # Worktree mirrors workspace layout
-        artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+        artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
         remote_plans = wt / artifact_root_rel / "plans"
     except ValueError as exc:
         return 1, [str(exc)]
@@ -373,7 +379,7 @@ def cmd_sync_push(root: Path) -> tuple[int, list[str]]:
     mirror_plans(local, remote_plans)
     lines.append(f"Copied local plans -> {remote_plans}")
 
-    committed = git_commit_plans_if_changed(wt, "onward sync push", layout)
+    committed = git_commit_plans_if_changed(wt, "onward sync push", layout, project)
     lines.append("Committed changes in sync worktree" if committed else "No commit (no plan changes)")
 
     try:
@@ -387,23 +393,23 @@ def cmd_sync_push(root: Path) -> tuple[int, list[str]]:
     return 0, lines
 
 
-def cmd_sync_pull(root: Path) -> tuple[int, list[str]]:
+def cmd_sync_pull(root: Path, project: str | None = None) -> tuple[int, list[str]]:
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
-    settings = parse_sync_settings(config, layout)
+    settings = parse_sync_settings(config, layout, project)
     if settings.mode == "local":
         return 1, ["sync pull skipped: sync.mode is local. Set sync.mode to branch or repo in .onward.config.yaml"]
 
-    local = plans_dir(layout)
+    local = plans_dir(layout, project)
     lines: list[str] = []
 
     try:
         if settings.mode == "branch":
-            wt = ensure_branch_worktree(root, settings, layout)
+            wt = ensure_branch_worktree(root, settings, layout, project)
         else:
-            wt = ensure_repo_clone(root, settings, layout)
+            wt = ensure_repo_clone(root, settings, layout, project)
         # Worktree mirrors workspace layout
-        artifact_root_rel = layout.artifact_root().relative_to(layout.workspace_root)
+        artifact_root_rel = layout.artifact_root(project).relative_to(layout.workspace_root)
         remote_plans = wt / artifact_root_rel / "plans"
     except ValueError as exc:
         return 1, [str(exc)]
@@ -416,6 +422,6 @@ def cmd_sync_pull(root: Path) -> tuple[int, list[str]]:
 
     mirror_plans(remote_plans, local)
     lines.append(f"Copied remote plans -> {local.relative_to(root)}")
-    regenerate_indexes(layout)
+    regenerate_indexes(layout, project)
     lines.append("Regenerated plan indexes")
     return 0, lines
