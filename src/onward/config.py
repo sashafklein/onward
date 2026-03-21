@@ -874,9 +874,57 @@ def build_plan_review_slots(config: dict[str, Any]) -> tuple[list[PlanReviewSlot
     return slots, None
 
 
-def load_artifact_template(root: Path, artifact_type: str) -> str:
-    return (root / f".onward/templates/{artifact_type}.md").read_text(encoding="utf-8")
+def load_artifact_template(
+    root: Path,
+    artifact_type: str,
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
+) -> str:
+    """Load an artifact template (plan, chunk, task).
+
+    Args:
+        root: Workspace root directory (where .onward.config.yaml lives)
+        artifact_type: Template name (e.g., "plan", "chunk", "task")
+        layout: WorkspaceLayout to use for path resolution (defaults to .onward/)
+        project: Project key for multi-root workspaces (optional)
+
+    Returns:
+        Template content as a string
+    """
+    if layout is None:
+        # Backward compatibility: construct default layout when not provided
+        layout = WorkspaceLayout(
+            workspace_root=root,
+            roots={None: root / ".onward"},
+            default_project=None,
+        )
+    template_path = layout.templates_dir(project) / f"{artifact_type}.md"
+    return template_path.read_text(encoding="utf-8")
 
 
-def _load_prompt(root: Path, prompt_name: str) -> str:
-    return (root / f".onward/prompts/{prompt_name}").read_text(encoding="utf-8")
+def _load_prompt(
+    root: Path,
+    prompt_name: str,
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
+) -> str:
+    """Load a prompt file (split.md, review.md, etc.).
+
+    Args:
+        root: Workspace root directory (where .onward.config.yaml lives)
+        prompt_name: Prompt filename (e.g., "split.md", "review.md")
+        layout: WorkspaceLayout to use for path resolution (defaults to .onward/)
+        project: Project key for multi-root workspaces (optional)
+
+    Returns:
+        Prompt content as a string
+    """
+    if layout is None:
+        # Backward compatibility: construct default layout when not provided
+        layout = WorkspaceLayout(
+            workspace_root=root,
+            roots={None: root / ".onward"},
+            default_project=None,
+        )
+    prompt_path = layout.prompts_dir(project) / prompt_name
+    return prompt_path.read_text(encoding="utf-8")
