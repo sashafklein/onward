@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T17:02:51Z"
-index_version: 155
+generated_at: "2026-03-21T17:03:09Z"
+index_version: 159
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -69,8 +69,8 @@ chunks:
   effort: "m"
 - id: "CHUNK-005"
   title: "Migrate all artifact path references"
-  status: "open"
-  updated_at: "2026-03-21T15:46:43Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T17:03:08Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/chunks/CHUNK-005-migrate-all-artifact-path-references.md"
   plan: "PLAN-003"
   project: ""
@@ -328,7 +328,7 @@ tasks:
 - id: "TASK-017"
   title: "Update cmd_doctor for root/roots validation"
   status: "completed"
-  updated_at: "2026-03-21T17:02:50Z"
+  updated_at: "2026-03-21T17:03:07Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-017-update-cmd-doctor-for-root-roots-validation.md"
   plan: "PLAN-003"
   chunk: "CHUNK-004"
@@ -339,8 +339,8 @@ tasks:
   effort: "s"
 - id: "TASK-018"
   title: "Migrate artifacts.py to use WorkspaceLayout"
-  status: "open"
-  updated_at: "2026-03-21T15:49:27Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T17:03:09Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-018-migrate-artifacts-py-to-use-workspacelayout.md"
   plan: "PLAN-003"
   chunk: "CHUNK-005"

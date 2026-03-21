@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from onward.config import load_artifact_template, load_workspace_config, model_setting
+from onward.config import WorkspaceLayout, load_artifact_template, load_workspace_config, model_setting
 from onward.util import (
     as_str_list,
     colorize,
@@ -54,30 +54,60 @@ def write_artifact(artifact: Artifact) -> None:
     artifact.file_path.write_text(format_artifact(artifact.metadata, artifact.body), encoding="utf-8")
 
 
-def artifact_glob(root: Path) -> list[Path]:
-    base = root / ".onward/plans"
-    if not base.exists():
-        return []
-    results: list[Path] = []
-    for path in sorted(base.glob("**/*.md")):
-        if ".archive" in path.relative_to(base).parts:
-            continue
-        results.append(path)
-    return results
+def artifact_glob(layout: WorkspaceLayout, project: str | None = None) -> list[Path]:
+    """Glob all artifact files, optionally filtered by project.
+
+    In multi-root mode with project=None, scans all project roots.
+    """
+    if layout.is_multi_root and project is None:
+        # Scan all project roots
+        results: list[Path] = []
+        for proj_key in layout.all_project_keys():
+            if proj_key is None:
+                continue
+            base = layout.plans_dir(proj_key)
+            if not base.exists():
+                continue
+            for path in sorted(base.glob("**/*.md")):
+                if ".archive" in path.relative_to(base).parts:
+                    continue
+                results.append(path)
+        return results
+    else:
+        # Single root or specific project
+        base = layout.plans_dir(project)
+        if not base.exists():
+            return []
+        results = []
+        for path in sorted(base.glob("**/*.md")):
+            if ".archive" in path.relative_to(base).parts:
+                continue
+            results.append(path)
+        return results
 
 
-def collect_artifacts(root: Path) -> list[Artifact]:
+def collect_artifacts(layout: WorkspaceLayout, project: str | None = None) -> list[Artifact]:
+    """Collect all artifacts, optionally filtered by project.
+
+    In multi-root mode with project=None, collects from all project roots.
+    """
     artifacts: list[Artifact] = []
-    for path in artifact_glob(root):
+    for path in artifact_glob(layout, project):
         artifacts.append(parse_artifact(path))
     return artifacts
 
 
-def next_id(root: Path, prefix: str) -> str:
+def next_id(layout: WorkspaceLayout, prefix: str, project: str | None = None) -> str:
+    """Generate next available ID with the given prefix.
+
+    In multi-root mode, scans all roots to ensure global ID uniqueness.
+    """
     ids: set[int] = set()
     regex = re.compile(rf"^{re.escape(prefix)}-(\d{{3}})$")
 
-    for artifact in collect_artifacts(root):
+    # Always scan all artifacts in multi-root mode to ensure uniqueness
+    scan_project = None if layout.is_multi_root else project
+    for artifact in collect_artifacts(layout, scan_project):
         candidate = str(artifact.metadata.get("id", ""))
         match = regex.match(candidate)
         if match:
@@ -89,10 +119,17 @@ def next_id(root: Path, prefix: str) -> str:
     return f"{prefix}-{next_num:03d}"
 
 
-def next_ids(root: Path, prefix: str, count: int) -> list[str]:
+def next_ids(layout: WorkspaceLayout, prefix: str, count: int, project: str | None = None) -> list[str]:
+    """Generate multiple sequential IDs with the given prefix.
+
+    In multi-root mode, scans all roots to ensure global ID uniqueness.
+    """
     ids: set[int] = set()
     regex = re.compile(rf"^{re.escape(prefix)}-(\d{{3}})$")
-    for artifact in collect_artifacts(root):
+
+    # Always scan all artifacts in multi-root mode to ensure uniqueness
+    scan_project = None if layout.is_multi_root else project
+    for artifact in collect_artifacts(layout, scan_project):
         candidate = str(artifact.metadata.get("id", ""))
         match = regex.match(candidate)
         if match:
@@ -107,28 +144,54 @@ def next_ids(root: Path, prefix: str, count: int) -> list[str]:
     return out
 
 
-def find_by_id(root: Path, artifact_id: str) -> Artifact | None:
+def find_by_id(layout: WorkspaceLayout, artifact_id: str, project: str | None = None) -> Artifact | None:
+    """Find artifact by ID, optionally filtered by project.
+
+    In multi-root mode with project=None, searches all project roots.
+    """
     target = artifact_id.strip()
-    for artifact in collect_artifacts(root):
+    # In multi-root mode without a project, search all roots
+    scan_project = None if layout.is_multi_root else project
+    for artifact in collect_artifacts(layout, scan_project):
         if str(artifact.metadata.get("id", "")) == target:
             return artifact
     return None
 
 
-def must_find_by_id(root: Path, artifact_id: str) -> Artifact:
-    artifact = find_by_id(root, artifact_id)
+def must_find_by_id(layout: WorkspaceLayout, artifact_id: str, project: str | None = None) -> Artifact:
+    """Find artifact by ID, raising ValueError if not found."""
+    artifact = find_by_id(layout, artifact_id, project)
     if not artifact:
         raise ValueError(f"artifact not found: {artifact_id}")
     return artifact
 
 
-def find_plan_dir(root: Path, plan_id: str) -> Path:
-    base = root / ".onward/plans"
+def find_plan_dir(layout: WorkspaceLayout, plan_id: str, project: str | None = None) -> Path:
+    """Find plan directory by ID.
+
+    In multi-root mode with project=None, searches all project roots.
+    """
     pattern = f"{plan_id}-*"
-    matches = sorted(base.glob(pattern))
-    if not matches:
+
+    if layout.is_multi_root and project is None:
+        # Search all project roots
+        for proj_key in layout.all_project_keys():
+            if proj_key is None:
+                continue
+            base = layout.plans_dir(proj_key)
+            if not base.exists():
+                continue
+            matches = sorted(base.glob(pattern))
+            if matches:
+                return matches[0]
         raise ValueError(f"plan not found: {plan_id}")
-    return matches[0]
+    else:
+        # Single root or specific project
+        base = layout.plans_dir(project)
+        matches = sorted(base.glob(pattern))
+        if not matches:
+            raise ValueError(f"plan not found: {plan_id}")
+        return matches[0]
 
 
 def validate_artifact(artifact: Artifact) -> list[str]:
@@ -192,11 +255,12 @@ def transition_status(current: str, target: str) -> str:
     return transitions[target][current]
 
 
-def update_artifact_status(root: Path, artifact: Artifact, status: str) -> None:
+def update_artifact_status(layout: WorkspaceLayout, artifact: Artifact, status: str, project: str | None = None) -> None:
+    """Update artifact status and regenerate indexes."""
     artifact.metadata["status"] = status
     artifact.metadata["updated_at"] = now_iso()
     write_artifact(artifact)
-    regenerate_indexes(root)
+    regenerate_indexes(layout, project=project)
 
 
 def artifact_project(artifact: Artifact) -> str:
@@ -282,9 +346,10 @@ def find_dependents(artifacts: list[Artifact], task_id: str) -> list[Artifact]:
 
 
 def create_follow_up_tasks(
-    root: Path,
+    layout: WorkspaceLayout,
     parent: Artifact,
     follow_ups: list[dict[str, Any]],
+    project: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Create tasks from executor ``follow_ups`` in the same chunk as ``parent``.
 
@@ -299,15 +364,15 @@ def create_follow_up_tasks(
     parent_id = str(parent.metadata.get("id", ""))
     plan_id = str(parent.metadata.get("plan", ""))
     chunk_id = str(parent.metadata.get("chunk", ""))
-    project = str(parent.metadata.get("project", ""))
+    parent_project = str(parent.metadata.get("project", ""))
     executor = str(parent.metadata.get("executor", "onward-exec"))
 
-    config = load_workspace_config(root)
+    config = load_workspace_config(layout.workspace_root)
     default_model = model_setting(config, "task_default", "sonnet-4-6")
 
     chunk_tasks = [
         a
-        for a in collect_artifacts(root)
+        for a in collect_artifacts(layout, project)
         if str(a.metadata.get("type", "")) == "task" and str(a.metadata.get("chunk", "")) == chunk_id
     ]
     open_titles = {
@@ -316,13 +381,13 @@ def create_follow_up_tasks(
         if str(a.metadata.get("status", "")) == "open"
     }
 
-    plan_dir = find_plan_dir(root, plan_id)
+    plan_dir = find_plan_dir(layout, plan_id, project)
     tasks_dir = plan_dir / "tasks"
     tasks_dir.mkdir(parents=True, exist_ok=True)
 
     created: list[str] = []
     warnings: list[str] = []
-    body_template = load_artifact_template(root, "task")
+    body_template = load_artifact_template(layout.workspace_root, "task")
 
     for fu in follow_ups:
         if not isinstance(fu, dict):
@@ -339,7 +404,7 @@ def create_follow_up_tasks(
             warnings.append(f"Follow-up skipped (duplicate open task title in chunk): {title!r}")
             continue
 
-        task_id = next_id(root, "TASK")
+        task_id = next_id(layout, "TASK", project)
         now = now_iso()
         slug = slugify(title)
         metadata: dict[str, Any] = {
@@ -347,7 +412,7 @@ def create_follow_up_tasks(
             "type": "task",
             "plan": plan_id,
             "chunk": chunk_id,
-            "project": project,
+            "project": parent_project,
             "title": title,
             "status": "open",
             "description": desc,
@@ -367,7 +432,7 @@ def create_follow_up_tasks(
         open_titles.add(title)
 
     if created:
-        regenerate_indexes(root)
+        regenerate_indexes(layout, project=project)
     return created, warnings
 
 
@@ -462,8 +527,9 @@ def select_next_artifact(
     return None
 
 
-def _read_index_version(root: Path) -> int:
-    index_path = root / ".onward/plans/index.yaml"
+def _read_index_version(layout: WorkspaceLayout, project: str | None = None) -> int:
+    """Read current index version number."""
+    index_path = layout.index_path(project)
     if not index_path.exists():
         return 0
     try:
@@ -478,8 +544,9 @@ def _read_index_version(root: Path) -> int:
     return 0
 
 
-def load_index(root: Path) -> dict[str, Any] | None:
-    index_path = root / ".onward/plans/index.yaml"
+def load_index(layout: WorkspaceLayout, project: str | None = None) -> dict[str, Any] | None:
+    """Load index.yaml for a project, or None if not found."""
+    index_path = layout.index_path(project)
     if not index_path.exists():
         return None
     try:
@@ -489,17 +556,17 @@ def load_index(root: Path) -> dict[str, Any] | None:
         return None
 
 
-def index_is_fresh(root: Path, index: dict[str, Any] | None = None) -> bool:
+def index_is_fresh(layout: WorkspaceLayout, index: dict[str, Any] | None = None, project: str | None = None) -> bool:
     """True when ``index.yaml`` is at least as new as every plan artifact file."""
-    index_path = root / ".onward/plans/index.yaml"
+    index_path = layout.index_path(project)
     if not index_path.exists():
         return False
     if index is None:
-        index = load_index(root)
+        index = load_index(layout, project)
     if not index:
         return False
     idx_mtime = index_path.stat().st_mtime
-    plans_root = root / ".onward/plans"
+    plans_root = layout.plans_dir(project)
     if not plans_root.exists():
         return True
     newest = 0.0
@@ -513,8 +580,9 @@ def index_is_fresh(root: Path, index: dict[str, Any] | None = None) -> bool:
     return idx_mtime >= newest
 
 
-def _artifact_from_index_row(kind: str, row: dict[str, Any], root: Path) -> Artifact:
-    path = root / Path(str(row.get("path", "")))
+def _artifact_from_index_row(kind: str, row: dict[str, Any], layout: WorkspaceLayout) -> Artifact:
+    """Build Artifact from index row using workspace-relative path."""
+    path = layout.workspace_root / Path(str(row.get("path", "")))
     meta: dict[str, Any] = {
         "id": row.get("id"),
         "type": kind,
@@ -547,48 +615,52 @@ def _artifact_from_index_row(kind: str, row: dict[str, Any], root: Path) -> Arti
     return Artifact(file_path=path, body="", metadata=meta)
 
 
-def artifacts_from_index(index: dict[str, Any], root: Path) -> list[Artifact]:
+def artifacts_from_index(index: dict[str, Any], layout: WorkspaceLayout) -> list[Artifact]:
+    """Build artifact list from index data."""
     out: list[Artifact] = []
     for row in index.get("plans") or []:
         if isinstance(row, dict) and row.get("id"):
-            out.append(_artifact_from_index_row("plan", row, root))
+            out.append(_artifact_from_index_row("plan", row, layout))
     for row in index.get("chunks") or []:
         if isinstance(row, dict) and row.get("id"):
-            out.append(_artifact_from_index_row("chunk", row, root))
+            out.append(_artifact_from_index_row("chunk", row, layout))
     for row in index.get("tasks") or []:
         if isinstance(row, dict) and row.get("id"):
-            out.append(_artifact_from_index_row("task", row, root))
+            out.append(_artifact_from_index_row("task", row, layout))
     return out
 
 
-def collect_artifacts_fast(root: Path) -> list[Artifact] | None:
-    index = load_index(root)
-    if not index or not index_is_fresh(root, index):
+def collect_artifacts_fast(layout: WorkspaceLayout, project: str | None = None) -> list[Artifact] | None:
+    """Try to collect artifacts from index if fresh, else return None."""
+    index = load_index(layout, project)
+    if not index or not index_is_fresh(layout, index, project):
         return None
-    return artifacts_from_index(index, root)
+    return artifacts_from_index(index, layout)
 
 
-def artifacts_from_index_or_collect(root: Path) -> list[Artifact]:
-    fast = collect_artifacts_fast(root)
+def artifacts_from_index_or_collect(layout: WorkspaceLayout, project: str | None = None) -> list[Artifact]:
+    """Collect artifacts using fast index path if possible, else full glob."""
+    fast = collect_artifacts_fast(layout, project)
     if fast is not None:
         return fast
-    return collect_artifacts(root)
+    return collect_artifacts(layout, project)
 
 
 def list_from_index(
-    root: Path,
+    layout: WorkspaceLayout,
     *,
     type_filter: str = "all",
     project_filter: str = "",
+    project: str | None = None,
     blocking: bool = False,
     human_only: bool = False,
 ) -> list[dict[str, str]] | None:
     """Return tabular rows from a fresh index, or None to signal fallback to full scan."""
-    index = load_index(root)
-    if not index or not index_is_fresh(root, index):
+    index = load_index(layout, project)
+    if not index or not index_is_fresh(layout, index, project):
         return None
     project_filter = project_filter.strip()
-    artifacts_full = artifacts_from_index(index, root)
+    artifacts_full = artifacts_from_index(index, layout)
     blocker_ids = blocking_ids(artifacts_full) if blocking else set()
 
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts_full if a.metadata.get("id")}
@@ -634,22 +706,34 @@ def list_from_index(
     return rows
 
 
-def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = None) -> None:
-    index_path = root / ".onward/plans/index.yaml"
-    recent_path = root / ".onward/plans/recent.yaml"
+def regenerate_indexes(layout: WorkspaceLayout, run_records: list[dict[str, Any]] | None = None, project: str | None = None) -> None:
+    """Regenerate index.yaml and recent.yaml for a project.
+
+    In multi-root mode with project=None, regenerates indexes for all projects.
+    """
+    if layout.is_multi_root and project is None:
+        # Regenerate indexes for all projects
+        for proj_key in layout.all_project_keys():
+            if proj_key is None:
+                continue
+            regenerate_indexes(layout, run_records=run_records, project=proj_key)
+        return
+
+    index_path = layout.index_path(project)
+    recent_path = layout.recent_path(project)
 
     plans: list[dict[str, Any]] = []
     chunks: list[dict[str, Any]] = []
     tasks: list[dict[str, Any]] = []
 
-    for artifact in collect_artifacts(root):
+    for artifact in collect_artifacts(layout, project):
         m = artifact.metadata
         row: dict[str, Any] = {
             "id": m.get("id"),
             "title": m.get("title"),
             "status": m.get("status"),
             "updated_at": m.get("updated_at") or "",
-            "path": str(artifact.file_path.relative_to(root)),
+            "path": str(artifact.file_path.relative_to(layout.workspace_root)),
         }
 
         artifact_type = m.get("type")
@@ -688,7 +772,7 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
 
     runs_index: list[dict[str, Any]] = []
     if run_records is None:
-        run_dir = root / ".onward/runs"
+        run_dir = layout.runs_dir(project)
         if run_dir.exists():
             for path in sorted(run_dir.glob("RUN-*.json")):
                 try:
@@ -712,7 +796,7 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
 
     index_payload = {
         "generated_at": now_iso(),
-        "index_version": _read_index_version(root) + 1,
+        "index_version": _read_index_version(layout, project) + 1,
         "plans": plans,
         "chunks": chunks,
         "tasks": tasks,
@@ -737,20 +821,23 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
 # ---------------------------------------------------------------------------
 
 
-def _notes_path(root: Path, artifact_id: str) -> Path:
-    return root / ".onward/notes" / f"{artifact_id}.md"
+def _notes_path(layout: WorkspaceLayout, artifact_id: str, project: str | None = None) -> Path:
+    """Get notes file path for an artifact."""
+    return layout.notes_dir(project) / f"{artifact_id}.md"
 
 
-def read_notes(root: Path, artifact_id: str) -> str:
-    path = _notes_path(root, artifact_id)
+def read_notes(layout: WorkspaceLayout, artifact_id: str, project: str | None = None) -> str:
+    """Read notes for an artifact, returning empty string if not found."""
+    path = _notes_path(layout, artifact_id, project)
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8")
 
 
-def append_note(root: Path, artifact: Artifact, message: str) -> Path:
+def append_note(layout: WorkspaceLayout, artifact: Artifact, message: str, project: str | None = None) -> Path:
+    """Append a timestamped note to an artifact's notes file."""
     artifact_id = str(artifact.metadata.get("id", ""))
-    path = _notes_path(root, artifact_id)
+    path = _notes_path(layout, artifact_id, project)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     timestamp = now_iso()
@@ -778,7 +865,7 @@ def append_note(root: Path, artifact: Artifact, message: str) -> Path:
 
 def report_rows(
     artifacts: list[Artifact],
-    root: Path,
+    layout: WorkspaceLayout,
     status: str | None = None,
     project: str | None = None,
     claimed_ids: set[str] | None = None,
@@ -802,7 +889,7 @@ def report_rows(
                     str(artifact.metadata.get("type", "")),
                     str(artifact.metadata.get("status", "")),
                     str(artifact.metadata.get("title", "")),
-                    str(artifact.file_path.relative_to(root)),
+                    str(artifact.file_path.relative_to(layout.workspace_root)),
                 ]
             )
         )
@@ -811,7 +898,7 @@ def report_rows(
 
 def claimed_rows(
     artifacts: list[Artifact],
-    root: Path,
+    layout: WorkspaceLayout,
     claimed_ids: set[str],
     project: str | None = None,
 ) -> list[str]:
@@ -833,7 +920,7 @@ def claimed_rows(
                     "task",
                     str(artifact.metadata.get("status", "")),
                     str(artifact.metadata.get("title", "")),
-                    str(artifact.file_path.relative_to(root)),
+                    str(artifact.file_path.relative_to(layout.workspace_root)),
                 ]
             )
         )
@@ -865,7 +952,7 @@ def _plan_visible_for_project_filter(
 
 def render_active_work_tree_lines(
     artifacts: list[Artifact],
-    root: Path,
+    layout: WorkspaceLayout,
     project: str | None = None,
     color_enabled: bool = False,
 ) -> list[str]:
