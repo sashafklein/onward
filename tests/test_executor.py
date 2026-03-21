@@ -30,10 +30,8 @@ from tests.workspace_helpers import (
 
 
 def _set_builtin_executor(root: Path) -> None:
-    """Avoid preflight failure when ``onward-exec`` is not on PATH in CI sandboxes."""
-    config_path = root / ".onward.config.yaml"
-    raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: builtin'), encoding="utf-8")
+    """Scaffold already defaults to builtin — this is a no-op kept for clarity."""
+    pass
 
 
 def test_executor_import_surface() -> None:

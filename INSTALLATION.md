@@ -105,7 +105,7 @@ When the user describes a new initiative, feature, or project:
 - Prefer **`onward work <TASK-ID>`** for executor-backed tasks (status + run records).
 - Run **`onward complete <ID>`** only when finishing **without** `work`.
 - If you discover follow-up work, blockers, or refactors: IMMEDIATELY create a new task
-  with `onward new task <CHUNK-ID> "<title>"` and set `blocked_by`, `human`, and `project`
+  with `onward new task <CHUNK-ID> "<title>"` and set `depends_on`, `human`, and `project`
   metadata in the frontmatter as appropriate
 - Run `onward report` at the end of every work session to leave a clear picture for the
   next session or the next agent
@@ -309,7 +309,7 @@ When creating or editing task frontmatter, these fields matter:
 |---|---|---|
 | `project` | Cross-plan grouping and filtering | `project: auth-rewrite` |
 | `human` | Flags tasks requiring a person | `human: true` |
-| `blocked_by` | Dependency tracking | `blocked_by: [TASK-003]` |
+| `depends_on` | Dependency tracking (preferred) | `depends_on: [TASK-003]` |
 | `block_reason` | Why it's stuck | `block_reason: Waiting on API decision` |
 | `status` | Current state | `open`, `in_progress`, `completed`, `canceled` |
 
@@ -339,8 +339,6 @@ Onward's workspace config lives at `.onward.config.yaml` in your project root. K
 ```yaml
 version: 1
 
-# Plans, templates, runs, etc. live under .onward/ at the workspace root (not configurable).
-
 sync:
   mode: local              # local | branch | repo
   branch: onward           # used when mode is branch (git worktree on this branch)
@@ -348,30 +346,46 @@ sync:
   worktree_path: .onward/sync   # sync checkout directory (gitignored)
 
 executor:
-  command: onward-exec
+  # Executor command for `onward work`, markdown hooks, and `review-plan`.
+  # "builtin" (or blank) → BuiltinExecutor (runs Claude/Cursor CLIs directly with streamed output).
+  # Any other value → SubprocessExecutor (JSON on stdin; see docs/WORK_HANDOFF.md).
+  command: builtin
   args: []
-  # When false, shell hooks still run; the executor is not invoked for work, markdown hooks, or review-plan.
+  # When false, shell hooks still run; the executor is not invoked.
   enabled: true
 
 models:
-  default: opus-latest           # fallback for everything
-  task_default: sonnet-latest    # default for new tasks
-  split_default:                 # blank = use default
-  review_default: codex-latest   # review hooks/workflows
+  # Tiered model keys with automatic fallback chains (see docs/CAPABILITIES.md).
+  default: opus-latest       # ultimate fallback
+  high: opus-latest          # effort: high tasks
+  medium: sonnet-latest      # effort: medium tasks (and default for new tasks)
+  low: haiku-latest          # effort: low tasks
+  split: sonnet-latest       # split decomposition (blank → falls through to default)
+  review_1: codex-latest     # first plan reviewer
+  review_2:                  # second reviewer (blank → falls through high → default)
 
 review:
-  double_review: true            # two independent reviewers (review_default + default)
+  # If true, plan reviews spawn two independent reviewers (review_1 + review_2 tiers).
+  double_review: true
 
 work:
   # true: one `onward work CHUNK` drains all ready tasks. false: at most one task per invocation.
   sequential_by_default: true
+  # When true, exit 0 is not enough: executor must print JSON ack (see docs/WORK_HANDOFF.md).
+  require_success_ack: false
+  # Refuse `onward work` when run_count reaches this. 0 = unlimited.
+  max_retries: 3
 
 hooks:
+  pre_task_shell: []
+  pre_chunk_shell: []
+  post_task_shell:
+    - "git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK_TITLE}' --allow-empty"
   post_task_markdown: .onward/hooks/post-task.md
   post_chunk_markdown: .onward/hooks/post-chunk.md
 ```
 
-> **Migration:** If your older workspace still has a top-level `ralph:` key, it continues to work; Onward maps it to `executor` at load time. Rename to `executor:` to silence the deprecation warning from `onward doctor`.
+> **Migration:** Legacy flat model keys (`task_default`, `split_default`, `review_default`) are still read but deprecated — `onward doctor` warns. Migrate to the tiered keys above. If your older workspace has a top-level `ralph:` key, Onward maps it to `executor` at load time; rename to `executor:` to silence the warning.
 
 With `sync.mode` set to `branch` or `repo`, use:
 

@@ -113,7 +113,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward show TASK-001`        | Full detail on one artifact (+ latest run for tasks) |
 | `onward note TASK-001`        | View notes on an artifact         |
 
-In **`onward tree`** and the **[Active work tree]** section of **`onward report`**, each task line includes **`(A)`** or **`(H)`**: **(A)** agent task (`human: false` in frontmatter, the default); **(H)** human task (`human: true`). `onward next` suggests only agent tasks when dependencies allow. **`[Blocking Human Tasks]`** in `onward report` lists human tasks whose IDs appear in another open or in-progress artifact’s `depends_on` or `blocked_by`. See `onward tree --help` and `onward report --help` for the same legend.
+In **`onward tree`** and the **[Active work tree]** section of **`onward report`**, each task line includes **`(A)`** or **`(H)`**: **(A)** agent task (`human: false` in frontmatter, the default); **(H)** human task (`human: true`). `onward next` suggests only agent tasks when dependencies allow. **`[Blocking Human Tasks]`** in `onward report` lists human tasks whose IDs appear in another open or in-progress artifact’s `depends_on`. See `onward tree --help` and `onward report --help` for the same legend.
 
 ### Syncing plan files (optional)
 
@@ -237,7 +237,22 @@ Latest run:
 
 `onward recent` interleaves completed artifacts with terminal run records, giving a unified timeline of what just happened.
 
-The executor receives a rich context packet containing the task body, its parent chunk, and the parent plan — so the worker agent always knows the bigger picture without needing to read the filesystem.
+### How the Executor Works
+
+When you run `onward work TASK-001`, here's what happens:
+
+1. **Resolve model** — Onward picks the model string from task frontmatter `model`, or `effort` tier, or `models.default` in config.
+2. **Build context packet** — The task body, its parent chunk, and the parent plan are assembled into a JSON payload (schema: [`docs/schemas/onward-executor-stdin-v1.schema.json`](docs/schemas/onward-executor-stdin-v1.schema.json)). The executor always has the full picture without needing filesystem access.
+3. **Run pre-task hooks** — Shell commands from `hooks.pre_task_shell` execute first.
+4. **Invoke the executor** — Depending on `executor.command` in config:
+   - **`builtin`** (or absent): `BuiltinExecutor` routes the model string to **Claude Code** or **Cursor agent** CLI, streams output to your terminal in real time, and writes to a run log.
+   - **Any other value**: `SubprocessExecutor` spawns `[command, *args]` with the JSON payload on **stdin**. Output is captured (not streamed interactively).
+5. **Run post-task hooks** — Shell commands (`post_task_shell`), then optionally a markdown hook (`post_task_markdown`) via the executor.
+6. **Update status** — On success → `completed`; on failure → `failed`. Run record written to `.onward/runs/`.
+
+**Chunk execution** (`onward work CHUNK-001`) repeats this for every ready task in dependency order, then runs the `post_chunk_markdown` hook. **Plan execution** (`onward work PLAN-001`) walks every chunk in the plan the same way.
+
+For the full protocol spec, see **[docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)**. For lifecycle rules, see **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 ---
 
@@ -255,7 +270,7 @@ project: auth-rewrite
 title: Add refresh token rotation
 status: open
 human: false
-blocked_by: []
+depends_on: []
 created_at: 2026-03-18T12:00:00Z
 ---
 
@@ -272,7 +287,7 @@ Refresh tokens currently never rotate...
 - Tests pass
 ```
 
-Status flows: `open` → `in_progress` → `completed` (or `canceled`). **`onward work`** applies these transitions around executor runs; **`start` / `complete` / `cancel`** are manual. Details: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
+Status flows: `open` → `in_progress` → `completed` (or `canceled` / `failed`). **`onward work`** applies these transitions around executor runs; **`complete` / `cancel` / `retry`** are manual overrides. Details: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 ---
 
@@ -332,11 +347,11 @@ Not every command calls your configured executor. **`onward split`** uses the ex
 
 ### Forward Momentum
 
-Onward is named for its core value: **keep moving forward.** Every command either shows you the state of the world or advances it. A typical execution loop is `report` → `next` → `work` → `report`, with optional `start` for claiming and `complete` when not using `work`. See **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
+Onward is named for its core value: **keep moving forward.** Every command either shows you the state of the world or advances it. A typical execution loop is `report` → `next` → `work` → `report`, with `complete` when closing work outside the executor. See **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)**.
 
 ### Feedback Capture
 
-During execution, new work always surfaces — blockers, refactors, follow-ups. Onward expects this. Agents should immediately capture discovered work as new tasks with `blocked_by`, `human`, and `project` metadata. Nothing gets lost in a chat log.
+During execution, new work always surfaces — blockers, refactors, follow-ups. Onward expects this. Agents should immediately capture discovered work as new tasks with `depends_on`, `human`, and `project` metadata. Nothing gets lost in a chat log.
 
 ### Markdown Native
 
@@ -383,12 +398,12 @@ Bootstrap a consumer workspace that uses this repo as the source:
 | [INSTALLATION.md](INSTALLATION.md)                                         | Install + agent setup + sync semantics & troubleshooting |
 | [docs/AI_OPERATOR.md](docs/AI_OPERATOR.md)                                 | Agent/operator quickstart, anti-patterns, recovery |
 | [docs/CONTRIBUTION.md](docs/CONTRIBUTION.md)                               | Contributor guide & local dev walkthrough |
-| [docs/LIFECYCLE.md](docs/LIFECYCLE.md)                                     | Artifact status: `start` / `work` / `complete` / `cancel` |
+| [docs/LIFECYCLE.md](docs/LIFECYCLE.md)                                     | Artifact status: `work` / `complete` / `cancel` / `retry` |
 | [docs/CAPABILITIES.md](docs/CAPABILITIES.md)                             | Model-backed vs local/heuristic commands   |
 | **`.onward/plans/`**                                                      | Plans, chunks, tasks, acceptance criteria (source of truth) |
 | [docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)                               | Execution handoff design                    |
 | [docs/schemas/onward-executor-stdin-v1.schema.json](docs/schemas/onward-executor-stdin-v1.schema.json) | Executor stdin JSON (versioned)             |
-| [docs/PROVIDER_REGISTRY.md](docs/PROVIDER_REGISTRY.md)                     | Multi-provider routing design (opt-in; not implemented) |
+| [docs/archive/PROVIDER_REGISTRY.md](docs/archive/PROVIDER_REGISTRY.md)     | Archived: multi-provider routing design (superseded by executor layer) |
 | [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md)                           | Deferred ideas & vision (not committed work) |
 | [docs/DOGFOOD.md](docs/DOGFOOD.md)                                         | Dogfood workflow                            |
 

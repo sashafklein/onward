@@ -34,8 +34,10 @@ sync:
   worktree_path: .onward/sync
 
 executor:
-  # Executor command to run for `onward work`, markdown hooks, and `review-plan`.
-  command: onward-exec
+  # Executor command for `onward work`, markdown hooks, and `review-plan`.
+  # "builtin" (or blank) runs Claude/Cursor CLIs directly with streamed output.
+  # Set to a custom command (e.g. "onward-exec") for the JSON stdin subprocess protocol.
+  command: builtin
   # Default arguments appended to the executor command.
   args: []
   # When false, the CLI still runs shell hooks but does not invoke the executor.

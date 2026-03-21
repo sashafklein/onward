@@ -285,6 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--limit", type=int, default=10, help="Max recent items to show")
     report_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
     report_parser.add_argument("--verbose", action="store_true", help="Show run stats (total runs, tokens, pass rate)")
+    report_parser.add_argument("--md", action="store_true", help="Output clean markdown instead of ANSI")
     report_parser.set_defaults(func=cmd_report)
 
     return parser

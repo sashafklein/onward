@@ -63,7 +63,7 @@ Artifact status rules are **orthogonal** to model usage: see [LIFECYCLE.md](LIFE
 
 ## Archived: provider registry design
 
-The old **multi-provider registry** YAML design was **not** implemented. See [PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md) for a pointer to the executor protocol and why that doc is archived.
+The old **multi-provider registry** YAML design was **not** implemented. See [archive/PROVIDER_REGISTRY.md](archive/PROVIDER_REGISTRY.md) for historical context on why the simpler executor-first approach was chosen.
 
 ### `review-plan` reviewer matrix (config)
 

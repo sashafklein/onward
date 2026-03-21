@@ -19,33 +19,35 @@ A daemon can be added later behind the same runtime files if needed.
 
 ## Runtime state layout
 
-New runs are stored in per-task subdirectories:
+All new runs use **per-task subdirectories** inside `.onward/runs/`. Workspaces upgraded from older versions may also contain **legacy flat files** (`RUN-*.json` / `RUN-*.log`) — these are still readable by all `onward` commands; no migration is required.
 
 ```txt
 .onward/
-  ongoing.json
+  ongoing.json                              ← active run queue (quick visibility)
   runs/
-    TASK-020/
-      info-2026-03-21T00-30-00Z.json      ← run metadata (replaces RUN-*.json)
-      summary-2026-03-21T00-30-00Z.log    ← hook output + errors (replaces RUN-*.log)
-      output-2026-03-21T00-30-00Z.log     ← live executor stdout/stderr stream (new)
-      info-2026-03-21T01-15-00Z.json      ← retry run
+    TASK-020/                               ← current format: per-task directory
+      info-2026-03-21T00-30-00Z.json        ← run metadata (JSON)
+      summary-2026-03-21T00-30-00Z.log      ← hook output + errors
+      output-2026-03-21T00-30-00Z.log       ← live executor stdout/stderr stream
+      info-2026-03-21T01-15-00Z.json        ← retry run (same task, new timestamp)
       summary-2026-03-21T01-15-00Z.log
       output-2026-03-21T01-15-00Z.log
     TASK-021/
       ...
-    RUN-2026-03-20T22-27-57Z-TASK-060.json  ← legacy flat files (still readable)
+    RUN-2026-03-20T22-27-57Z-TASK-060.json  ← legacy flat format (still readable)
     RUN-2026-03-20T22-27-57Z-TASK-060.log
 ```
 
-- `.ongoing.json`: active run queue and current status for quick parent-agent visibility.
-- `runs/TASK-XXX/info-*.json`: run metadata snapshot (**JSON**). Contains `status`, `model`, `executor`, `started_at`, `finished_at`, `files_changed`, and `token_usage`.
-- `runs/TASK-XXX/summary-*.log`: post-hoc log written at completion — hook outputs, error messages, executor output summary.
-- `runs/TASK-XXX/output-*.log`: raw executor stdout/stderr stream written in real-time during execution. You can `tail -f` this file from another terminal to monitor a running task:
-  ```bash
-  tail -f .onward/runs/TASK-020/output-*.log
-  ```
-- Legacy `RUN-<timestamp>-TASK-<id>.json` / `.log` files from older runs remain in the flat `runs/` directory and are still readable by all `onward` commands.
+- **`ongoing.json`**: active run queue and current status for quick parent-agent visibility.
+- **`runs/TASK-XXX/info-*.json`**: run metadata snapshot (**JSON**). Contains `status`, `model`, `executor`, `started_at`, `finished_at`, `files_changed`, and `token_usage`.
+- **`runs/TASK-XXX/summary-*.log`**: post-hoc log written at completion — hook outputs, error messages, executor output summary.
+- **`runs/TASK-XXX/output-*.log`**: raw executor stdout/stderr stream written in real-time during execution. You can `tail -f` this file from another terminal to monitor a running task:
+
+```bash
+tail -f .onward/runs/TASK-020/output-*.log
+```
+
+- **Legacy flat files**: `RUN-<timestamp>-TASK-<id>.json` / `.log` from older runs remain in the flat `runs/` directory. All `onward` commands read both formats transparently.
 - Multiple runs per task (retries) each get their own timestamped triple inside the task directory.
 
 ### Example `info-*.json`
@@ -236,7 +238,7 @@ This keeps orchestration transparent and scriptable for overseer-style parent ag
 
 1. Set chunk status to `in_progress`.
 2. Run `pre_chunk_shell` hooks (once per `onward work CHUNK-*` invocation).
-3. Collect **ready** open tasks belonging to the chunk (`depends_on` / legacy `blocked_by` must be **`completed`**).
+3. Collect **ready** open tasks belonging to the chunk (all IDs in `depends_on` must be **`completed`**).
 4. Apply **`work.max_retries`** and **`work.sequential_by_default`** to form a **wave** of eligible tasks (when `sequential_by_default` is false, the wave is at most one task per invocation).
 5. For that wave, call **`Executor.execute_batch`**: for each task in order, run `pre_task_shell`, the executor step, then post-task hooks on success.
 6. Stop on first task failure in the wave.
@@ -255,7 +257,7 @@ Recommended default guidance:
 - when a blocker/refactor/follow-up is discovered, create a new task artifact immediately
 - default placement is the current chunk unless reassignment is clearly better
 - include frontmatter metadata when known:
-  - `blocked_by`
+  - `depends_on`
   - `human`
   - `project`
 

@@ -29,7 +29,7 @@ def _make_workspace(tmp_path: Path) -> None:
     clear_post_task_shell(tmp_path)
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: "true"'), encoding="utf-8")
+    config_path.write_text(raw.replace("  command: builtin", '  command: "true"'), encoding="utf-8")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
@@ -78,7 +78,7 @@ def test_builtin_executor_creates_output_log(mock_popen: MagicMock, tmp_path: Pa
     clear_post_chunk_markdown(tmp_path)
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", "  command: builtin"), encoding="utf-8")
+    config_path.write_text(raw, encoding="utf-8")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "B"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "C"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "T"]) == 0
@@ -105,7 +105,7 @@ def test_retry_creates_second_run_triple(tmp_path: Path, capsys: Any) -> None:
     clear_post_task_shell(tmp_path)
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: "false"'), encoding="utf-8")
+    config_path.write_text(raw.replace("  command: builtin", '  command: "false"'), encoding="utf-8")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0

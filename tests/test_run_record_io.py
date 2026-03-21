@@ -79,7 +79,7 @@ def test_new_writes_are_json_files(tmp_path: Path, capsys):
     clear_post_task_shell(tmp_path)
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: "true"'), encoding="utf-8")
+    config_path.write_text(raw.replace("  command: builtin", '  command: "true"'), encoding="utf-8")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
@@ -123,9 +123,8 @@ error: ""
 
 
 def _set_builtin_executor(root: Path) -> None:
-    config_path = root / ".onward.config.yaml"
-    raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: builtin'), encoding="utf-8")
+    """Scaffold already defaults to builtin — this is a no-op kept for clarity."""
+    pass
 
 
 def _prepare_task_for_tier_low_model(task_path: Path) -> None:

@@ -71,11 +71,11 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ---
 
-### 3. Treating **`onward split`** as always model-backed
+### 3. Assuming **`onward split`** is purely local
 
-**Symptom:** Expecting an LLM to decompose the plan during `split`; surprise when behavior is purely local.
+**Symptom:** Running `split` without `executor.enabled: true` (or without a working executor command) and getting an error — or expecting offline behavior without `--heuristic`.
 
-**Recovery:** Read [CAPABILITIES.md](CAPABILITIES.md). **`onward split`** is **heuristic** (markdown sections → candidates) in the default path; it does **not** call the executor. Use **`onward review-plan`** when you want model-backed scrutiny of a plan. For decomposition, edit artifacts or use split as a starting point and refine files.
+**Recovery:** Read [CAPABILITIES.md](CAPABILITIES.md). **`onward split`** is **executor-backed by default**: it sends a `type: split` payload to the executor and expects JSON back. For offline decomposition (no model call), use **`onward split --heuristic`**, which derives candidates from markdown sections locally. In tests, set **`TRAIN_SPLIT_RESPONSE`** to a JSON string.
 
 ---
 
@@ -87,7 +87,7 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ---
 
-### 5. Ignoring **`human`** and **`blocked_by`**
+### 5. Ignoring **`human`** and **`depends_on`**
 
 **Symptom:** Agents pick tasks that need a person, or run work out of dependency order.
 
@@ -113,7 +113,7 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ## Executor preflight
 
-When `executor.enabled` is true, **`onward work`**, **`onward review-plan`**, and the **`post_chunk_markdown`** hook verify that `executor.command` exists on `PATH` or as an executable file path **before** starting a run. If it fails, fix `executor.command`, install the binary, or for automated tests use command **`true`**. A reference router ships at **`scripts/onward-exec`**. **`onward split`** does not use the executor today, so it does not run this check. Details: [CAPABILITIES.md](CAPABILITIES.md).
+When `executor.enabled` is true, **`onward work`**, **`onward review-plan`**, and the **`post_chunk_markdown`** hook verify that `executor.command` exists on `PATH` or as an executable file path **before** starting a run. The **built-in** executor (default) skips this check and verifies `claude` / `cursor` at run time instead. If preflight fails, fix `executor.command`, install the binary, or for automated tests use command **`true`**. A reference subprocess router ships at **`scripts/onward-exec`** for custom setups. Details: [CAPABILITIES.md](CAPABILITIES.md).
 
 ## Related docs
 

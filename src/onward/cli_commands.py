@@ -1360,6 +1360,224 @@ def cmd_tree(args: argparse.Namespace) -> int:
     return 0
 
 
+def format_report_markdown(
+    root: Path,
+    project: str | None,
+    artifacts: list[Artifact],
+    blockers: set[str],
+    by_id: dict[str, Artifact],
+    active_claimed: set[str],
+    limit: int,
+    verbose: bool,
+) -> str:
+    """Format report data as clean markdown (no ANSI codes)."""
+    lines: list[str] = []
+
+    # Header
+    lines.append("# Onward Report")
+    lines.append("")
+    if project:
+        lines.append(f"**Project:** {project}")
+    lines.append(f"**Generated:** {now_iso()}")
+    lines.append("")
+
+    # Effort Remaining
+    lines.append("## Effort Remaining")
+    lines.append("")
+    eff_counts = summarize_effort_remaining(artifacts)
+    headers = ["xs", "s", "m", "l", "xl", "unestimated"]
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("|" + "|".join(["---"] * len(headers)) + "|")
+    lines.append("| " + " | ".join(str(eff_counts[k]) for k in headers) + " |")
+    lines.append("")
+
+    # In Progress
+    lines.append("## In Progress")
+    lines.append("")
+    in_progress = report_rows(artifacts, root, status="in_progress", project=project, claimed_ids=active_claimed)
+    if in_progress:
+        lines.append("| ID | Type | Status | Title | File |")
+        lines.append("|---|---|---|---|---|")
+        for row in in_progress:
+            parts = row.split("\t")
+            lines.append("| " + " | ".join(parts) + " |")
+    else:
+        lines.append("*None*")
+    lines.append("")
+
+    # Upcoming
+    lines.append("## Upcoming")
+    lines.append("")
+    upcoming = report_rows(artifacts, root, status="open", project=project, claimed_ids=active_claimed)
+    if upcoming:
+        lines.append("| ID | Type | Status | Title | File |")
+        lines.append("|---|---|---|---|---|")
+        for row in upcoming:
+            parts = row.split("\t")
+            lines.append("| " + " | ".join(parts) + " |")
+    else:
+        lines.append("*None*")
+    lines.append("")
+
+    # Claimed (if any)
+    if active_claimed:
+        lines.append("## Claimed")
+        lines.append("")
+        c_rows = claimed_rows(artifacts, root, active_claimed, project=project)
+        if c_rows:
+            lines.append("| ID | Type | Status | Title | File |")
+            lines.append("|---|---|---|---|---|")
+            for row in c_rows:
+                parts = row.split("\t")
+                lines.append("| " + " | ".join(parts) + " |")
+        else:
+            lines.append("*None*")
+        lines.append("")
+
+    # Next
+    lines.append("## Next")
+    lines.append("")
+    nxt = select_next_artifact(artifacts, project=project, claimed_ids=active_claimed)
+    if nxt:
+        status = str(nxt.metadata.get("status", ""))
+        artifact_id = str(nxt.metadata.get("id", ""))
+        artifact_type = str(nxt.metadata.get("type", ""))
+        title = str(nxt.metadata.get("title", ""))
+        file_path = str(nxt.file_path.relative_to(root))
+        lines.append(f"- **{artifact_id}** ({artifact_type}, {status}): {title}")
+        lines.append(f"  - File: `{file_path}`")
+    else:
+        lines.append("*None*")
+    lines.append("")
+
+    # Blocking Human Tasks
+    lines.append("## Blocking Human Tasks")
+    lines.append("")
+    human_blockers: list[tuple[str, str, str, str, str]] = []
+    for blocker_id in sorted(blockers):
+        artifact = by_id.get(blocker_id)
+        if not artifact:
+            continue
+        if project and resolve_project(artifact, by_id) != project:
+            continue
+        if not is_human_task(artifact):
+            continue
+        human_blockers.append((
+            blocker_id,
+            "task",
+            str(artifact.metadata.get("status", "")),
+            str(artifact.metadata.get("title", "")),
+            str(artifact.file_path.relative_to(root)),
+        ))
+    if human_blockers:
+        lines.append("| ID | Type | Status | Title | File |")
+        lines.append("|---|---|---|---|---|")
+        for parts in human_blockers:
+            lines.append("| " + " | ".join(parts) + " |")
+    else:
+        lines.append("*None*")
+    lines.append("")
+
+    # Recent Completed
+    lines.append("## Recent Completed")
+    lines.append("")
+    completed = [
+        a
+        for a in artifacts
+        if str(a.metadata.get("status", "")) == "completed"
+        and (not project or resolve_project(a, by_id) == project)
+    ]
+    completed.sort(key=lambda a: str(a.metadata.get("updated_at", "")), reverse=True)
+    if completed:
+        slice_ = completed[:limit]
+        lines.append("| Completed | Breadcrumb | Title |")
+        lines.append("|---|---|---|")
+        for artifact in slice_:
+            artifact_id = str(artifact.metadata.get("id", ""))
+            artifact_type = str(artifact.metadata.get("type", ""))
+            updated = str(artifact.metadata.get("updated_at", ""))
+            title = str(artifact.metadata.get("title", ""))
+            if artifact_type == "task":
+                chunk_id = str(artifact.metadata.get("chunk", "") or "")
+                plan_id = str(artifact.metadata.get("plan", "") or "")
+                parts = [p for p in [plan_id, chunk_id, artifact_id] if p]
+            elif artifact_type == "chunk":
+                plan_id = str(artifact.metadata.get("plan", "") or "")
+                parts = [p for p in [plan_id, artifact_id] if p]
+            else:
+                parts = [artifact_id]
+            breadcrumb = " > ".join(parts)
+            lines.append(f"| {updated} | {breadcrumb} | {title} |")
+    else:
+        lines.append("*None*")
+    lines.append("")
+
+    # Active Work Tree
+    lines.append("## Active Work Tree")
+    lines.append("")
+    tree_lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=False)
+    if not tree_lines:
+        lines.append("*None*")
+    else:
+        lines.append("```")
+        lines.extend(tree_lines)
+        lines.append("```")
+    lines.append("")
+
+    # Run Stats (if verbose)
+    if verbose:
+        lines.append("## Run Stats")
+        lines.append("")
+        task_ids = [
+            str(a.metadata.get("id", ""))
+            for a in artifacts
+            if str(a.metadata.get("type", "")) == "task"
+            and str(a.metadata.get("id", ""))
+            and (not project or resolve_project(a, by_id) == project)
+        ]
+        all_runs: list[dict[str, Any]] = []
+        for tid in task_ids:
+            all_runs.extend(collect_runs_for_target(root, tid, limit=100))
+        total = len(all_runs)
+        if total == 0:
+            lines.append("| Metric | Value |")
+            lines.append("|---|---|")
+            lines.append("| Total runs | 0 |")
+            lines.append("| Pass rate | n/a |")
+            lines.append("| Total tokens | n/a |")
+        else:
+            completed_count = sum(1 for r in all_runs if str(r.get("status", "")) == "completed")
+            failed_count = sum(1 for r in all_runs if str(r.get("status", "")) == "failed")
+            pass_rate = completed_count / total * 100
+            total_input = 0
+            total_output = 0
+            has_tokens = False
+            for r in all_runs:
+                tu = r.get("token_usage")
+                if isinstance(tu, dict):
+                    inp = tu.get("input_tokens")
+                    out = tu.get("output_tokens")
+                    if inp is not None:
+                        total_input += int(inp)
+                        has_tokens = True
+                    if out is not None:
+                        total_output += int(out)
+                        has_tokens = True
+            lines.append("| Metric | Value |")
+            lines.append("|---|---|")
+            lines.append(f"| Total runs | {total} ({completed_count} completed, {failed_count} failed) |")
+            if has_tokens:
+                inp_s = f"{total_input / 1000:.1f}k"
+                out_s = f"{total_output / 1000:.1f}k"
+                lines.append(f"| Total tokens | {inp_s} input / {out_s} output |")
+            else:
+                lines.append("| Total tokens | n/a |")
+            lines.append(f"| Pass rate | {pass_rate:.1f}% |")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     color_enabled = not args.no_color
@@ -1371,6 +1589,21 @@ def cmd_report(args: argparse.Namespace) -> int:
     blockers = blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
     active_claimed = claimed_task_ids(root)
+
+    # If --md flag is set, output markdown and return early
+    if getattr(args, "md", False):
+        md = format_report_markdown(
+            root=root,
+            project=project,
+            artifacts=artifacts,
+            blockers=blockers,
+            by_id=by_id,
+            active_claimed=active_claimed,
+            limit=args.limit,
+            verbose=getattr(args, "verbose", False),
+        )
+        print(md)
+        return 0
 
     print(colorize("== Onward Report ==", "bold", color_enabled))
     if project:

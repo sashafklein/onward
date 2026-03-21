@@ -22,7 +22,7 @@ def _init_workspace(root: Path) -> None:
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    raw = raw.replace("  command: onward-exec", f'  command: "{command}"')
+    raw = raw.replace("  command: builtin", f'  command: "{command}"')
     config_path.write_text(raw, encoding="utf-8")
 
 

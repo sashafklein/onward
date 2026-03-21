@@ -12,12 +12,12 @@ executor:
   enabled: true
 
 models:
-  default: sonnet-latest
-  high: opus-latest
-  medium: sonnet-latest
-  low: haiku-latest
-  split: sonnet-latest
-  review_1: codex-latest
+  default: claude-sonnet-4-6
+  high: claude-opus-4-6
+  medium: claude-sonnet-4-6
+  low: claude-haiku-4-6
+  split: claude-sonnet-4-6
+  review_1: codex-5-3
   review_2:
 
 work:

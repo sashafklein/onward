@@ -44,7 +44,7 @@ def _set_python_ack_executor(root: Path) -> None:
     )
     config_path = root / ".onward.config.yaml"
     text = config_path.read_text(encoding="utf-8")
-    text = text.replace("  command: onward-exec", f"  command: {json.dumps(sys.executable)}", 1)
+    text = text.replace("  command: builtin", f"  command: {json.dumps(sys.executable)}", 1)
     text = text.replace("  args: []", "  args:\n    - .onward/ack_exec.py\n", 1)
     config_path.write_text(text, encoding="utf-8")
 
@@ -89,7 +89,7 @@ def test_work_chunk_releases_claim_on_task_failure(tmp_path: Path, capsys):
     # Use 'false' as executor so task fails
     config_path = tmp_path / ".onward.config.yaml"
     text = config_path.read_text(encoding="utf-8")
-    text = text.replace("  command: onward-exec", "  command: false")
+    text = text.replace("  command: builtin", "  command: false")
     config_path.write_text(text, encoding="utf-8")
 
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
