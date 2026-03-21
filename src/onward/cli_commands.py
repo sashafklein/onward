@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import defaultdict
@@ -16,6 +17,7 @@ from onward.artifacts import (
     artifact_project,
     artifacts_from_index_or_collect,
     blocking_ids,
+    claimed_rows,
     collect_artifacts,
     create_follow_up_tasks,
     find_by_id,
@@ -52,6 +54,9 @@ from onward.config import (
 )
 from onward.preflight import preflight_shell_invocation
 from onward.execution import (
+    register_claim,
+    release_claim,
+    claimed_task_ids,
     collect_run_records,
     collect_runs_for_target,
     execute_plan_review,
@@ -95,6 +100,7 @@ from onward.util import (
     normalize_effort,
     now_iso,
     parse_simple_yaml,
+    run_timestamp,
     slugify,
     split_frontmatter,
     status_color,
@@ -688,6 +694,16 @@ def cmd_show(args: argparse.Namespace) -> int:
     print(artifact.body.rstrip())
 
     if str(artifact.metadata.get("type", "")) == "task":
+        task_id = str(artifact.metadata.get("id", ""))
+        active_claimed = claimed_task_ids(root)
+        if task_id in active_claimed:
+            ongoing = load_ongoing(root)
+            for entry in ongoing.get("active_runs", []):
+                if task_id in (entry.get("claimed_children") or []):
+                    claim_id = str(entry.get("id", ""))
+                    claim_target = str(entry.get("target", ""))
+                    print(f"\nClaimed by {claim_id} (running {claim_target})")
+                    break
         _print_task_show_extras(root, artifact)
     return 0
 
@@ -950,7 +966,19 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
             return 1
         cid = min(ready)
         chunk_art = must_find_by_id(root, cid)
-        code = _work_chunk(root, chunk_art, config)
+        chunk_claimed = [
+            str(a.metadata.get("id", ""))
+            for a in collect_artifacts(root)
+            if str(a.metadata.get("type", "")) == "task"
+            and str(a.metadata.get("chunk", "")) == cid
+            and str(a.metadata.get("status", "")) in {"open", "in_progress"}
+        ]
+        plan_claim_id = f"CLAIM-{run_timestamp()}-{cid}"
+        register_claim(root, plan_claim_id, cid, "plan", chunk_claimed, os.getpid())
+        try:
+            code = _work_chunk(root, chunk_art, config)
+        finally:
+            release_claim(root, plan_claim_id)
         if code != 0:
             print(f"Stopping plan work for {plan_id} after chunk {cid} failure")
             return 1
@@ -1249,7 +1277,12 @@ def cmd_next(args: argparse.Namespace) -> int:
     for w in warnings:
         print(w)
     artifacts = artifacts_from_index_or_collect(root)
-    chosen = select_next_artifact(artifacts, project=(args.project or "").strip() or None)
+    active_claimed = claimed_task_ids(root)
+    chosen = select_next_artifact(
+        artifacts,
+        project=(args.project or "").strip() or None,
+        claimed_ids=active_claimed,
+    )
     if chosen:
         print(
             f"{chosen.metadata.get('id')}\t{chosen.metadata.get('type')}\t{chosen.metadata.get('status')}\t{chosen.metadata.get('title')}\t{chosen.file_path.relative_to(root)}"
@@ -1283,6 +1316,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     artifacts = artifacts_from_index_or_collect(root)
     blockers = blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
+    active_claimed = claimed_task_ids(root)
 
     print(colorize("== Onward Report ==", "bold", color_enabled))
     if project:
@@ -1301,7 +1335,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print()
 
     print(colorize("[In Progress]", "cyan", color_enabled))
-    in_progress = report_rows(artifacts, root, status="in_progress", project=project)
+    in_progress = report_rows(artifacts, root, status="in_progress", project=project, claimed_ids=active_claimed)
     if in_progress:
         for row in in_progress:
             parts = row.split("\t")
@@ -1312,7 +1346,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print()
 
     print(colorize("[Upcoming]", "cyan", color_enabled))
-    upcoming = report_rows(artifacts, root, status="open", project=project)
+    upcoming = report_rows(artifacts, root, status="open", project=project, claimed_ids=active_claimed)
     if upcoming:
         for row in upcoming:
             parts = row.split("\t")
@@ -1322,8 +1356,20 @@ def cmd_report(args: argparse.Namespace) -> int:
         print("none")
     print()
 
+    if active_claimed:
+        print(colorize("[Claimed]", "cyan", color_enabled))
+        c_rows = claimed_rows(artifacts, root, active_claimed, project=project)
+        if c_rows:
+            for row in c_rows:
+                parts = row.split("\t")
+                parts[2] = colorize(parts[2], status_color(parts[2]), color_enabled)
+                print("\t".join(parts))
+        else:
+            print("none")
+        print()
+
     print(colorize("[Next]", "cyan", color_enabled))
-    nxt = select_next_artifact(artifacts, project=project)
+    nxt = select_next_artifact(artifacts, project=project, claimed_ids=active_claimed)
     if nxt:
         status = str(nxt.metadata.get("status", ""))
         print(

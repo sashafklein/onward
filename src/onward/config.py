@@ -34,7 +34,7 @@ CONFIG_SECTION_KEYS: dict[str, frozenset[str]] = {
         "review_default",
     }),
     "review": frozenset({"double_review", "reviewers"}),
-    "work": frozenset({"sequential_by_default", "require_success_ack", "max_retries"}),
+    "work": frozenset({"sequential_by_default", "require_success_ack", "max_retries", "claim_timeout_minutes"}),
     "hooks": frozenset({
         "pre_task_shell",
         "post_task_shell",
@@ -407,6 +407,25 @@ def work_max_retries(config: dict[str, Any]) -> int:
         n = int(raw)
     except (TypeError, ValueError):
         return 3
+    return max(0, n)
+
+
+def work_claim_timeout_minutes(config: dict[str, Any]) -> int:
+    """Minutes before a claim expires regardless of PID liveness.
+
+    Default is 120 minutes. Setting to 0 disables claiming entirely
+    (``claimed_task_ids`` returns an empty set).
+    """
+    work = config.get("work", {})
+    if not isinstance(work, dict) or "claim_timeout_minutes" not in work:
+        return 120
+    raw = work.get("claim_timeout_minutes")
+    if raw is None or raw == "":
+        return 120
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return 120
     return max(0, n)
 
 

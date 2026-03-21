@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from onward.config import (
     model_setting,
     resolve_executor,
     resolve_model_for_task,
+    work_claim_timeout_minutes,
     work_max_retries,
     work_sequential_by_default,
 )
@@ -240,6 +242,111 @@ def _register_active_run(
     )
     ongoing["active_runs"] = active_runs
     _write_ongoing(root, ongoing)
+
+
+def register_claim(
+    root: Path,
+    run_id: str,
+    target: str,
+    scope: str,
+    claimed_children: list[str],
+    pid: int,
+) -> None:
+    """Append a claim entry to ``ongoing.json`` for a chunk or plan execution."""
+    ongoing = load_ongoing(root)
+    active_runs = list(ongoing.get("active_runs", []))
+    active_runs.append(
+        {
+            "id": run_id,
+            "target": target,
+            "scope": scope,
+            "claimed_children": list(claimed_children),
+            "pid": pid,
+            "status": "running",
+            "started_at": now_iso(),
+        }
+    )
+    ongoing["active_runs"] = active_runs
+    _write_ongoing(root, ongoing)
+
+
+def release_claim(root: Path, run_id: str) -> None:
+    """Remove the claim entry with the given run_id from ``ongoing.json``."""
+    ongoing = load_ongoing(root)
+    remaining = [
+        entry
+        for entry in ongoing.get("active_runs", [])
+        if str(entry.get("id", "")) != run_id
+    ]
+    ongoing["active_runs"] = remaining
+    _write_ongoing(root, ongoing)
+
+
+def _claim_is_expired(entry: dict[str, Any], timeout_minutes: int) -> bool:
+    """Return True if the claim entry is older than ``timeout_minutes``."""
+    if timeout_minutes <= 0:
+        return False
+    started_at = str(entry.get("started_at", ""))
+    if not started_at:
+        return False
+    try:
+        dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        age_minutes = (datetime.now(tz=timezone.utc) - dt).total_seconds() / 60
+        return age_minutes > timeout_minutes
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def claimed_task_ids(root: Path) -> set[str]:
+    """Return the set of task IDs claimed by active chunk/plan runs.
+
+    Loads ``ongoing.json``, filters entries with ``scope`` in ``{"chunk", "plan"}``,
+    performs PID liveness checks via ``os.kill(pid, 0)``, prunes dead-PID entries
+    and entries older than ``work.claim_timeout_minutes`` (writing back cleaned data),
+    and returns the union of all ``claimed_children`` sets.
+
+    Returns an empty set when ``work.claim_timeout_minutes`` is 0 (claiming disabled).
+    """
+    config = load_workspace_config(root)
+    timeout_minutes = work_claim_timeout_minutes(config)
+    if timeout_minutes == 0:
+        return set()
+
+    ongoing = load_ongoing(root)
+    active_runs = ongoing.get("active_runs", [])
+
+    live: list[dict[str, Any]] = []
+    pruned = False
+    result: set[str] = set()
+
+    for entry in active_runs:
+        scope = str(entry.get("scope", ""))
+        if scope not in {"chunk", "plan"}:
+            live.append(entry)
+            continue
+
+        if _claim_is_expired(entry, timeout_minutes):
+            pruned = True
+            continue
+
+        pid = entry.get("pid")
+        if pid is not None:
+            try:
+                os.kill(int(pid), 0)
+            except (ProcessLookupError, OSError):
+                pruned = True
+                continue
+
+        live.append(entry)
+        claimed = entry.get("claimed_children", [])
+        if isinstance(claimed, list):
+            result.update(str(t) for t in claimed)
+
+    if pruned:
+        ongoing["active_runs"] = live
+        _write_ongoing(root, ongoing)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +630,18 @@ def work_task(root: Path, task: Artifact) -> tuple[bool, str]:
     return _execute_task_run(root, fresh)
 
 
+def _open_task_ids_for_chunk(root: Path, chunk_id: str) -> list[str]:
+    """Return IDs of all open/in_progress tasks belonging to the given chunk."""
+    artifacts = collect_artifacts(root)
+    return [
+        str(a.metadata.get("id", ""))
+        for a in artifacts
+        if str(a.metadata.get("type", "")) == "task"
+        and str(a.metadata.get("chunk", "")) == chunk_id
+        and str(a.metadata.get("status", "")) in {"open", "in_progress"}
+    ]
+
+
 def ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact], bool]:
     artifacts = collect_artifacts(root)
     tasks = [
@@ -640,6 +759,17 @@ def work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
         print(f"pre_chunk_shell hook failed:\n{pre_chunk_log}")
         return 1
 
+    claimed_children = _open_task_ids_for_chunk(root, chunk_id)
+    claim_run_id = f"CLAIM-{run_timestamp()}-{chunk_id}"
+    register_claim(root, claim_run_id, chunk_id, "chunk", claimed_children, os.getpid())
+    try:
+        return _work_chunk_loop(root, chunk_id, config, sequential)
+    finally:
+        release_claim(root, claim_run_id)
+
+
+def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequential: bool) -> int:
+    """Inner task loop for work_chunk (separated so claim try/finally is clean)."""
     while True:
         ready_tasks, all_resolved = ordered_ready_chunk_tasks(root, chunk_id)
         if not ready_tasks:

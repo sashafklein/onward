@@ -3,12 +3,12 @@ id: "PLAN-013"
 type: "plan"
 project: ""
 title: "Task claiming for chunk and plan execution"
-status: "open"
+status: "completed"
 description: "Make tasks owned by an active chunk/plan work run invisible to other agents via a claiming mechanism"
 priority: "medium"
 model: "opus-latest"
 created_at: "2026-03-21T00:21:29Z"
-updated_at: "2026-03-21T00:21:29Z"
+updated_at: "2026-03-21T03:18:01Z"
 ---
 
 # Summary

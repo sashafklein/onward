@@ -406,7 +406,12 @@ def chunk_has_actionable_executor_task(
     return False
 
 
-def select_next_artifact(artifacts: list[Artifact], project: str | None = None) -> Artifact | None:
+def select_next_artifact(
+    artifacts: list[Artifact],
+    project: str | None = None,
+    claimed_ids: set[str] | None = None,
+) -> Artifact | None:
+    _claimed = claimed_ids or set()
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     status_by_id = {
         str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
@@ -421,17 +426,20 @@ def select_next_artifact(artifacts: list[Artifact], project: str | None = None) 
     for artifact in artifacts:
         artifact_type = str(artifact.metadata.get("type", ""))
         status = str(artifact.metadata.get("status", ""))
+        aid = str(artifact.metadata.get("id", ""))
 
         if project and resolve_project(artifact, by_id) != project:
             continue
 
         if artifact_type == "task" and task_is_next_actionable(artifact, status_by_id):
+            if aid in _claimed:
+                continue
             chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
             plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
             rank = (
                 0 if chunk_status == "in_progress" else 1,
                 0 if plan_status == "in_progress" else 1,
-                str(artifact.metadata.get("id", "")),
+                aid,
             )
             ready_tasks.append((rank, artifact))
 
@@ -766,7 +774,15 @@ def append_note(root: Path, artifact: Artifact, message: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def report_rows(artifacts: list[Artifact], root: Path, status: str | None = None, project: str | None = None) -> list[str]:
+def report_rows(
+    artifacts: list[Artifact],
+    root: Path,
+    status: str | None = None,
+    project: str | None = None,
+    claimed_ids: set[str] | None = None,
+) -> list[str]:
+    """Return tab-separated artifact rows, excluding tasks whose ID is in ``claimed_ids``."""
+    _claimed = claimed_ids or set()
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     rows: list[str] = []
     for artifact in artifacts:
@@ -774,11 +790,45 @@ def report_rows(artifacts: list[Artifact], root: Path, status: str | None = None
             continue
         if project and resolve_project(artifact, by_id) != project:
             continue
+        aid = str(artifact.metadata.get("id", ""))
+        if str(artifact.metadata.get("type", "")) == "task" and aid in _claimed:
+            continue
         rows.append(
             "\t".join(
                 [
-                    str(artifact.metadata.get("id", "")),
+                    aid,
                     str(artifact.metadata.get("type", "")),
+                    str(artifact.metadata.get("status", "")),
+                    str(artifact.metadata.get("title", "")),
+                    str(artifact.file_path.relative_to(root)),
+                ]
+            )
+        )
+    return sorted(rows)
+
+
+def claimed_rows(
+    artifacts: list[Artifact],
+    root: Path,
+    claimed_ids: set[str],
+    project: str | None = None,
+) -> list[str]:
+    """Return tab-separated rows for tasks currently claimed by an active chunk/plan run."""
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
+    rows: list[str] = []
+    for artifact in artifacts:
+        if str(artifact.metadata.get("type", "")) != "task":
+            continue
+        aid = str(artifact.metadata.get("id", ""))
+        if aid not in claimed_ids:
+            continue
+        if project and resolve_project(artifact, by_id) != project:
+            continue
+        rows.append(
+            "\t".join(
+                [
+                    aid,
+                    "task",
                     str(artifact.metadata.get("status", "")),
                     str(artifact.metadata.get("title", "")),
                     str(artifact.file_path.relative_to(root)),
