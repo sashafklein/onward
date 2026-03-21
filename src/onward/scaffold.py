@@ -488,11 +488,41 @@ def _is_workspace_root(root: Path, artifact_root: str = ".onward") -> bool:
     Returns:
         True if the directory appears to be a valid workspace
     """
-    return (
-        (root / ".onward.config.yaml").exists()
-        and (root / artifact_root).exists()
-        and (root / artifact_root / "plans").exists()
-    )
+    config_path = root / ".onward.config.yaml"
+    if not config_path.exists():
+        # Legacy: check default .onward/plans
+        return (root / artifact_root / "plans").exists()
+    
+    # Config exists — check configured roots
+    from onward.util import parse_simple_yaml
+    config = parse_simple_yaml(config_path.read_text(encoding="utf-8")) or {}
+    
+    config_root = config.get("root")
+    config_roots = config.get("roots")
+    
+    # Multi-root mode: check if at least one configured root has plans/
+    if config_roots and isinstance(config_roots, dict):
+        for path_str in config_roots.values():
+            if not path_str:
+                continue
+            path = Path(path_str)
+            if not path.is_absolute():
+                path = root / path
+            if (path / "plans").exists():
+                return True
+        return False
+    
+    # Single custom root mode
+    if config_root:
+        root_str = str(config_root).strip()
+        if root_str:
+            custom_path = Path(root_str)
+            if not custom_path.is_absolute():
+                custom_path = root / custom_path
+            return (custom_path / "plans").exists()
+    
+    # Default mode
+    return (root / artifact_root / "plans").exists()
 
 
 def require_workspace(root: Path, artifact_root: str = ".onward") -> None:
