@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T20:58:14Z"
-index_version: 307
+generated_at: "2026-03-21T21:00:44Z"
+index_version: 310
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -873,8 +873,8 @@ tasks:
   effort: "s"
 - id: "TASK-060"
   title: "Tests: update all affected tests for the effort→complexity rename"
-  status: "in_progress"
-  updated_at: "2026-03-21T20:58:14Z"
+  status: "completed"
+  updated_at: "2026-03-21T21:00:43Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-060-tests-update-all-affected-tests-for-the-effort-complexity-rename.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"
@@ -891,8 +891,8 @@ tasks:
   effort: "m"
 - id: "TASK-061"
   title: "Docs: update effort→complexity references in documentation"
-  status: "open"
-  updated_at: "2026-03-21T20:23:52Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T21:00:43Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-061-docs-update-effort-complexity-references-in-documentation.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"

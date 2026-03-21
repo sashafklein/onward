@@ -33,7 +33,7 @@ If `executor.enabled` is false, executor-backed steps are skipped or fail with a
 **Task model resolution (in order):**
 
 1. Non-empty **`model`** in task frontmatter — used as-is.
-2. **`effort: high|medium|low`** — maps to that tier (with fallbacks).
+2. **`complexity: high|medium|low`** — maps to that tier (with fallbacks).
 3. Otherwise — **`default`** tier.
 
 **Deprecated (still read; `onward doctor` warns):** `task_default` (prefer `medium` + effort), `split_default` (prefer `split`), `review_default` (prefer `review_1`).

@@ -113,7 +113,7 @@ The `chunk` and `plan` fields give the executor full context about the parent sc
 
 ## Model strings
 
-**Tasks:** Onward resolves a concrete model string before invoking the executor: explicit **`model`** in task frontmatter wins; else **`effort: high|medium|low`** maps to the matching **`models`** tier (with automatic fallbacks); else the **`default`** tier. Tier keys are **`default`**, **`high`**, **`medium`**, **`low`**, **`split`**, **`review_1`**, **`review_2`** — see [CAPABILITIES.md](CAPABILITIES.md). Legacy flat keys **`task_default`**, **`split_default`**, and **`review_default`** are still read for compatibility but are **deprecated**; **`onward doctor`** warns — migrate to tiers.
+**Tasks:** Onward resolves a concrete model string before invoking the executor: explicit **`model`** in task frontmatter wins; else **`complexity: high|medium|low`** maps to the matching **`models`** tier (with automatic fallbacks); else the **`default`** tier. Tier keys are **`default`**, **`high`**, **`medium`**, **`low`**, **`split`**, **`review_1`**, **`review_2`** — see [CAPABILITIES.md](CAPABILITIES.md). Legacy flat keys **`task_default`**, **`split_default`**, and **`review_default`** are still read for compatibility but are **deprecated**; **`onward doctor`** warns — migrate to tiers. Older tasks with **`effort`** key are still supported via fallback in config.py; `onward doctor` warns to encourage migration.
 
 **Split / flags:** `--model` on `onward split` overrides the resolved **split** tier model after CLI parsing.
 
