@@ -364,19 +364,22 @@ def resolve_model_for_task(config: dict[str, Any], task_metadata: Mapping[str, A
     Resolution order:
 
     1. Non-empty ``task_metadata["model"]`` — returned as-is.
-    2. ``task_metadata["effort"]`` of ``high`` / ``medium`` / ``low`` (case-insensitive) —
-       :func:`resolve_model_for_tier` for that tier.
+    2. ``task_metadata["complexity"]`` of ``high`` / ``medium`` / ``low`` (case-insensitive) —
+       :func:`resolve_model_for_tier` for that tier. Falls back to legacy ``effort`` key
+       for backward compatibility with tasks still using the old name.
     3. Otherwise — :func:`resolve_model_for_tier` for ``"default"``.
 
-    Other effort strings (e.g. ``xl``) are ignored for tier mapping and behave like step 3.
+    Other complexity strings (e.g. ``xl``) are ignored for tier mapping and behave like step 3.
     """
     explicit = _nonempty_model_string(task_metadata.get("model"))
     if explicit:
         return explicit
 
-    raw_effort = task_metadata.get("effort")
-    if raw_effort is not None:
-        e = str(raw_effort).strip().lower()
+    raw_complexity = task_metadata.get("complexity")
+    if raw_complexity is None:  # compat: fall back to legacy 'effort' key
+        raw_complexity = task_metadata.get("effort")
+    if raw_complexity is not None:
+        e = str(raw_complexity).strip().lower()
         if e in _EFFORT_TIER_VALUES:
             return resolve_model_for_tier(config, e)
 
