@@ -225,11 +225,31 @@ def run_split_model(
     return _run_split_executor(root, config, artifact, prompt_name, split_model)
 
 
+def _extract_json_object(raw: str) -> str:
+    """Try to extract a JSON object from AI CLI output that may include prose or code fences."""
+    stripped = raw.strip()
+    if stripped.startswith("{"):
+        return stripped
+    import re
+    fence_match = re.search(r"```(?:json)?\s*\n(\{.*?\})\s*\n```", stripped, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+    first = stripped.find("{")
+    last = stripped.rfind("}")
+    if first != -1 and last > first:
+        return stripped[first : last + 1]
+    return stripped
+
+
 def parse_split_payload(raw: str, key: str) -> list[dict[str, Any]]:
     try:
         payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid split JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        extracted = _extract_json_object(raw)
+        try:
+            payload = json.loads(extracted)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid split JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError("invalid split JSON: root must be an object")
     items = payload.get(key)

@@ -98,6 +98,30 @@ def build_review_prompt(payload: dict[str, Any]) -> str:
     return str(payload.get("prompt", "") or "").strip() + "\n"
 
 
+def build_split_prompt(payload: dict[str, Any]) -> str:
+    system = str(payload.get("prompt", "") or "").strip()
+    meta = payload.get("artifact_metadata")
+    body = str(payload.get("artifact_body", "") or "").strip()
+    split_type = str(payload.get("split_type", ""))
+
+    parts: list[str] = [system]
+    parts.append("")
+    parts.append("---")
+    parts.append("")
+    if isinstance(meta, dict):
+        title = str(meta.get("title", "")).strip()
+        desc = str(meta.get("description", "")).strip()
+        label = "Plan" if split_type == "plan" else "Chunk"
+        if title:
+            parts.append(f"## {label}: {title}")
+        if desc:
+            parts.append(f"Description: {desc}")
+    if body:
+        parts.append("")
+        parts.append(body)
+    return "\n".join(parts).strip() + "\n"
+
+
 def resolve_model(payload: dict[str, Any]) -> str:
     ptype = str(payload.get("type", ""))
     if ptype == "task":
@@ -108,6 +132,8 @@ def resolve_model(payload: dict[str, Any]) -> str:
     if ptype == "hook":
         return str(payload.get("model", "") or "composer-2")
     if ptype == "review":
+        return str(payload.get("model", "") or "composer-2")
+    if ptype == "split":
         return str(payload.get("model", "") or "composer-2")
     return "composer-2"
 
@@ -210,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
         prompt = build_hook_prompt(payload)
     elif ptype == "review":
         prompt = build_review_prompt(payload)
+    elif ptype == "split":
+        prompt = build_split_prompt(payload)
     else:
         print(f"error: unknown payload type {ptype!r}", file=sys.stderr)
         return 1
