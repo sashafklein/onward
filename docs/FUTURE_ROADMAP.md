@@ -40,7 +40,7 @@ This file is **not a commitment** — it collects deferred ideas and vision item
 
 **Multi-value project filtering** — Richer `--project` filters (TASK-048); **low**.
 
-**Effort-based `onward next` sorting** — Order by `effort` metadata (TASK-047); **low**.
+**Complexity-based `onward next` sorting** — Order by `complexity` metadata (TASK-047); **low**.
 
 ---
 

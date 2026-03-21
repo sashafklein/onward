@@ -2,23 +2,27 @@
 id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
-model: opus-latest
+model: opus
 executor: onward-exec
 scope: repo
 ---
 
 # Purpose
+
 Capture chunk-level completion and recommend plan updates.
 
 # Inputs
+
 - Completed chunk
 - Child task outcomes
 
 # Instructions
+
 1. Verify the chunk completion criteria.
 2. Summarize major outputs and known risks.
 3. Suggest next chunk ordering.
 
 # Required output
+
 - Chunk completion status
 - Risks and recommended next actions

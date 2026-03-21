@@ -1,35 +1,132 @@
+# ──────────────────────────────────────────────────────────────────────
+# .onward.config.yaml — Onward workspace configuration
+# ──────────────────────────────────────────────────────────────────────
+
+# Schema version (reserved for future config migrations).
 version: 1
 
+# ── Artifact roots ───────────────────────────────────────────────────
+# Where plans, chunks, and tasks live on disk.
+#
+# Single-root (default): all artifacts under one directory.
+#   root: .onward
+#
+# Multi-root: map project keys to separate directories.
+# Use `--project <key>` on artifact commands to target a specific root.
+#   roots:
+#     backend: .onward-backend
+#     frontend: .onward-frontend
+#   default_project: backend    # which project key to use when --project is omitted
+
+# ── Sync ─────────────────────────────────────────────────────────────
+# Controls how plan files are shared across branches / repos.
 sync:
+  # "local" — plans stay in the working tree (no sync).
+  # "branch" — plans sync to a dedicated branch (set `branch` below).
+  # "repo" — plans sync to a separate git repo (set `repo` below).
   mode: local
+
+  # Branch name used when mode is "branch".
   branch: onward
+
+  # Clone URL or local path when mode is "repo" (required for repo mode).
   repo: null
+
+  # Directory for the sync checkout, relative to workspace root.
+  # Defaults to <artifact_root>/sync (e.g. .onward/sync).
   worktree_path: .onward/sync
 
+# ── Executor ─────────────────────────────────────────────────────────
+# Configures which program runs tasks and reviews.
+# "builtin" (or blank) uses the built-in Claude/Cursor executor.
+# Any other value is treated as a shell command (SubprocessExecutor).
 executor:
   command: ./scripts/onward-exec
   args: []
+
+  # Set to false to skip executor invocation entirely (shell hooks still run).
   enabled: true
 
+# ── Models ───────────────────────────────────────────────────────────
+# Maps logical tiers to model aliases (opus, sonnet, haiku, codex, …).
+# Tasks pick a tier via their `effort` frontmatter key.
+#
+# Fallback chains when a tier is null / unset:
+#   high    → default
+#   medium  → high → default
+#   low     → medium → high → default
+#   split   → default
+#   review_1 → high → default
+#   review_2 → high → default
+#
+# When `default` itself is unset, "opus" is the ultimate fallback.
 models:
-  default: sonnet-latest
-  high: opus-latest
-  medium: sonnet-latest
-  low: haiku-latest
-  split: sonnet-latest
-  review_1: codex-latest
-  review_2:
+  default: claude-sonnet-4-6    # ultimate fallback for all tiers
+  high: claude-opus-4-6         # effort: high
+  medium: claude-sonnet-4-6     # effort: medium
+  low: claude-haiku-4-6         # effort: low
+  split: claude-sonnet-4-6      # model used by `onward split`
+  review_1: codex-5-3           # first plan reviewer
+  review_2:                     # second plan reviewer (null → falls back to high → default)
 
+# ── Review ───────────────────────────────────────────────────────────
+# Plan review settings for `onward review`.
+# review:
+#   # Run two independent reviewers (review_1 + review_2). Default: true.
+#   double_review: true
+#
+#   # Explicit reviewer slots (overrides double_review when non-empty).
+#   # Each entry: { model, label (optional), command (optional), args (optional), fallback (optional) }.
+#   # reviewers:
+#   #   - model: opus
+#   #     label: architecture
+#   #   - model: sonnet
+#   #     label: style
+#   #     fallback:
+#   #       - haiku          # plain string = fallback model with inherited executor
+#   #       - model: codex   # mapping = fallback with its own command/args
+#   #         command: ./scripts/alt-exec
+
+# ── Work ─────────────────────────────────────────────────────────────
+# Controls task execution behavior for `onward work`.
 work:
+  # When true, `onward work CHUNK` drains all ready tasks in sequence.
+  # When false, runs at most one task per invocation.
   sequential_by_default: true
-  # max_parallel_tasks: 1  # Dispatch up to N independent tasks concurrently within a chunk.
-  #                         # Default 1 (serial). Set to 3+ to enable parallel execution.
-  #                         # post_task_shell hooks are serialized to avoid git-commit conflicts.
 
+  # Dispatch up to N independent tasks concurrently within a chunk.
+  # Default 1 (serial). Hooks are serialized to avoid git conflicts.
+  # max_parallel_tasks: 1
+
+  # Max failed runs before `onward work` refuses to retry. 0 = unlimited.
+  # max_retries: 3
+
+  # Minutes before a task claim expires (regardless of PID liveness).
+  # Default 120. Set to 0 to disable claiming entirely.
+  # claim_timeout_minutes: 120
+
+  # When true, exit 0 is not enough — the executor must also print a
+  # machine-readable JSON acknowledgment to be counted as a success.
+  # require_success_ack: false
+
+# ── Hooks ────────────────────────────────────────────────────────────
+# Shell commands and markdown prompts that run around task/chunk execution.
+# Shell hooks are YAML lists of commands; markdown hooks are file paths or null.
 hooks:
+  # Shell commands run before each task.
   pre_task_shell: []
+
+  # Shell commands run once when `onward work CHUNK-*` starts.
   pre_chunk_shell: []
+
+  # Shell commands run after each successful task.
   post_task_shell:
     - 'git add -A && git commit -m "onward: ${ONWARD_TASK_ID} — ${ONWARD_TASK_TITLE}" --allow-empty-message || true'
+
+  # Markdown file whose contents are appended to the executor prompt after a task succeeds.
+  # Resolved relative to the artifact root. Default: .onward/hooks/post-task.md
   post_task_markdown:
+
+  # Markdown file appended to the executor prompt after a chunk completes.
+  # Default: .onward/hooks/post-chunk.md
   post_chunk_markdown:

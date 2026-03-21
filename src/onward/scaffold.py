@@ -2,26 +2,46 @@ from __future__ import annotations
 
 from pathlib import Path
 
-DEFAULT_DIRECTORIES = [
-    ".onward/plans",
-    ".onward/plans/.archive",
-    ".onward/templates",
-    ".onward/prompts",
-    ".onward/hooks",
-    ".onward/sync",
-    ".onward/runs",
-    ".onward/reviews",
-    ".onward/notes",
-]
 
-DEFAULT_FILES = {
-    ".onward.config.yaml": """# Onward workspace config.
+def default_directories(artifact_root: str) -> list[str]:
+    """Return the list of artifact directories relative to workspace root."""
+    return [
+        f"{artifact_root}/plans",
+        f"{artifact_root}/plans/.archive",
+        f"{artifact_root}/templates",
+        f"{artifact_root}/prompts",
+        f"{artifact_root}/hooks",
+        f"{artifact_root}/sync",
+        f"{artifact_root}/runs",
+        f"{artifact_root}/reviews",
+        f"{artifact_root}/notes",
+    ]
+
+
+# Backward-compatible constant
+DEFAULT_DIRECTORIES = default_directories(".onward")
+
+
+def default_files(artifact_root: str) -> dict[str, str]:
+    """Return the dict of default files with paths relative to workspace root."""
+    return {
+        ".onward.config.yaml": f"""# Onward workspace config.
 # This file is read by the CLI at runtime. Keep it in repo root.
 
 # Schema version for future migrations.
 version: 1
 
-# Artifact directories (.onward/, etc.) are fixed relative to the workspace root.
+# Artifact root directory (default: .onward)
+# Uncomment to use a non-hidden directory (e.g., for Obsidian sync):
+# root: .onward
+#
+# Multi-root workspaces (separate artifact trees per project):
+# roots:
+#   frontend: .fe-plans
+#   backend: .be-plans
+# default_project: frontend
+
+# Artifact directories ({artifact_root}/, etc.) are fixed relative to the workspace root.
 
 sync:
   # Sync mode: local (disabled), branch (same repo branch), repo (separate repo).
@@ -31,27 +51,29 @@ sync:
   # Optional separate git repository URL/path used when mode is "repo".
   repo: null
   # Local worktree path used for sync staging operations.
-  worktree_path: .onward/sync
+  worktree_path: {artifact_root}/sync
 
 executor:
-  # Executor command to run for `onward work`, markdown hooks, and `review-plan`.
-  command: onward-exec
+  # Executor command for `onward work`, markdown hooks, and `review-plan`.
+  # "builtin" (or blank) runs Claude/Cursor CLIs directly with streamed output.
+  # Set to a custom command (e.g. "onward-exec") for the JSON stdin subprocess protocol.
+  command: builtin
   # Default arguments appended to the executor command.
   args: []
   # When false, the CLI still runs shell hooks but does not invoke the executor.
   enabled: true
 
 models:
-  # Ultimate fallback and baseline tier (required logically; empty uses opus-latest).
-  default: opus-latest
+  # Ultimate fallback and baseline tier (required logically; empty uses opus).
+  default: opus
   # Tiered defaults with automatic fallbacks (null/blank walks the chain — see docs/CAPABILITIES.md).
-  high: opus-latest
-  medium: sonnet-latest
-  low: haiku-latest
+  high: opus
+  medium: sonnet
+  low: haiku
   # Split decomposition; blank falls back through split -> default.
   split:
   # Plan review slots; blank falls back review_1/review_2 -> high -> default.
-  review_1: codex-latest
+  review_1: codex
   review_2:
 
 review:
@@ -77,13 +99,13 @@ hooks:
   pre_chunk_shell: []
   # Shell commands run after each task (ONWARD_* env vars are set — see docs/WORK_HANDOFF.md).
   post_task_shell:
-    - "git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK_TITLE}' --allow-empty"
+    - "git add -A && git commit -m 'onward: completed ${{ONWARD_TASK_ID}} - ${{ONWARD_TASK_TITLE}}' --allow-empty"
   # Optional markdown hook path executed after each successful task (executor-backed).
-  post_task_markdown: .onward/hooks/post-task.md
+  post_task_markdown: {artifact_root}/hooks/post-task.md
   # Optional markdown hook path executed after chunk completion (executor-backed).
-  post_chunk_markdown: .onward/hooks/post-chunk.md
+  post_chunk_markdown: {artifact_root}/hooks/post-chunk.md
 """,
-    ".onward/templates/plan.md": """# Summary
+        f"{artifact_root}/templates/plan.md": """# Summary
 
 <!-- For a semi-technical layperson: What does this scope of work accomplish? 2-4 sentences, not in the weeds. -->
 
@@ -123,7 +145,7 @@ hooks:
 
 <!-- Optional -->
 """,
-    ".onward/templates/chunk.md": """# Summary
+        f"{artifact_root}/templates/chunk.md": """# Summary
 
 <!-- For a semi-technical layperson: what this chunk ships and why it matters. -->
 
@@ -149,9 +171,9 @@ hooks:
 
 # Notes
 
-<!-- Optional. Frontmatter may include optional ``effort: xs|s|m|l|xl`` and ``estimated_files: <int>`` for chunks. -->
+<!-- Optional. Frontmatter may include optional ``complexity: low|medium|high`` and ``estimated_files: <int>`` for chunks. -->
 """,
-    ".onward/templates/task.md": """# Context
+        f"{artifact_root}/templates/task.md": """# Context
 
 <!-- What this task is doing and where it fits in the chunk. -->
 
@@ -179,9 +201,9 @@ hooks:
 
 <!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
 
-<!-- Frontmatter may include optional ``effort: xs|s|m|l|xl``. -->
+<!-- Frontmatter may include optional ``complexity: low|medium|high``. -->
 """,
-    ".onward/templates/run.md": """# Execution summary
+        f"{artifact_root}/templates/run.md": """# Execution summary
 
 <!-- Short narrative of what was attempted and result. -->
 
@@ -197,7 +219,7 @@ hooks:
 
 <!-- Blockers, refactors, or for-later tasks discovered during execution. -->
 """,
-    ".onward/prompts/split-plan.md": """You decompose a **plan** into **chunks** of work. Each chunk is a coherent slice that can be executed and tested on its own. Follow the sizing and structure rules below.
+        f"{artifact_root}/prompts/split-plan.md": """You decompose a **plan** into **chunks** of work. Each chunk is a coherent slice that can be executed and tested on its own. Follow the sizing and structure rules below.
 
 ## Sizing and scope
 
@@ -228,7 +250,7 @@ If you are unsure of paths, use coarse entries (e.g. src/onward/) rather than om
 ## Priority and model
 
 - **priority**: low, medium, or high (default medium).
-- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-latest, opus-latest, etc.).
+- **model**: suggest an executor model alias for work in this chunk (haiku, sonnet, opus, etc.).
 
 ## Output format
 
@@ -238,11 +260,11 @@ Each element of chunks must include: title (string), description (string), prior
 
 Illustrative minimal object (structure only):
 
-{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-latest","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
+{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
 
 Rules: Return at least one chunk. Keep titles short and concrete. JSON only on stdout.
 """,
-    ".onward/prompts/split-chunk.md": """You decompose a **chunk** into **tasks** small enough for one focused execution pass. Each task must be self-contained: an implementer can finish it using only this task's title, description, acceptance, and file list—without hunting the parent plan for missing context.
+        f"{artifact_root}/prompts/split-chunk.md": """You decompose a **chunk** into **tasks** small enough for one focused execution pass. Each task must be self-contained: an implementer can finish it using only this task's title, description, acceptance, and file list—without hunting the parent plan for missing context.
 
 ## Sizing
 
@@ -256,10 +278,10 @@ Rules: Return at least one chunk. Keep titles short and concrete. JSON only on s
 - **files** must list the paths you expect to read or edit (array of strings). Use [] only when truly unknown; prefer best guesses.
 - **acceptance** must be binary and verifiable (tests, CLI output, behavior).
 
-## Models and effort
+## Models and complexity
 
-- **model**: haiku-latest for trivial edits; sonnet-latest for typical work; opus-latest for deep refactors or cross-cutting design.
-- **effort**: xs | s | m | l | xl — rough size (optional but preferred).
+- **model**: haiku for trivial edits; sonnet for typical work; opus for deep refactors or cross-cutting design.
+- **complexity**: low | medium | high — rough size (optional but preferred).
 
 ## Ordering within the chunk
 
@@ -269,15 +291,15 @@ Rules: Return at least one chunk. Keep titles short and concrete. JSON only on s
 
 Output a single JSON object (no markdown code fences, no prose outside JSON). Required top-level key: tasks (non-empty array).
 
-Each element of tasks must include: title (string), description (string), acceptance (array of strings), model (string), human (boolean), depends_on_index (array of integers), files (array of strings), effort (string: xs|s|m|l|xl or empty string if unknown).
+Each element of tasks must include: title (string), description (string), acceptance (array of strings), model (string), human (boolean), depends_on_index (array of integers), files (array of strings), complexity (string: low|medium|high or empty string if unknown).
 
 Illustrative minimal object (structure only):
 
-{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-latest","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
+{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet","human":false,"depends_on_index":[],"files":["src/foo.py"],"complexity":"medium"}]}
 
 Rules: Return at least one task. Each task needs at least one acceptance criterion. JSON only on stdout.
 """,
-    ".onward/prompts/review-plan.md": """You are an adversarial plan reviewer. Your job is to find gaps, risks, and issues that the plan author missed. Be thorough and direct.
+        f"{artifact_root}/prompts/review-plan.md": """You are an adversarial plan reviewer. Your job is to find gaps, risks, and issues that the plan author missed. Be thorough and direct.
 
 Review the plan for:
 - **Gaps in requirements:** Are there missing edge cases, undefined behaviors, or unstated assumptions?
@@ -311,11 +333,11 @@ If there are no findings at a given severity, omit those rows. If the plan is ge
 
 Any broader observations about the approach, architecture, or patterns that don't fit neatly into the findings table.
 """,
-    ".onward/hooks/post-task.md": """---
+        f"{artifact_root}/hooks/post-task.md": """---
 id: HOOK-post-task
 type: hook
 trigger: task.completed
-model: opus-latest
+model: opus
 executor: onward-exec
 scope: repo
 ---
@@ -336,11 +358,11 @@ Summarize what changed and propose next tasks.
 - Short completion summary
 - Follow-up list (if any)
 """,
-    ".onward/hooks/post-chunk.md": """---
+        f"{artifact_root}/hooks/post-chunk.md": """---
 id: HOOK-post-chunk
 type: hook
 trigger: chunk.completed
-model: opus-latest
+model: opus
 executor: onward-exec
 scope: repo
 ---
@@ -361,43 +383,62 @@ Capture chunk-level completion and recommend plan updates.
 - Chunk completion status
 - Risks and recommended next actions
 """,
-    ".onward/plans/index.yaml": """generated_at: null
+        f"{artifact_root}/plans/index.yaml": """generated_at: null
+index_version: 1
 plans: []
 chunks: []
 tasks: []
 runs: []
 """,
-    ".onward/plans/recent.yaml": """generated_at: null
+        f"{artifact_root}/plans/recent.yaml": """generated_at: null
 completed: []
 """,
-    ".onward/ongoing.json": """{
+        f"{artifact_root}/ongoing.json": """{
   "version": 1,
   "updated_at": null,
   "active_runs": []
 }
 """,
-}
+    }
 
-GITIGNORE_LINES = [
-    ".onward/plans/.archive/",
-    ".onward/sync/",
-    ".onward/runs/",
-    ".onward/reviews/",
-    ".onward/ongoing.json",
-    ".dogfood/",
-]
 
-REQUIRED_PATHS = [
-    ".onward.config.yaml",
-    ".onward/templates/plan.md",
-    ".onward/templates/chunk.md",
-    ".onward/templates/task.md",
-    ".onward/templates/run.md",
-    ".onward/prompts/split-plan.md",
-    ".onward/prompts/split-chunk.md",
-    ".onward/plans/index.yaml",
-    ".onward/plans/recent.yaml",
-]
+# Backward-compatible constant
+DEFAULT_FILES = default_files(".onward")
+
+
+def gitignore_lines(artifact_root: str) -> list[str]:
+    """Return the list of gitignore entries for the artifact root."""
+    return [
+        f"{artifact_root}/plans/.archive/",
+        f"{artifact_root}/sync/",
+        f"{artifact_root}/runs/",
+        f"{artifact_root}/reviews/",
+        f"{artifact_root}/ongoing.json",
+        ".dogfood/",
+    ]
+
+
+# Backward-compatible constant
+GITIGNORE_LINES = gitignore_lines(".onward")
+
+
+def required_paths(artifact_root: str) -> list[str]:
+    """Return the list of required paths for validation."""
+    return [
+        ".onward.config.yaml",
+        f"{artifact_root}/templates/plan.md",
+        f"{artifact_root}/templates/chunk.md",
+        f"{artifact_root}/templates/task.md",
+        f"{artifact_root}/templates/run.md",
+        f"{artifact_root}/prompts/split-plan.md",
+        f"{artifact_root}/prompts/split-chunk.md",
+        f"{artifact_root}/plans/index.yaml",
+        f"{artifact_root}/plans/recent.yaml",
+    ]
+
+
+# Backward-compatible constant
+REQUIRED_PATHS = required_paths(".onward")
 
 
 def write_workspace_file(path: Path, content: str, force: bool) -> bool:
@@ -408,7 +449,16 @@ def write_workspace_file(path: Path, content: str, force: bool) -> bool:
     return True
 
 
-def update_gitignore(root: Path) -> bool:
+def update_gitignore(root: Path, artifact_root: str = ".onward") -> bool:
+    """Update .gitignore with artifact root entries.
+
+    Args:
+        root: Workspace root directory
+        artifact_root: Artifact root path (default: ".onward")
+
+    Returns:
+        True if .gitignore was modified, False otherwise
+    """
     gitignore = root / ".gitignore"
     existing = []
     if gitignore.exists():
@@ -416,7 +466,7 @@ def update_gitignore(root: Path) -> bool:
 
     changed = False
     lines = existing.copy()
-    for entry in GITIGNORE_LINES:
+    for entry in gitignore_lines(artifact_root):
         if entry not in lines:
             lines.append(entry)
             changed = True
@@ -428,16 +478,34 @@ def update_gitignore(root: Path) -> bool:
     return True
 
 
-def _is_workspace_root(root: Path) -> bool:
+def _is_workspace_root(root: Path, artifact_root: str = ".onward") -> bool:
+    """Check if a directory is a valid Onward workspace root.
+
+    Args:
+        root: Workspace root directory
+        artifact_root: Artifact root path (default: ".onward")
+
+    Returns:
+        True if the directory appears to be a valid workspace
+    """
     return (
         (root / ".onward.config.yaml").exists()
-        and (root / ".onward").exists()
-        and (root / ".onward/plans").exists()
+        and (root / artifact_root).exists()
+        and (root / artifact_root / "plans").exists()
     )
 
 
-def require_workspace(root: Path) -> None:
-    if _is_workspace_root(root):
+def require_workspace(root: Path, artifact_root: str = ".onward") -> None:
+    """Require that a directory is a valid Onward workspace.
+
+    Args:
+        root: Workspace root directory
+        artifact_root: Artifact root path (default: ".onward")
+
+    Raises:
+        ValueError: If the directory is not a valid workspace
+    """
+    if _is_workspace_root(root, artifact_root):
         return
     raise ValueError(
         f"not an Onward workspace: {root}. Run `onward init` here (or pass --root <workspace>)"

@@ -19,33 +19,35 @@ A daemon can be added later behind the same runtime files if needed.
 
 ## Runtime state layout
 
-New runs are stored in per-task subdirectories:
+All new runs use **per-task subdirectories** inside `.onward/runs/`. Workspaces upgraded from older versions may also contain **legacy flat files** (`RUN-*.json` / `RUN-*.log`) — these are still readable by all `onward` commands; no migration is required.
 
 ```txt
 .onward/
-  ongoing.json
+  ongoing.json                              ← active run queue (quick visibility)
   runs/
-    TASK-020/
-      info-2026-03-21T00-30-00Z.json      ← run metadata (replaces RUN-*.json)
-      summary-2026-03-21T00-30-00Z.log    ← hook output + errors (replaces RUN-*.log)
-      output-2026-03-21T00-30-00Z.log     ← live executor stdout/stderr stream (new)
-      info-2026-03-21T01-15-00Z.json      ← retry run
+    TASK-020/                               ← current format: per-task directory
+      info-2026-03-21T00-30-00Z.json        ← run metadata (JSON)
+      summary-2026-03-21T00-30-00Z.log      ← hook output + errors
+      output-2026-03-21T00-30-00Z.log       ← live executor stdout/stderr stream
+      info-2026-03-21T01-15-00Z.json        ← retry run (same task, new timestamp)
       summary-2026-03-21T01-15-00Z.log
       output-2026-03-21T01-15-00Z.log
     TASK-021/
       ...
-    RUN-2026-03-20T22-27-57Z-TASK-060.json  ← legacy flat files (still readable)
+    RUN-2026-03-20T22-27-57Z-TASK-060.json  ← legacy flat format (still readable)
     RUN-2026-03-20T22-27-57Z-TASK-060.log
 ```
 
-- `.ongoing.json`: active run queue and current status for quick parent-agent visibility.
-- `runs/TASK-XXX/info-*.json`: run metadata snapshot (**JSON**). Contains `status`, `model`, `executor`, `started_at`, `finished_at`, `files_changed`, and `token_usage`.
-- `runs/TASK-XXX/summary-*.log`: post-hoc log written at completion — hook outputs, error messages, executor output summary.
-- `runs/TASK-XXX/output-*.log`: raw executor stdout/stderr stream written in real-time during execution. You can `tail -f` this file from another terminal to monitor a running task:
-  ```bash
-  tail -f .onward/runs/TASK-020/output-*.log
-  ```
-- Legacy `RUN-<timestamp>-TASK-<id>.json` / `.log` files from older runs remain in the flat `runs/` directory and are still readable by all `onward` commands.
+- **`ongoing.json`**: active run queue and current status for quick parent-agent visibility.
+- **`runs/TASK-XXX/info-*.json`**: run metadata snapshot (**JSON**). Contains `status`, `model`, `executor`, `started_at`, `finished_at`, `files_changed`, and `token_usage`.
+- **`runs/TASK-XXX/summary-*.log`**: post-hoc log written at completion — hook outputs, error messages, executor output summary.
+- **`runs/TASK-XXX/output-*.log`**: raw executor stdout/stderr stream written in real-time during execution. You can `tail -f` this file from another terminal to monitor a running task:
+
+```bash
+tail -f .onward/runs/TASK-020/output-*.log
+```
+
+- **Legacy flat files**: `RUN-<timestamp>-TASK-<id>.json` / `.log` from older runs remain in the flat `runs/` directory. All `onward` commands read both formats transparently.
 - Multiple runs per task (retries) each get their own timestamped triple inside the task directory.
 
 ### Example `info-*.json`
@@ -86,16 +88,22 @@ The task packet contains:
   "type": "task",
   "schema_version": 1,
   "run_id": "RUN-<timestamp>-TASK-<id>",
-  "task": { /* task frontmatter metadata */ },
+  "task": {
+    /* task frontmatter metadata */
+  },
   "body": "task markdown body",
   "notes": "accumulated scratch-pad notes (or null)",
   "notes_hint": "onward note <ID> usage hint",
   "chunk": {
-    "metadata": { /* parent chunk frontmatter */ },
+    "metadata": {
+      /* parent chunk frontmatter */
+    },
     "body": "chunk markdown body"
   },
   "plan": {
-    "metadata": { /* parent plan frontmatter */ },
+    "metadata": {
+      /* parent plan frontmatter */
+    },
     "body": "plan markdown body"
   }
 }
@@ -105,11 +113,11 @@ The `chunk` and `plan` fields give the executor full context about the parent sc
 
 ## Model strings
 
-**Tasks:** Onward resolves a concrete model string before invoking the executor: explicit **`model`** in task frontmatter wins; else **`effort: high|medium|low`** maps to the matching **`models`** tier (with automatic fallbacks); else the **`default`** tier. Tier keys are **`default`**, **`high`**, **`medium`**, **`low`**, **`split`**, **`review_1`**, **`review_2`** — see [CAPABILITIES.md](CAPABILITIES.md). Legacy flat keys **`task_default`**, **`split_default`**, and **`review_default`** are still read for compatibility but are **deprecated**; **`onward doctor`** warns — migrate to tiers.
+**Tasks:** Onward resolves a concrete model string before invoking the executor: explicit **`model`** in task frontmatter wins; else **`complexity: high|medium|low`** maps to the matching **`models`** tier (with automatic fallbacks); else the **`default`** tier. Tier keys are **`default`**, **`high`**, **`medium`**, **`low`**, **`split`**, **`review_1`**, **`review_2`** — see [CAPABILITIES.md](CAPABILITIES.md). Legacy flat keys **`task_default`**, **`split_default`**, and **`review_default`** are still read for compatibility but are **deprecated**; **`onward doctor`** warns — migrate to tiers. Older tasks with **`effort`** key are still supported via fallback in config.py; `onward doctor` warns to encourage migration.
 
 **Split / flags:** `--model` on `onward split` overrides the resolved **split** tier model after CLI parsing.
 
-**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet-latest`) to vendor IDs.
+**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet`) to vendor IDs.
 
 **Built-in executor:** The same string selects **Claude Code** vs **Cursor agent** via heuristics in code (`route_model_to_backend`); the CLI then interprets the model id.
 
@@ -117,13 +125,13 @@ The `chunk` and `plan` fields give the executor full context about the parent sc
 
 Hooks run at well-defined lifecycle points around task and chunk execution:
 
-| Hook | Type | When |
-|------|------|------|
-| `pre_chunk_shell` | Shell command(s) | Once when `onward work CHUNK-*` starts, before any task in that chunk |
-| `pre_task_shell` | Shell command(s) | Before each task execution |
-| `post_task_shell` | Shell command(s) | After successful task execution |
-| `post_task_markdown` | Markdown via executor | After successful task execution (after shell hooks) |
-| `post_chunk_markdown` | Markdown via executor | After all tasks in a chunk complete successfully |
+| Hook                  | Type                  | When                                                                  |
+| --------------------- | --------------------- | --------------------------------------------------------------------- |
+| `pre_chunk_shell`     | Shell command(s)      | Once when `onward work CHUNK-*` starts, before any task in that chunk |
+| `pre_task_shell`      | Shell command(s)      | Before each task execution                                            |
+| `post_task_shell`     | Shell command(s)      | After successful task execution                                       |
+| `post_task_markdown`  | Markdown via executor | After successful task execution (after shell hooks)                   |
+| `post_chunk_markdown` | Markdown via executor | After all tasks in a chunk complete successfully                      |
 
 Shell hooks run as subprocess commands in the workspace root. Markdown hooks use the **stdin-JSON subprocess** shape (same idea as an external task executor): when the workspace **`executor.command`** is **`builtin`** or unset, Onward falls back to the reference **`onward-exec`** adapter so hooks still receive JSON on stdin. Any hook failure aborts execution and marks the run as failed.
 
@@ -133,18 +141,18 @@ Shell hooks run as subprocess commands in the workspace root. Markdown hooks use
 
 For **`pre_chunk_shell`**, Onward sets:
 
-| Variable | Meaning |
-| -------- | ------- |
-| `ONWARD_CHUNK_ID` | Chunk id (e.g. `CHUNK-001`). |
+| Variable             | Meaning                         |
+| -------------------- | ------------------------------- |
+| `ONWARD_CHUNK_ID`    | Chunk id (e.g. `CHUNK-001`).    |
 | `ONWARD_CHUNK_TITLE` | Chunk `title` from frontmatter. |
 
 For **`pre_task_shell`** and **`post_task_shell`**, Onward merges these into the subprocess environment (in addition to the normal process environment):
 
-| Variable | Meaning |
-| -------- | ------- |
-| `ONWARD_RUN_ID` | Current run id (same as `run_id` in the stdin payload for the main task executor). |
-| `ONWARD_TASK_ID` | Task id being executed (e.g. `TASK-001`). |
-| `ONWARD_TASK_TITLE` | Task `title` from frontmatter. |
+| Variable            | Meaning                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| `ONWARD_RUN_ID`     | Current run id (same as `run_id` in the stdin payload for the main task executor). |
+| `ONWARD_TASK_ID`    | Task id being executed (e.g. `TASK-001`).                                          |
+| `ONWARD_TASK_TITLE` | Task `title` from frontmatter.                                                     |
 
 The main executor subprocess also receives **`ONWARD_RUN_ID`** (see below).
 
@@ -190,7 +198,7 @@ Accepted schema versions: **`1`**, **`2`**, **`3`**. See [`schemas/onward-task-s
 Minimal example line (v1):
 
 ```json
-{"onward_task_result":{"status":"completed","schema_version":1}}
+{ "onward_task_result": { "status": "completed", "schema_version": 1 } }
 ```
 
 Schema v3 adds an optional `token_usage` field:
@@ -236,7 +244,7 @@ This keeps orchestration transparent and scriptable for overseer-style parent ag
 
 1. Set chunk status to `in_progress`.
 2. Run `pre_chunk_shell` hooks (once per `onward work CHUNK-*` invocation).
-3. Collect **ready** open tasks belonging to the chunk (`depends_on` / legacy `blocked_by` must be **`completed`**).
+3. Collect **ready** open tasks belonging to the chunk (all IDs in `depends_on` must be **`completed`**).
 4. Apply **`work.max_retries`** and **`work.sequential_by_default`** to form a **wave** of eligible tasks (when `sequential_by_default` is false, the wave is at most one task per invocation).
 5. For that wave, call **`Executor.execute_batch`**: for each task in order, run `pre_task_shell`, the executor step, then post-task hooks on success.
 6. Stop on first task failure in the wave.
@@ -255,7 +263,7 @@ Recommended default guidance:
 - when a blocker/refactor/follow-up is discovered, create a new task artifact immediately
 - default placement is the current chunk unless reassignment is clearly better
 - include frontmatter metadata when known:
-  - `blocked_by`
+  - `depends_on`
   - `human`
   - `project`
 

@@ -10,7 +10,7 @@ import pytest
 
 from onward import cli
 from onward.artifacts import Artifact
-from onward.config import resolve_executor
+from onward.config import resolve_executor, WorkspaceLayout
 from onward.executor import (
     Executor,
     ExecutorResult,
@@ -30,10 +30,8 @@ from tests.workspace_helpers import (
 
 
 def _set_builtin_executor(root: Path) -> None:
-    """Avoid preflight failure when ``onward-exec`` is not on PATH in CI sandboxes."""
-    config_path = root / ".onward.config.yaml"
-    raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: builtin'), encoding="utf-8")
+    """Scaffold already defaults to builtin — this is a no-op kept for clarity."""
+    pass
 
 
 def test_executor_import_surface() -> None:
@@ -145,7 +143,7 @@ def _subprocess_ctx(
             "task body",
             {"id": task_id, "title": "T", "chunk": "CHUNK-1", "plan": "PLAN-1"},
         ),
-        model="opus-latest",
+        model="opus",
         run_id=run_id,
         plan_context=plan,
         chunk_context=chunk,
@@ -281,7 +279,7 @@ def test_run_hooked_executor_batch_empty_prepared_is_noop(tmp_path: Path) -> Non
         def execute_task(self, root: Path, ctx: TaskContext) -> ExecutorResult:
             raise AssertionError("no tasks")
 
-    ok, outcomes = _run_hooked_executor_batch(tmp_path, {}, _NeverRun(), [])
+    ok, outcomes = _run_hooked_executor_batch(WorkspaceLayout.from_config(tmp_path, {}), {}, _NeverRun(), [])
     assert ok is True
     assert outcomes == []
 

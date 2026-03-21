@@ -1,4 +1,4 @@
-# Onward Noob Guide
+# Onward Contributor Guide
 
 This guide is for first-time contributors who want to run Onward locally without guessing.
 
@@ -21,6 +21,7 @@ Right now this repo supports:
 - active/completed views (`onward progress`, `onward recent` — recent includes run records)
 - next-item suggestion (`onward next`) and full ready-task listing (`onward ready`)
 - plan archival (`onward archive PLAN-###`)
+- artifact root migration (`onward migrate` — moves artifacts when `root` config changes)
 - optional plan sync (`onward sync status`, `onward sync push`, `onward sync pull` when `sync.mode` is `branch` or `repo`)
 
 Onward stores tracked planning state in `.onward/plans/` and runtime state in `.onward/`.
@@ -39,13 +40,21 @@ python3 --version
 
 ## 3. First 10 minutes
 
-From repo root:
+Install in editable mode from the repo root:
 
 ```bash
-PYTHONPATH=src python3 -m onward.cli init
-PYTHONPATH=src python3 -m onward.cli doctor
-PYTHONPATH=src python3 -m onward.cli list
+pip install -e .
 ```
+
+Then verify:
+
+```bash
+onward init
+onward doctor
+onward list
+```
+
+> **Running from source without installing?** Prefix every command with `PYTHONPATH=src python3 -m onward.cli` instead of `onward` (e.g. `PYTHONPATH=src python3 -m onward.cli init`).
 
 Expected behavior:
 
@@ -56,13 +65,13 @@ Expected behavior:
 Create your first artifacts:
 
 ```bash
-PYTHONPATH=src python3 -m onward.cli new plan "First Plan" --description "learning flow"
-PYTHONPATH=src python3 -m onward.cli new chunk PLAN-001 "First Chunk"
-PYTHONPATH=src python3 -m onward.cli new task CHUNK-001 "First Task"
-PYTHONPATH=src python3 -m onward.cli list
-PYTHONPATH=src python3 -m onward.cli show TASK-001
-PYTHONPATH=src python3 -m onward.cli list --blocking --human
-PYTHONPATH=src python3 -m onward.cli report --no-color
+onward new plan "First Plan" --description "learning flow"
+onward new chunk PLAN-001 "First Chunk"
+onward new task CHUNK-001 "First Task"
+onward list
+onward show TASK-001
+onward list --blocking --human
+onward report --no-color
 ```
 
 ## 4. Dogfood workflow
@@ -84,18 +93,12 @@ What this does:
 
 ## 5. Automated tests
 
-### Option A: pytest already available
-
 ```bash
-PYTHONPATH=src python3 -m pytest
+pip install -e '.[dev]'
+pytest
 ```
 
-### Option B: install dev deps first
-
-```bash
-pip install -e .[dev]
-PYTHONPATH=src python3 -m pytest
-```
+> If you haven't installed in editable mode, use `PYTHONPATH=src python3 -m pytest` instead.
 
 Test coverage currently includes:
 
@@ -138,7 +141,7 @@ When you add config keys, new subcommands, or change executor stdin, update the 
 ### Docs consistency (local)
 
 ```bash
-PYTHONPATH=src python3 -m pytest tests/test_docs_consistency.py -v
+pytest tests/test_docs_consistency.py -v
 ```
 
 This is included in the full suite (`./scripts/test.sh` / `pytest`).
@@ -156,9 +159,14 @@ Automation does not cover everything. Before a release or large doc reshuffle, s
 
 ### `No module named onward`
 
-You are missing `PYTHONPATH=src` for direct module execution.
+You haven't installed the package. Either install it:
 
-Use:
+```bash
+pip install -e .
+onward --help
+```
+
+Or run from source:
 
 ```bash
 PYTHONPATH=src python3 -m onward.cli --help
@@ -218,7 +226,7 @@ The sync checkout lives under `sync.worktree_path` (default `.onward/sync/`, git
 - **[INSTALLATION.md](../INSTALLATION.md)** — agent setup, full config reference, sync semantics and troubleshooting
 - **[AI_OPERATOR.md](AI_OPERATOR.md)** — operator quickstart, anti-patterns, recovery playbooks
 - **`.onward/plans/`** — active plans and tasks; use `onward report` for orientation
-- **[LIFECYCLE.md](LIFECYCLE.md)** — `start` / `work` / `complete` / `cancel` rules
+- **[LIFECYCLE.md](LIFECYCLE.md)** — `work` / `complete` / `cancel` / `retry` rules
 - **[CAPABILITIES.md](CAPABILITIES.md)** — model-backed vs local commands
 - **[WORK_HANDOFF.md](WORK_HANDOFF.md)** — how `onward work` and executor handoff fit together
-- **[PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md)** — multi-provider routing design (not implemented by default)
+- **[archive/PROVIDER_REGISTRY.md](archive/PROVIDER_REGISTRY.md)** — archived: multi-provider routing design (superseded by executor layer)

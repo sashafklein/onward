@@ -44,7 +44,7 @@ onward init
 onward doctor
 ```
 
-`init` creates the `.onward/` directory structure, templates, and config.
+`init` creates the artifact directory structure (default `.onward/`, configurable via `root` or `roots`), templates, and config.
 `doctor` validates everything is wired up correctly.
 
 You're installed. Now the important part.
@@ -75,7 +75,7 @@ or in your own memory. Onward is the single source of truth.
 ### The Rule
 
 Every piece of work — from initial planning through final completion — is tracked as an
-Onward artifact. No exceptions. If it's not in `.onward/plans/`, it doesn't exist.
+Onward artifact. No exceptions. If it's not in the configured artifact root, it doesn't exist.
 
 ### The Loop
 
@@ -105,7 +105,7 @@ When the user describes a new initiative, feature, or project:
 - Prefer **`onward work <TASK-ID>`** for executor-backed tasks (status + run records).
 - Run **`onward complete <ID>`** only when finishing **without** `work`.
 - If you discover follow-up work, blockers, or refactors: IMMEDIATELY create a new task
-  with `onward new task <CHUNK-ID> "<title>"` and set `blocked_by`, `human`, and `project`
+  with `onward new task <CHUNK-ID> "<title>"` and set `depends_on`, `human`, and `project`
   metadata in the frontmatter as appropriate
 - Run `onward report` at the end of every work session to leave a clear picture for the
   next session or the next agent
@@ -129,6 +129,7 @@ When the user describes a new initiative, feature, or project:
 - If you discover work during execution, capture it as an Onward task IMMEDIATELY.
 - At the end of every session, run `onward report` so the next agent (or human) can
   pick up exactly where you left off.
+- Check the configured artifact root (default `.onward/`, may be customized via `root` or `roots` in config).
 ````
 
 ---
@@ -204,7 +205,8 @@ See **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)** for chunk runs and manual transit
 - Use **`onward work`** for executor runs; use **`complete` / `cancel` / `retry`** for non-executor closure (see LIFECYCLE doc)
 - ALWAYS capture discovered follow-up work as new Onward tasks immediately
 - ALWAYS run `onward report` at end of session to leave breadcrumbs for the next agent
-- Artifact files in `.onward/plans/` are the ONLY source of truth for project state
+- Artifact files in the configured artifact root are the ONLY source of truth for project state
+- When `roots` is configured, use `--project <key>` on artifact commands (or set `default_project` in config)
 ````
 
 ---
@@ -216,7 +218,7 @@ For agents configured via system prompts, SOUL.md, or similar instruction files,
 ```
 You MUST use Onward (the `onward` CLI) as your EXCLUSIVE system for planning, task
 tracking, and execution management. All work is structured as Plan → Chunk → Task
-artifacts stored in .onward/plans/.
+artifacts stored in the configured artifact root (check .onward.config.yaml for `root` or `roots`).
 
 MANDATORY BEHAVIORS:
 - Start every session with `onward report` to understand current state
@@ -249,10 +251,11 @@ ONWARD QUICK-REF:
   list     → filter artifacts         tree     → hierarchy view
   show     → inspect one artifact     progress → what's in flight
   recent   → what just finished       onward archive → retire a plan
-  sync     → mirror .onward/plans to branch or second repo (optional)
+  sync     → mirror plans to branch or second repo (optional)
 
 WORKFLOW: report → next → work → report (use complete when not using work; see docs/LIFECYCLE.md)
-FLAGS: --project <key>  --blocking  --human  --no-color
+FLAGS: --project <key> (required for multi-root)  --blocking  --human  --no-color
+CONFIG: root/roots in .onward.config.yaml for custom artifact location
 ```
 
 ---
@@ -305,13 +308,13 @@ That's it. You're on the rails. The train is moving. Keep it moving.
 
 When creating or editing task frontmatter, these fields matter:
 
-| Field | What it does | Example |
-|---|---|---|
-| `project` | Cross-plan grouping and filtering | `project: auth-rewrite` |
-| `human` | Flags tasks requiring a person | `human: true` |
-| `blocked_by` | Dependency tracking | `blocked_by: [TASK-003]` |
-| `block_reason` | Why it's stuck | `block_reason: Waiting on API decision` |
-| `status` | Current state | `open`, `in_progress`, `completed`, `canceled` |
+| Field          | What it does                      | Example                                        |
+| -------------- | --------------------------------- | ---------------------------------------------- |
+| `project`      | Cross-plan grouping and filtering | `project: auth-rewrite`                        |
+| `human`        | Flags tasks requiring a person    | `human: true`                                  |
+| `depends_on`   | Dependency tracking (preferred)   | `depends_on: [TASK-003]`                       |
+| `block_reason` | Why it's stuck                    | `block_reason: Waiting on API decision`        |
+| `status`       | Current state                     | `open`, `in_progress`, `completed`, `canceled` |
 
 ### The Blocking Pattern
 
@@ -339,39 +342,100 @@ Onward's workspace config lives at `.onward.config.yaml` in your project root. K
 ```yaml
 version: 1
 
-# Plans, templates, runs, etc. live under .onward/ at the workspace root (not configurable).
+# Artifact root configuration (optional)
+# Default: .onward/ (used when neither root nor roots is set)
+# Use `root` for a single custom artifact directory:
+root: notebooks # all artifacts go here instead of .onward/
+
+# OR use `roots` for multi-project workspaces with separate artifact trees:
+# roots:
+#   frontend: .fe-plans
+#   backend: .be-plans
+# default_project: frontend  # optional: used when --project not specified
 
 sync:
-  mode: local              # local | branch | repo
-  branch: onward           # used when mode is branch (git worktree on this branch)
-  repo: null               # clone URL or path when mode is repo
-  worktree_path: .onward/sync   # sync checkout directory (gitignored)
+  mode: local # local | branch | repo
+  branch: onward # used when mode is branch (git worktree on this branch)
+  repo: null # clone URL or path when mode is repo
+  worktree_path: .onward/sync # sync checkout directory (gitignored)
 
 executor:
-  command: onward-exec
+  # Executor command for `onward work`, markdown hooks, and `review-plan`.
+  # "builtin" (or blank) → BuiltinExecutor (runs Claude/Cursor CLIs directly with streamed output).
+  # Any other value → SubprocessExecutor (JSON on stdin; see docs/WORK_HANDOFF.md).
+  command: builtin
   args: []
-  # When false, shell hooks still run; the executor is not invoked for work, markdown hooks, or review-plan.
+  # When false, shell hooks still run; the executor is not invoked.
   enabled: true
 
 models:
-  default: opus-latest           # fallback for everything
-  task_default: sonnet-latest    # default for new tasks
-  split_default:                 # blank = use default
-  review_default: codex-latest   # review hooks/workflows
+  # Tiered model keys with automatic fallback chains (see docs/CAPABILITIES.md).
+  default: opus # ultimate fallback
+  high: opus # effort: high tasks
+  medium: sonnet # effort: medium tasks (and default for new tasks)
+  low: haiku # effort: low tasks
+  split: sonnet # split decomposition (blank → falls through to default)
+  review_1: codex # first plan reviewer
+  review_2: # second reviewer (blank → falls through high → default)
 
 review:
-  double_review: true            # two independent reviewers (review_default + default)
+  # If true, plan reviews spawn two independent reviewers (review_1 + review_2 tiers).
+  double_review: true
 
 work:
   # true: one `onward work CHUNK` drains all ready tasks. false: at most one task per invocation.
   sequential_by_default: true
+  # When true, exit 0 is not enough: executor must print JSON ack (see docs/WORK_HANDOFF.md).
+  require_success_ack: false
+  # Refuse `onward work` when run_count reaches this. 0 = unlimited.
+  max_retries: 3
 
 hooks:
+  pre_task_shell: []
+  pre_chunk_shell: []
+  post_task_shell:
+    - "git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK_TITLE}' --allow-empty"
+  # Hook paths resolve from <artifact-root>/hooks/ (default .onward/hooks/)
   post_task_markdown: .onward/hooks/post-task.md
   post_chunk_markdown: .onward/hooks/post-chunk.md
 ```
 
-> **Migration:** If your older workspace still has a top-level `ralph:` key, it continues to work; Onward maps it to `executor` at load time. Rename to `executor:` to silence the deprecation warning from `onward doctor`.
+> **Migration:** Legacy flat model keys (`task_default`, `split_default`, `review_default`) are still read but deprecated — `onward doctor` warns. Migrate to the tiered keys above. If your older workspace has a top-level `ralph:` key, Onward maps it to `executor` at load time; rename to `executor:` to silence the warning.
+
+### Artifact Root Configuration
+
+**Default behavior:** When neither `root` nor `roots` is set, Onward uses `.onward/` as the artifact root (backward compatible).
+
+**Single custom root (`root`):** Set this to change where all artifacts are stored. Useful for:
+
+- Making plans visible in tools like Obsidian (non-hidden directories)
+- Keeping artifacts in a specific location for organizational reasons
+- Example: `root: notebooks` → artifacts live in `./notebooks/plans/`, `./notebooks/runs/`, etc.
+
+**Multi-root workspaces (`roots`):** Use this when managing multiple projects with separate artifact trees:
+
+```yaml
+roots:
+  frontend: .fe-plans
+  backend: .be-plans
+default_project: frontend
+```
+
+With multi-root configuration:
+
+- Every artifact-touching command requires `--project <key>` unless `default_project` is set
+- Each project gets its own `index.yaml`, `recent.yaml`, `ongoing.json`
+- `onward report` without `--project` shows a combined view across all projects
+- `onward report --project frontend` scopes to one project
+- Templates, prompts, and hooks can be per-project (check project dir first) with shared fallback
+
+**Rules:**
+
+- `root` and `roots` are mutually exclusive (doctor error if both set)
+- All paths are relative to the workspace root
+- Run `onward init` after changing roots to scaffold new directories
+- Run `onward doctor` to validate configuration
+- Use `onward migrate` to move existing `.onward/` contents to a new root
 
 With `sync.mode` set to `branch` or `repo`, use:
 
@@ -389,23 +453,23 @@ With **`sync.mode: local`** there is no sync checkout. **`onward sync status`** 
 
 ### Plan sync semantics (branch and repo modes)
 
-- **Mirror** — After each push or pull direction, the destination `.onward/plans/` tree matches the source (files absent on the source are removed on the destination).
+- **Mirror** — After each push or pull direction, the destination plans tree matches the source (files absent on the source are removed on the destination).
 - **First run** — `onward sync status` does not clone or add a worktree; it reports that the sync checkout is not initialized until the first successful **`onward sync push`**.
-- **Push** — Copies from your workspace into the sync checkout, commits under `.onward/plans` when there are changes, then runs **`git push -u origin HEAD`**. The sync checkout must have **`origin`** set; the remote should allow the update (a **bare** repository is the usual choice for `repo` mode).
+- **Push** — Copies from your workspace into the sync checkout, commits under the plans directory when there are changes, then runs **`git push -u origin HEAD`**. The sync checkout must have **`origin`** set; the remote should allow the update (a **bare** repository is the usual choice for `repo` mode).
 - **Pull** — Runs **`git pull --ff-only`** in the sync checkout (non-fast-forward updates fail with an error until you reconcile in that checkout), copies plans into the workspace, then regenerates **`index.yaml`** / **`recent.yaml`**.
 
 ### Model Aliases
 
 Onward supports short aliases so you don't have to remember full model identifiers.
-Use `<family>-latest` to always get the current best version of a model family:
+Use `<family>` to always get the current best version of a model family:
 
-| Alias | Resolves to |
-|---|---|
-| `opus-latest` or `opus` | `claude-opus-4-6` |
-| `sonnet-latest` or `sonnet` | `claude-sonnet-4-6` |
-| `haiku-latest` or `haiku` | `claude-haiku-4` |
-| `codex-latest` or `codex` | `codex-5-3` |
-| `gpt5` | `gpt-5` |
+| Alias                | Resolves to       |
+| -------------------- | ----------------- |
+| `opus` or `opus`     | `claude-opus-4-6` |
+| `sonnet` or `sonnet` | `claude-sonnet`   |
+| `haiku` or `haiku`   | `claude-haiku-4`  |
+| `codex` or `codex`   | `codex-5-3`       |
+| `gpt5`               | `gpt-5`           |
 
 You can also use full model identifiers directly (e.g., `claude-opus-4-6`). Aliases are resolved
 at execution time, so updating Onward automatically picks up new model versions.
@@ -430,4 +494,4 @@ at execution time, so updating Onward automatically picks up new model versions.
 
 ---
 
-*Structure is freedom. Plans are memory. The train doesn't stop. Move onward.*
+_Structure is freedom. Plans are memory. The train doesn't stop. Move onward._

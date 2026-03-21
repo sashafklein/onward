@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
-from onward.config import work_require_success_ack
+from onward.config import resolve_model_alias, work_require_success_ack
 from onward.executor_ack import find_task_success_ack
 
 if TYPE_CHECKING:
@@ -295,7 +295,8 @@ class BuiltinExecutor(Executor):
         task_id = str(ctx.task.metadata.get("id", ""))
         run_id = ctx.run_id
         prompt = build_task_prompt(ctx)
-        backend = route_model_to_backend(ctx.model)
+        resolved_model = resolve_model_alias(ctx.model)
+        backend = route_model_to_backend(resolved_model)
         exe = backend.find_executable()
         if not exe:
             return ExecutorResult(
@@ -308,7 +309,7 @@ class BuiltinExecutor(Executor):
                 return_code=-1,
             )
 
-        argv = [exe, *backend.build_argv(ctx.model, prompt)[1:]]
+        argv = [exe, *backend.build_argv(resolved_model, prompt)[1:]]
         child_env = {**os.environ, "ONWARD_RUN_ID": run_id}
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []

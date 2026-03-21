@@ -11,6 +11,7 @@ from onward.cli_commands import (
     cmd_doctor,
     cmd_init,
     cmd_list,
+    cmd_migrate,
     cmd_new_chunk,
     cmd_new_plan,
     cmd_new_task,
@@ -62,17 +63,27 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     doctor_parser.set_defaults(func=cmd_doctor)
 
+    migrate_parser = subparsers.add_parser("migrate", help="Move artifacts from old root to new configured root")
+    migrate_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    migrate_parser.add_argument("--dry-run", action="store_true", help="Print planned moves without executing them")
+    migrate_parser.add_argument("--force", action="store_true", help="Overwrite target if it already has content")
+    migrate_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
+    migrate_parser.set_defaults(func=cmd_migrate)
+
     sync_parser = subparsers.add_parser("sync", help="Sync .onward/plans with a branch or remote repo")
     sync_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     sync_sub = sync_parser.add_subparsers(dest="sync_command", required=True)
 
     sync_status_parser = sync_sub.add_parser("status", help="Compare local plans with sync target")
+    sync_status_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     sync_status_parser.set_defaults(func=cmd_sync_status)
 
     sync_push_parser = sync_sub.add_parser("push", help="Copy local plans to sync target, commit, and push")
+    sync_push_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     sync_push_parser.set_defaults(func=cmd_sync_push)
 
     sync_pull_parser = sync_sub.add_parser("pull", help="Fast-forward sync target and copy plans locally")
+    sync_pull_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     sync_pull_parser.set_defaults(func=cmd_sync_pull)
 
     new_parser = subparsers.add_parser("new", help="Create new artifacts")
@@ -83,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("title", help="Plan title")
     plan_parser.add_argument("--description", default="", help="Plan description")
     plan_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
-    plan_parser.add_argument("--model", default="opus-latest", help="Default model")
+    plan_parser.add_argument("--model", default="opus", help="Default model")
     plan_parser.add_argument("--project", default=None, help="Optional project key (omit for empty)")
     plan_parser.set_defaults(func=cmd_new_plan)
 
@@ -92,16 +103,16 @@ def build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("title", help="Chunk title")
     chunk_parser.add_argument("--description", default="", help="Chunk description")
     chunk_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
-    chunk_parser.add_argument("--model", default="opus-latest", help="Default model")
+    chunk_parser.add_argument("--model", default="opus", help="Default model")
     chunk_parser.add_argument(
         "--project",
         default=None,
         help="Optional project key (omit to inherit from plan; use --project '' for none)",
     )
     chunk_parser.add_argument(
-        "--effort",
+        "--complexity",
         default=None,
-        help="T-shirt size: xs|s|m|l|xl (invalid values ignored)",
+        help="Complexity: low|medium|high (invalid values ignored)",
     )
     chunk_parser.add_argument(
         "--estimated-files",
@@ -131,16 +142,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="With --batch: validate and print planned tasks without writing files",
     )
     task_parser.add_argument("--description", default="", help="Task description")
-    task_parser.add_argument("--model", default="sonnet-latest", help="Model")
+    task_parser.add_argument("--model", default="sonnet", help="Model")
     task_parser.add_argument(
         "--project",
         default=None,
         help="Optional project key (omit to inherit from chunk; use --project '' for none)",
     )
     task_parser.add_argument(
-        "--effort",
+        "--complexity",
         default=None,
-        help="T-shirt size: xs|s|m|l|xl (invalid values ignored)",
+        help="Complexity: low|medium|high (invalid values ignored)",
     )
     task_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
     task_parser.set_defaults(func=cmd_new_task)
@@ -169,16 +180,19 @@ def build_parser() -> argparse.ArgumentParser:
     note_parser.add_argument("id", help="Artifact ID (PLAN-###, CHUNK-###, TASK-###)")
     note_parser.add_argument("message", nargs="?", default=None, help="Note text (omit to view existing notes)")
     note_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    note_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     note_parser.set_defaults(func=cmd_note)
 
     complete_parser = subparsers.add_parser("complete", help="Move artifact to completed")
     complete_parser.add_argument("id", help="Artifact ID")
     complete_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    complete_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     complete_parser.set_defaults(func=cmd_complete)
 
     cancel_parser = subparsers.add_parser("cancel", help="Move artifact to canceled")
     cancel_parser.add_argument("id", help="Artifact ID")
     cancel_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    cancel_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     cancel_parser.set_defaults(func=cmd_cancel)
 
     retry_parser = subparsers.add_parser(
@@ -187,11 +201,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     retry_parser.add_argument("id", help="Task ID (TASK-###)")
     retry_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    retry_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     retry_parser.set_defaults(func=cmd_retry)
 
     archive_parser = subparsers.add_parser("archive", help="Archive a plan")
     archive_parser.add_argument("plan_id", help="Plan ID (PLAN-###)")
     archive_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    archive_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     archive_parser.set_defaults(func=cmd_archive)
 
     split_parser = subparsers.add_parser(
@@ -212,6 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write artifacts even when split validation reports errors",
     )
+    split_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     split_parser.set_defaults(func=cmd_split)
 
     review_plan_parser = subparsers.add_parser("review-plan", help="Run adversarial review(s) of a plan")
@@ -224,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="LABEL",
         help="Run only reviewer slot(s) with this label (exact match; repeat flag for multiple)",
     )
+    review_plan_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     review_plan_parser.set_defaults(func=cmd_review_plan)
 
     work_parser = subparsers.add_parser("work", help="Execute a task or sequentially execute a chunk")
@@ -234,6 +252,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not create tasks from structured follow_ups in the executor result (tasks only)",
     )
     work_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    work_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     work_parser.set_defaults(func=cmd_work)
 
     progress_parser = subparsers.add_parser("progress", help="Show in-progress artifacts")
@@ -285,6 +304,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--limit", type=int, default=10, help="Max recent items to show")
     report_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
     report_parser.add_argument("--verbose", action="store_true", help="Show run stats (total runs, tokens, pass rate)")
+    report_parser.add_argument("--md", action="store_true", help="Output clean markdown instead of ANSI")
     report_parser.set_defaults(func=cmd_report)
 
     return parser
@@ -294,7 +314,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if getattr(args, "command", "") != "init":
+        # Skip workspace validation for init, doctor, and migrate commands
+        # (init creates the workspace, doctor diagnoses workspace issues, migrate moves artifacts)
+        if getattr(args, "command", "") not in ("init", "doctor", "migrate"):
             root_value = getattr(args, "root", ".")
             require_workspace(Path(root_value).resolve())
         return args.func(args)

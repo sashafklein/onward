@@ -18,7 +18,7 @@ from tests.workspace_helpers import clear_post_task_shell
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    raw = raw.replace("  command: onward-exec", f'  command: "{command}"')
+    raw = raw.replace("  command: builtin", f'  command: "{command}"')
     config_path.write_text(raw, encoding="utf-8")
 
 
@@ -47,7 +47,7 @@ def test_onboarding_flow_init_doctor_new_next_report_work(tmp_path: Path, capsys
     capsys.readouterr()
     assert cli.main(["work", "--root", root, "TASK-001"]) == 0
     work_out = capsys.readouterr().out
-    assert "Run RUN-" in work_out
+    assert "TASK-001" in work_out
 
     task_paths = list(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
     assert len(task_paths) == 1

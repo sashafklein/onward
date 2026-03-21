@@ -29,7 +29,7 @@ def test_init_creates_expected_layout(tmp_path: Path, capsys):
     config = (tmp_path / ".onward.config.yaml").read_text(encoding="utf-8")
     assert "# Onward workspace config." in config
     assert "# Schema version for future migrations." in config
-    assert "# Executor command to run for `onward work`, markdown hooks, and `review-plan`." in config
+    assert "# Executor command for `onward work`, markdown hooks, and `review-plan`." in config
     assert "# Split decomposition; blank falls back through split -> default." in config
 
 
@@ -115,7 +115,7 @@ def test_doctor_fails_on_unknown_nested_config_key(tmp_path: Path, capsys):
     assert cli.main(["init", "--root", str(tmp_path)]) == 0
     cfg = tmp_path / ".onward.config.yaml"
     raw = cfg.read_text(encoding="utf-8")
-    raw = raw.replace("  review_1: codex-latest\n", "  review_1: codex-latest\n  typo_key: x\n")
+    raw = raw.replace("  review_1: codex\n", "  review_1: codex\n  typo_key: x\n")
     cfg.write_text(raw, encoding="utf-8")
     capsys.readouterr()
 
@@ -131,7 +131,7 @@ def test_doctor_warns_when_models_default_missing(tmp_path: Path, capsys):
     cfg = tmp_path / ".onward.config.yaml"
     raw = cfg.read_text(encoding="utf-8")
     raw = raw.replace(
-        "  # Ultimate fallback and baseline tier (required logically; empty uses opus-latest).\n  default: opus-latest\n",
+        "  # Ultimate fallback and baseline tier (required logically; empty uses opus).\n  default: opus\n",
         "",
         1,
     )
@@ -221,7 +221,7 @@ def test_doctor_warns_on_legacy_model_keys(tmp_path: Path, capsys):
     raw = cfg.read_text(encoding="utf-8")
     raw = raw.replace(
         "models:",
-        "models:\n  split_default: sonnet-latest\n  review_default: opus-latest\n  task_default: haiku-latest\n",
+        "models:\n  split_default: sonnet\n  review_default: opus\n  task_default: haiku\n",
         1,
     )
     cfg.write_text(raw, encoding="utf-8")
@@ -245,7 +245,7 @@ def test_doctor_warns_when_split_and_split_default_both_set(tmp_path: Path, caps
     # Non-empty split + split_default triggers the conflict warning (empty split does not).
     raw = raw.replace(
         "  split:\n",
-        "  split: sonnet-latest\n  split_default: legacy-model\n",
+        "  split: sonnet\n  split_default: legacy-model\n",
         1,
     )
     cfg.write_text(raw, encoding="utf-8")
@@ -262,7 +262,7 @@ def test_doctor_warns_when_split_and_split_default_both_set(tmp_path: Path, caps
 def test_config_raw_deprecation_split_only_no_duplicate_conflict_message() -> None:
     """Only split_default set should not emit the 'ignored because split is set' line."""
     msgs = config_raw_deprecation_warnings(
-        {"models": {"default": "D", "split_default": "sonnet-latest"}},
+        {"models": {"default": "D", "split_default": "sonnet"}},
     )
     assert any("rename to models.split" in m for m in msgs)
     assert not any("ignored because models.split" in m for m in msgs)
@@ -298,3 +298,163 @@ def test_doctor_detects_duplicate_ids(tmp_path: Path, capsys):
 
     assert exit_code == 1
     assert "duplicate id found: PLAN-001" in out
+
+
+def test_doctor_validates_custom_root_directories(tmp_path: Path, capsys):
+    """Test that doctor validates directories under a custom artifact root."""
+    # Create config with custom root
+    config = (tmp_path / ".onward.config.yaml").write_text(
+        """version: 1
+root: nb
+
+sync:
+  mode: local
+  branch: onward
+  repo: null
+  worktree_path: nb/sync
+
+models:
+  default: opus
+""",
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+
+    # Doctor should fail because nb/ doesn't exist
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "missing artifact root: nb/" in out
+
+
+def test_doctor_validates_multi_root_directories(tmp_path: Path, capsys):
+    """Test that doctor validates directories for each project in multi-root mode."""
+    # Create config with multiple roots
+    config = (tmp_path / ".onward.config.yaml").write_text(
+        """version: 1
+roots:
+  proj_a: .proj_a
+  proj_b: .proj_b
+
+sync:
+  mode: local
+  branch: onward
+  repo: null
+
+models:
+  default: opus
+""",
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+
+    # Doctor should fail because neither root exists
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "missing artifact root [proj_a]: .proj_a/" in out
+    assert "missing artifact root [proj_b]: .proj_b/" in out
+
+
+def test_doctor_passes_with_custom_root_after_init(tmp_path: Path, capsys):
+    """Test that doctor passes with a custom root after proper initialization."""
+    # Create custom root directory structure manually
+    nb_root = tmp_path / "nb"
+    nb_root.mkdir()
+    (nb_root / "plans").mkdir()
+    (nb_root / "plans" / ".archive").mkdir()
+    (nb_root / "templates").mkdir()
+    (nb_root / "prompts").mkdir()
+    (nb_root / "hooks").mkdir()
+    (nb_root / "sync").mkdir()
+    (nb_root / "runs").mkdir()
+    (nb_root / "reviews").mkdir()
+    (nb_root / "notes").mkdir()
+
+    # Create required files
+    (tmp_path / ".onward.config.yaml").write_text(
+        """version: 1
+root: nb
+
+sync:
+  mode: local
+  branch: onward
+  repo: null
+  worktree_path: nb/sync
+
+models:
+  default: opus
+""",
+        encoding="utf-8",
+    )
+    (nb_root / "templates" / "plan.md").write_text("# Plan template", encoding="utf-8")
+    (nb_root / "templates" / "chunk.md").write_text("# Chunk template", encoding="utf-8")
+    (nb_root / "templates" / "task.md").write_text("# Task template", encoding="utf-8")
+    (nb_root / "templates" / "run.md").write_text("# Run template", encoding="utf-8")
+    (nb_root / "prompts" / "split-plan.md").write_text("# Split plan prompt", encoding="utf-8")
+    (nb_root / "prompts" / "split-chunk.md").write_text("# Split chunk prompt", encoding="utf-8")
+    (nb_root / "plans" / "index.yaml").write_text("generated_at: null\nplans: []\n", encoding="utf-8")
+    (nb_root / "plans" / "recent.yaml").write_text("generated_at: null\ncompleted: []\n", encoding="utf-8")
+
+    # Create .gitignore with custom root entries
+    (tmp_path / ".gitignore").write_text(
+        """nb/plans/.archive/
+nb/sync/
+nb/runs/
+nb/reviews/
+nb/ongoing.json
+.dogfood/
+""",
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+
+    # Doctor should now pass
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Doctor check passed" in out
+
+
+def test_doctor_fails_on_bad_complexity_value(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "T"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    # Insert complexity: banana into the frontmatter block (before the closing ---)
+    modified = raw.replace("\n---\n", "\ncomplexity: banana\n---\n", 1)
+    task_path.write_text(modified, encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "TASK-001" in out
+    assert "banana" in out
+
+
+def test_doctor_fails_on_bad_model_value(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "T"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    # The frontmatter uses quoted strings: model: "sonnet"
+    task_path.write_text(raw.replace('model: "sonnet"', 'model: "nonexistent-model"'), encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "nonexistent-model" in out

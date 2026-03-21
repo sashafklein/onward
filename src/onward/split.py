@@ -20,12 +20,12 @@ from onward.util import (
     markdown_section,
     normalize_acceptance,
     normalize_bool,
-    normalize_effort,
+    normalize_complexity,
     normalize_priority,
     now_iso,
     slugify,
 )
-from onward.config import is_executor_enabled
+from onward.config import is_executor_enabled, WorkspaceLayout
 from onward.executor_payload import with_schema_version
 from onward.preflight import preflight_executor_command
 
@@ -127,7 +127,7 @@ def _heuristic_split_chunk_payload(artifact: Artifact, default_model: str) -> di
                 "human": False,
                 "depends_on_index": [],
                 "files": [],
-                "effort": "",
+                "complexity": "",
             }
         )
     return {"tasks": tasks}
@@ -139,6 +139,8 @@ def _run_split_executor(
     artifact: Artifact,
     prompt_name: str,
     split_model: str,
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
 ) -> str:
     preflight_err = preflight_executor_command(config)
     if preflight_err:
@@ -157,7 +159,13 @@ def _run_split_executor(
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
 
-    prompt_path = root / ".onward" / "prompts" / prompt_name
+    if layout is None:
+        layout = WorkspaceLayout(
+            workspace_root=root,
+            roots={None: root / ".onward"},
+            default_project=None,
+        )
+    prompt_path = layout.prompts_dir(project) / prompt_name
     if not prompt_path.is_file():
         raise ValueError(f"split prompt not found: {prompt_path.relative_to(root)}")
 
@@ -212,6 +220,8 @@ def run_split_model(
     *,
     heuristic: bool,
     config: dict[str, Any],
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
 ) -> str:
     env_override = str(os.environ.get("TRAIN_SPLIT_RESPONSE", "")).strip()
     if env_override:
@@ -222,7 +232,7 @@ def run_split_model(
         else:
             payload = _heuristic_split_chunk_payload(artifact, default_task_model)
         return json.dumps(payload, indent=2)
-    return _run_split_executor(root, config, artifact, prompt_name, split_model)
+    return _run_split_executor(root, config, artifact, prompt_name, split_model, layout, project)
 
 
 def _extract_json_object(raw: str) -> str:
@@ -313,7 +323,7 @@ def normalize_task_candidates(items: list[dict[str, Any]], default_model: str) -
         idx0 = i - 1
         depends_on_index = _coerce_dep_indices(item.get("depends_on_index"), n, idx0)
         files = _normalize_task_files_list(item.get("files"))
-        effort = normalize_effort(item.get("effort"))
+        complexity = normalize_complexity(item.get("complexity") or item.get("effort", ""))
         out.append(
             {
                 "title": title,
@@ -323,7 +333,7 @@ def normalize_task_candidates(items: list[dict[str, Any]], default_model: str) -
                 "human": normalize_bool(item.get("human")),
                 "depends_on_index": depends_on_index,
                 "files": files,
-                "effort": effort,
+                "complexity": complexity,
             }
         )
     return out
@@ -401,13 +411,13 @@ def validate_split_output(
 
 
 def prepare_chunk_writes(
-    root: Path,
+    layout: WorkspaceLayout,
     plan_artifact: Artifact,
     candidates: list[dict[str, Any]],
 ) -> list[tuple[str, Path, str]]:
     plan_id = str(plan_artifact.metadata.get("id"))
-    plan_dir = find_plan_dir(root, plan_id)
-    chunk_ids = next_ids(root, "CHUNK", len(candidates))
+    plan_dir = find_plan_dir(layout, plan_id)
+    chunk_ids = next_ids(layout, "CHUNK", len(candidates))
     now = now_iso()
     writes: list[tuple[str, Path, str]] = []
     for idx, (chunk_id, candidate) in enumerate(zip(chunk_ids, candidates)):
@@ -432,9 +442,9 @@ def prepare_chunk_writes(
             "created_at": now,
             "updated_at": now,
         }
-        ceff = normalize_effort(candidate.get("effort", ""))
-        if ceff:
-            metadata["effort"] = ceff
+        ccpx = normalize_complexity(candidate.get("complexity", ""))
+        if ccpx:
+            metadata["complexity"] = ccpx
         cefn = candidate.get("estimated_files")
         if isinstance(cefn, int) and cefn >= 0:
             metadata["estimated_files"] = cefn
@@ -478,14 +488,14 @@ def prepare_chunk_writes(
 
 
 def prepare_task_writes(
-    root: Path,
+    layout: WorkspaceLayout,
     chunk_artifact: Artifact,
     candidates: list[dict[str, Any]],
 ) -> list[tuple[str, Path, str]]:
     plan_id = str(chunk_artifact.metadata.get("plan"))
     chunk_id = str(chunk_artifact.metadata.get("id"))
-    plan_dir = find_plan_dir(root, plan_id)
-    task_ids = next_ids(root, "TASK", len(candidates))
+    plan_dir = find_plan_dir(layout, plan_id)
+    task_ids = next_ids(layout, "TASK", len(candidates))
     now = now_iso()
     writes: list[tuple[str, Path, str]] = []
     for idx, (task_id, candidate) in enumerate(zip(task_ids, candidates)):
@@ -510,14 +520,12 @@ def prepare_task_writes(
             "model": candidate["model"],
             "executor": "onward-exec",
             "depends_on": dep_ids,
-            "files": t_files,
-            "acceptance": candidate["acceptance"],
             "created_at": now,
             "updated_at": now,
         }
-        effort = normalize_effort(candidate.get("effort", ""))
-        if effort:
-            metadata["effort"] = effort
+        complexity = normalize_complexity(candidate.get("complexity", ""))
+        if complexity:
+            metadata["complexity"] = complexity
         acceptance_lines = "\n".join(f"- {item}" for item in candidate["acceptance"])
         if t_files:
             files_lines = "\n".join(f"- `{p}`" for p in t_files)

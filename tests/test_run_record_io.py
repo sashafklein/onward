@@ -6,6 +6,7 @@ from pathlib import Path
 from onward.executor import ExecutorResult
 from onward.util import dump_run_json_record, read_run_json_record
 
+from tests.conftest import make_default_layout
 from tests.workspace_helpers import (
     clear_post_chunk_markdown,
     clear_post_task_markdown,
@@ -79,7 +80,7 @@ def test_new_writes_are_json_files(tmp_path: Path, capsys):
     clear_post_task_shell(tmp_path)
     config_path = tmp_path / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: "true"'), encoding="utf-8")
+    config_path.write_text(raw.replace("  command: builtin", '  command: "true"'), encoding="utf-8")
     assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
@@ -123,18 +124,17 @@ error: ""
 
 
 def _set_builtin_executor(root: Path) -> None:
-    config_path = root / ".onward.config.yaml"
-    raw = config_path.read_text(encoding="utf-8")
-    config_path.write_text(raw.replace("  command: onward-exec", '  command: builtin'), encoding="utf-8")
+    """Scaffold already defaults to builtin — this is a no-op kept for clarity."""
+    pass
 
 
 def _prepare_task_for_tier_low_model(task_path: Path) -> None:
-    """Drop explicit ``model`` (``onward new task`` defaults to sonnet-latest) and set tier effort."""
+    """Drop explicit ``model`` (``onward new task`` defaults to sonnet) and set tier effort."""
     lines = task_path.read_text(encoding="utf-8").splitlines()
     filtered = [ln for ln in lines if not ln.lstrip().startswith("model:")]
     text = "\n".join(filtered)
-    if 'effort: "low"' not in text:
-        text = text.replace('type: "task"\n', 'type: "task"\neffort: "low"\n', 1)
+    if 'complexity: "low"' not in text:
+        text = text.replace('type: "task"\n', 'type: "task"\ncomplexity: "low"\n', 1)
     task_path.write_text(text.rstrip() + "\n", encoding="utf-8")
 
 
@@ -149,7 +149,8 @@ def test_run_record_builtin_executor_and_tier_resolved_model(tmp_path: Path, mon
         def execute_task(self, root: Path, ctx):  # noqa: ANN001
             from onward.execution import load_ongoing
 
-            ongoing = load_ongoing(root)
+            layout = make_default_layout(root)
+            ongoing = load_ongoing(layout)
             self.active_snapshots.append(list(ongoing.get("active_runs", [])))
             return ExecutorResult(
                 task_id=str(ctx.task.metadata.get("id", "")),
@@ -185,7 +186,7 @@ def test_run_record_builtin_executor_and_tier_resolved_model(tmp_path: Path, mon
     run_file = next((tmp_path / ".onward/runs/TASK-001").glob("info-*.json"))
     rec = json.loads(run_file.read_text(encoding="utf-8"))
     assert rec["executor"] == "builtin"
-    assert rec["model"] == "haiku-latest"
+    assert rec["model"] == "haiku"
     assert rec["status"] == "completed"
 
     assert len(recorder.active_snapshots) == 1

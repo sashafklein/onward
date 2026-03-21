@@ -18,7 +18,7 @@ def _init_workspace(root: Path) -> None:
 def _set_executor(root: Path, command: str) -> None:
     config_path = root / ".onward.config.yaml"
     raw = config_path.read_text(encoding="utf-8")
-    raw = raw.replace("  command: onward-exec", f'  command: "{command}"')
+    raw = raw.replace("  command: builtin", f'  command: "{command}"')
     config_path.write_text(raw, encoding="utf-8")
 
 
@@ -39,7 +39,7 @@ def _set_python_ack_executor(root: Path) -> None:
     )
     config_path = root / ".onward.config.yaml"
     text = config_path.read_text(encoding="utf-8")
-    text = text.replace("  command: onward-exec", f"  command: {json.dumps(sys.executable)}", 1)
+    text = text.replace("  command: builtin", f"  command: {json.dumps(sys.executable)}", 1)
     text = text.replace(
         "  args: []",
         "  args:\n    - .onward/ack_exec.py\n",
@@ -60,7 +60,7 @@ def _set_python_v2_followups_executor(root: Path) -> None:
     )
     config_path = root / ".onward.config.yaml"
     text = config_path.read_text(encoding="utf-8")
-    text = text.replace("  command: onward-exec", f"  command: {json.dumps(sys.executable)}", 1)
+    text = text.replace("  command: builtin", f"  command: {json.dumps(sys.executable)}", 1)
     text = text.replace(
         "  args: []",
         "  args:\n    - .onward/ack_exec.py\n",
@@ -191,8 +191,7 @@ def test_work_task_success_creates_run_and_completes_task(tmp_path: Path, capsys
     code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "Run RUN-" in out
-    assert "completed" in out
+    assert "TASK-001 completed" in out
 
     task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in task_raw
@@ -219,8 +218,7 @@ def test_work_task_failure_records_failed_run_and_sets_task_failed(tmp_path: Pat
     code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
     out = capsys.readouterr().out
     assert code == 1
-    assert "Run RUN-" in out
-    assert "failed" in out
+    assert "TASK-001 failed" in out
 
     task_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-ship.md").read_text(encoding="utf-8")
     assert 'status: "failed"' in task_raw
@@ -296,7 +294,7 @@ def test_work_max_retries_zero_allows_high_run_count(tmp_path: Path, capsys):
     code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "Run RUN-" in out
+    assert "TASK-001 completed" in out
 
 
 def test_work_chunk_skips_circuit_broken_task_and_runs_next(tmp_path: Path, capsys):
@@ -313,9 +311,9 @@ def test_work_chunk_skips_circuit_broken_task_and_runs_next(tmp_path: Path, caps
     code = cli.main(["work", "--root", str(tmp_path), "CHUNK-001"])
     out = capsys.readouterr().out
     assert code == 1
-    assert "Warning:" in out
+    assert "skipped" in out
     assert "max_retries" in out
-    assert out.count("Run RUN-") == 1
+    assert "TASK-002 completed" in out
     task_b = next(tmp_path.glob(".onward/plans/**/tasks/TASK-002-*.md"))
     assert 'status: "completed"' in task_b.read_text(encoding="utf-8")
     assert "no task could run" in out or "Stopping chunk work" in out
@@ -417,7 +415,7 @@ def test_work_chunk_sequential_false_stops_after_one_task(tmp_path: Path, capsys
     code = cli.main(["work", "--root", str(tmp_path), "CHUNK-001"])
     out = capsys.readouterr().out
     assert code == 0
-    assert out.count("Run RUN-") == 1
+    assert out.count("completed") == 1
     assert "sequential_by_default is false" in out
 
     chunk_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
@@ -445,8 +443,9 @@ def test_work_chunk_executes_ready_tasks_in_dependency_order(tmp_path: Path, cap
     code = cli.main(["work", "--root", str(tmp_path), "CHUNK-001"])
     out = capsys.readouterr().out
     assert code == 0
-    assert out.count("Run RUN-") == 2
-    assert "Chunk CHUNK-001 completed" in out
+    assert "TASK-001 completed" in out
+    assert "TASK-002 completed" in out
+    assert "CHUNK-001 completed" in out
 
     chunk_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/chunks/CHUNK-001-build.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in chunk_raw
@@ -646,7 +645,7 @@ def test_work_plan_drains_all_chunks_and_completes_plan(tmp_path: Path, capsys):
     code = cli.main(["work", "--root", str(tmp_path), "PLAN-001"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "Plan PLAN-001 completed" in out
+    assert "PLAN-001 completed" in out
     assert "(2 chunks," in out
     plan_raw = (tmp_path / ".onward/plans/PLAN-001-alpha/plan.md").read_text(encoding="utf-8")
     assert 'status: "completed"' in plan_raw
@@ -688,7 +687,7 @@ def test_work_plan_skips_completed_chunks(tmp_path: Path, capsys):
     code = cli.main(["work", "--root", str(tmp_path), "PLAN-001"])
     out = capsys.readouterr().out
     assert code == 0
-    assert out.count("Run RUN-") == 1
+    assert "TASK-002 completed" in out
 
 
 def test_work_plan_already_completed(tmp_path: Path, capsys):
@@ -726,6 +725,42 @@ def test_work_rejects_non_task_chunk_plan(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert code == 1
     assert "task, chunk, or plan" in out
+
+
+def test_work_task_preflight_rejects_bad_complexity(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    task_path.write_text(raw.replace("\n---\n", "\ncomplexity: banana\n---\n", 1), encoding="utf-8")
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+
+    assert code != 0
+    task_raw = task_path.read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
+
+
+def test_work_task_preflight_rejects_bad_model(tmp_path: Path, capsys):
+    _init_workspace(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    task_path.write_text(raw.replace('model: "sonnet"', 'model: "nonexistent-model-xyz"'), encoding="utf-8")
+    capsys.readouterr()
+
+    code = cli.main(["work", "--root", str(tmp_path), "TASK-001"])
+    capsys.readouterr()
+
+    assert code != 0
+    task_raw = task_path.read_text(encoding="utf-8")
+    assert 'status: "open"' in task_raw
 
 
 def test_post_task_shell_receives_onward_env_vars(tmp_path: Path, capsys, monkeypatch):

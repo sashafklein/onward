@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -18,9 +19,11 @@ from onward.artifacts import (
     read_notes,
     regenerate_indexes,
     update_artifact_status,
+    validate_artifact,
     write_artifact,
 )
 from onward.config import (
+    WorkspaceLayout,
     is_executor_enabled,
     load_workspace_config,
     model_setting,
@@ -34,6 +37,7 @@ from onward.config import (
 from onward.executor import Executor, ExecutorResult, TaskContext
 from onward.executor_ack import parse_task_result
 from onward.preflight import preflight_executor_command, preflight_shell_invocation
+from onward.reporter import WorkReporter
 from onward.executor_payload import with_schema_version
 from onward.util import (
     as_str_list,
@@ -70,6 +74,42 @@ def _hook_markdown_path(config: dict[str, Any], key: str) -> str:
         return ""
     value = hooks.get(key)
     return str(value or "").strip()
+
+
+def _resolve_hook_path(
+    layout: WorkspaceLayout,
+    hook_rel_path: str,
+    project: str | None = None,
+) -> tuple[Path, str]:
+    """Resolve hook path with project-specific and shared fallback.
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/hooks/<filename>`
+    2. Configured path: `<hook_rel_path>` (usually `.onward/hooks/<filename>`)
+
+    Args:
+        layout: WorkspaceLayout for path resolution
+        hook_rel_path: Relative hook path from config (e.g., ".onward/hooks/post-task.md")
+        project: Project key for multi-root workspaces (optional)
+
+    Returns:
+        Tuple of (resolved_path, display_path) where display_path is for error messages
+    """
+    if not hook_rel_path:
+        return layout.workspace_root / "", ""
+
+    # Extract the filename from the configured path
+    filename = Path(hook_rel_path).name
+
+    # Primary: project-specific hooks directory (only in multi-root mode with a project)
+    if layout.is_multi_root and project is not None:
+        project_hook_path = layout.hooks_dir(project) / filename
+        if project_hook_path.exists():
+            return project_hook_path, f"{project}/hooks/{filename}"
+
+    # Fallback: the configured path (relative to workspace root)
+    configured_path = layout.workspace_root / hook_rel_path
+    return configured_path, hook_rel_path
 
 
 def _run_shell_hooks(
@@ -152,20 +192,35 @@ def _run_markdown_hook(
     model: str,
     task: Artifact,
     run_id: str,
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
 ) -> tuple[bool, str]:
+    """Run a markdown hook with project-specific and shared fallback.
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/hooks/<filename>`
+    2. Configured path: `<hook_rel_path>` (usually `.onward/hooks/<filename>`)
+    """
     if not hook_rel_path:
         return True, f"[{phase}]\n(no hook)"
 
-    hook_path = root / hook_rel_path
+    # Resolve hook path with fallback if layout is provided
+    if layout is not None:
+        hook_path, display_path = _resolve_hook_path(layout, hook_rel_path, project)
+    else:
+        # Backward compatibility: use configured path directly
+        hook_path = root / hook_rel_path
+        display_path = hook_rel_path
+
     if not hook_path.exists():
-        return False, f"[{phase}]\n[error] hook file not found: {hook_rel_path}"
+        return False, f"[{phase}]\n[error] hook file not found: {display_path}"
 
     payload = {
         "type": "hook",
         "phase": phase,
         "run_id": run_id,
         "model": model,
-        "hook_path": hook_rel_path,
+        "hook_path": display_path,
         "hook_body": hook_path.read_text(encoding="utf-8"),
         "task": task.metadata,
         "task_body": task.body,
@@ -202,8 +257,8 @@ def _run_markdown_hook(
 # ---------------------------------------------------------------------------
 
 
-def load_ongoing(root: Path) -> dict[str, Any]:
-    path = root / ".onward/ongoing.json"
+def load_ongoing(layout: WorkspaceLayout, project: str | None = None) -> dict[str, Any]:
+    path = layout.ongoing_path(project)
     if not path.exists():
         return {"version": 1, "updated_at": now_iso(), "active_runs": []}
     try:
@@ -217,23 +272,24 @@ def load_ongoing(root: Path) -> dict[str, Any]:
     return payload
 
 
-def _write_ongoing(root: Path, payload: dict[str, Any]) -> None:
+def _write_ongoing(layout: WorkspaceLayout, payload: dict[str, Any], project: str | None = None) -> None:
     payload["updated_at"] = now_iso()
-    path = root / ".onward/ongoing.json"
+    path = layout.ongoing_path(project)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def _register_active_run(
-    root: Path,
+    layout: WorkspaceLayout,
     run_id: str,
     task_id: str,
     model: str,
     run_log: Path,
     started_at: str,
+    project: str | None = None,
 ) -> None:
     """Append one entry to ``ongoing.json`` immediately before the executor runs for that task."""
-    ongoing = load_ongoing(root)
+    ongoing = load_ongoing(layout, project)
     active_runs = list(ongoing.get("active_runs", []))
     active_runs.append(
         {
@@ -241,24 +297,25 @@ def _register_active_run(
             "target": task_id,
             "status": "running",
             "model": model,
-            "log_path": str(run_log.relative_to(root)),
+            "log_path": str(run_log.relative_to(layout.workspace_root)),
             "started_at": started_at,
         }
     )
     ongoing["active_runs"] = active_runs
-    _write_ongoing(root, ongoing)
+    _write_ongoing(layout, ongoing, project)
 
 
 def register_claim(
-    root: Path,
+    layout: WorkspaceLayout,
     run_id: str,
     target: str,
     scope: str,
     claimed_children: list[str],
     pid: int,
+    project: str | None = None,
 ) -> None:
     """Append a claim entry to ``ongoing.json`` for a chunk or plan execution."""
-    ongoing = load_ongoing(root)
+    ongoing = load_ongoing(layout, project)
     active_runs = list(ongoing.get("active_runs", []))
     active_runs.append(
         {
@@ -272,19 +329,19 @@ def register_claim(
         }
     )
     ongoing["active_runs"] = active_runs
-    _write_ongoing(root, ongoing)
+    _write_ongoing(layout, ongoing, project)
 
 
-def release_claim(root: Path, run_id: str) -> None:
+def release_claim(layout: WorkspaceLayout, run_id: str, project: str | None = None) -> None:
     """Remove the claim entry with the given run_id from ``ongoing.json``."""
-    ongoing = load_ongoing(root)
+    ongoing = load_ongoing(layout, project)
     remaining = [
         entry
         for entry in ongoing.get("active_runs", [])
         if str(entry.get("id", "")) != run_id
     ]
     ongoing["active_runs"] = remaining
-    _write_ongoing(root, ongoing)
+    _write_ongoing(layout, ongoing, project)
 
 
 def _claim_is_expired(entry: dict[str, Any], timeout_minutes: int) -> bool:
@@ -302,7 +359,7 @@ def _claim_is_expired(entry: dict[str, Any], timeout_minutes: int) -> bool:
         return False
 
 
-def claimed_task_ids(root: Path) -> set[str]:
+def claimed_task_ids(layout: WorkspaceLayout, project: str | None = None) -> set[str]:
     """Return the set of task IDs claimed by active chunk/plan runs.
 
     Loads ``ongoing.json``, filters entries with ``scope`` in ``{"chunk", "plan"}``,
@@ -312,12 +369,12 @@ def claimed_task_ids(root: Path) -> set[str]:
 
     Returns an empty set when ``work.claim_timeout_minutes`` is 0 (claiming disabled).
     """
-    config = load_workspace_config(root)
+    config = load_workspace_config(layout.workspace_root)
     timeout_minutes = work_claim_timeout_minutes(config)
     if timeout_minutes == 0:
         return set()
 
-    ongoing = load_ongoing(root)
+    ongoing = load_ongoing(layout, project)
     active_runs = ongoing.get("active_runs", [])
 
     live: list[dict[str, Any]] = []
@@ -349,7 +406,7 @@ def claimed_task_ids(root: Path) -> set[str]:
 
     if pruned:
         ongoing["active_runs"] = live
-        _write_ongoing(root, ongoing)
+        _write_ongoing(layout, ongoing, project)
 
     return result
 
@@ -359,13 +416,21 @@ def claimed_task_ids(root: Path) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def validate_chunk_dag(tasks: list[Artifact]) -> list[str]:
+def validate_chunk_dag(
+    tasks: list[Artifact],
+    all_statuses: dict[str, str] | None = None,
+) -> list[str]:
     """Return list of error strings (empty = valid DAG).
 
     Checks:
     - All IDs referenced in ``depends_on`` exist within the chunk (dangling refs
       to tasks outside the chunk that are not ``completed`` are also flagged).
     - No cycles (Kahn's algorithm).
+
+    ``all_statuses`` is an optional mapping of artifact-id → status for the
+    entire workspace.  When provided, external dependencies (those not in the
+    chunk) are resolved through this map so that cross-chunk completed deps
+    are recognised correctly.
     """
     errors: list[str] = []
     task_ids = {str(t.metadata.get("id", "")) for t in tasks}
@@ -379,7 +444,8 @@ def validate_chunk_dag(tasks: list[Artifact]) -> list[str]:
         deps = as_str_list(task.metadata.get("depends_on")) + as_str_list(task.metadata.get("blocked_by"))
         for dep in deps:
             if dep not in task_ids:
-                if status_by_id.get(dep) != "completed":
+                resolved_status = (all_statuses or {}).get(dep) or status_by_id.get(dep)
+                if resolved_status != "completed":
                     errors.append(
                         f"{tid} depends_on {dep!r} which is not in this chunk and not completed"
                     )
@@ -407,6 +473,35 @@ def validate_chunk_dag(tasks: list[Artifact]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Model-error detection
+# ---------------------------------------------------------------------------
+
+_MODEL_ERROR_PATTERNS = [
+    "issue with the selected model",
+    "model not found",
+    "not a valid model",
+    "invalid model",
+    "does not exist or you do not have access",
+    "may not exist or you may not have access",
+    "is not available",
+    "unknown model",
+]
+
+
+def _is_model_error(ex_result: ExecutorResult | None, error: str) -> bool:
+    """Return True when a failed executor run looks like a model configuration error.
+
+    Checks both the executor error string and captured output against known
+    patterns from Claude CLI / Cursor / other backends.
+    """
+    haystack = (error or "").lower()
+    if ex_result is not None:
+        haystack += " " + (ex_result.output or "").lower()
+        haystack += " " + (ex_result.error or "").lower()
+    return any(pat in haystack for pat in _MODEL_ERROR_PATTERNS)
+
+
+# ---------------------------------------------------------------------------
 # Task execution
 # ---------------------------------------------------------------------------
 
@@ -430,15 +525,15 @@ class PreparedTaskRun:
     log_sections: list[str]
 
 
-def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> PreparedTaskRun:
+def _prepare_task_run(layout: WorkspaceLayout, task: Artifact, config: dict[str, Any], project: str | None = None) -> PreparedTaskRun:
     task_id = str(task.metadata.get("id", ""))
-    fresh = must_find_by_id(root, task_id)
+    fresh = must_find_by_id(layout, task_id, project)
     run_count = int(fresh.metadata.get("run_count", 0)) + 1
     fresh.metadata["run_count"] = run_count
     fresh.metadata["updated_at"] = now_iso()
     write_artifact(fresh)
-    regenerate_indexes(root)
-    task = must_find_by_id(root, task_id)
+    regenerate_indexes(layout, project=project)
+    task = must_find_by_id(layout, task_id, project)
 
     model = resolve_model_for_task(config, task.metadata)
 
@@ -450,7 +545,7 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
 
     ts = run_timestamp()
     run_id = f"RUN-{ts}-{task_id}"
-    run_dir = root / ".onward/runs"
+    run_dir = layout.runs_dir(project)
     task_dir = run_dir / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     run_json = task_dir / f"info-{ts}.json"
@@ -469,24 +564,24 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
         "executor": executor_record,
         "started_at": started_at,
         "finished_at": None,
-        "log_path": str(run_log.relative_to(root)),
+        "log_path": str(run_log.relative_to(layout.workspace_root)),
         "error": "",
         "files_changed": [],
         "token_usage": None,
     }
     run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
-    notes = read_notes(root, task_id)
+    notes = read_notes(layout, task_id, project)
     chunk_context: dict[str, Any] | None = None
     plan_context: dict[str, Any] | None = None
     chunk_id = clean_string(task.metadata.get("chunk"))
     plan_id = clean_string(task.metadata.get("plan"))
     if chunk_id:
-        chunk_art = find_by_id(root, chunk_id)
+        chunk_art = find_by_id(layout, chunk_id, project)
         if chunk_art:
             chunk_context = {"metadata": chunk_art.metadata, "body": chunk_art.body}
     if plan_id:
-        plan_art = find_by_id(root, plan_id)
+        plan_art = find_by_id(layout, plan_id, project)
         if plan_art:
             plan_context = {"metadata": plan_art.metadata, "body": plan_art.body}
 
@@ -514,7 +609,7 @@ def _prepare_task_run(root: Path, task: Artifact, config: dict[str, Any]) -> Pre
 
 
 def _finalize_task_run(
-    root: Path,
+    layout: WorkspaceLayout,
     config: dict[str, Any],
     p: PreparedTaskRun,
     ex_result: ExecutorResult | None,
@@ -524,6 +619,8 @@ def _finalize_task_run(
     *,
     post_hook_lock: threading.Lock | None = None,
     before_sha: str = "",
+    project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[str, bool]:
     """Write log, run JSON, artifact status, and remove ongoing entry for one completed task.
 
@@ -559,21 +656,22 @@ def _finalize_task_run(
     if ok and not error:
         lock_ctx = post_hook_lock if post_hook_lock is not None else threading.Lock()
         with lock_ctx:
-            post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell", hook_env)
+            post_shell_ok, post_shell_log = _run_shell_hooks(layout.workspace_root, post_shell, "post_task_shell", hook_env)
             log_sections.append(post_shell_log)
             if not post_shell_ok:
                 ok = False
                 error = "post_task_shell hook failed"
             if ok:
                 post_md_ok, post_md_log = _run_markdown_hook(
-                    root, hook_cmd, post_md, "post_task_markdown", model, task, run_id
+                    layout.workspace_root, hook_cmd, post_md, "post_task_markdown", model, task, run_id,
+                    layout=layout, project=project
                 )
                 log_sections.append(post_md_log)
                 if not post_md_ok:
                     ok = False
                     error = "post_task_markdown hook failed"
 
-    files_changed = compute_files_changed(root, before_sha)
+    files_changed = compute_files_changed(layout.workspace_root, before_sha)
 
     if error:
         log_sections.append(f"[error] {error}")
@@ -595,30 +693,54 @@ def _finalize_task_run(
         run_record["task_result"] = parse_task_result(ack_obj)
     run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
-    ongoing = load_ongoing(root)
+    ongoing = load_ongoing(layout, project)
     remaining = [
         item
         for item in ongoing.get("active_runs", [])
         if str(item.get("id", "")) != run_id
     ]
     ongoing["active_runs"] = remaining
-    _write_ongoing(root, ongoing)
+    _write_ongoing(layout, ongoing, project)
 
-    refreshed = must_find_by_id(root, task_id)
-    refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
-    update_artifact_status(root, refreshed, "completed" if ok else "failed")
+    model_err = not ok and _is_model_error(ex_result, error)
+    model_err_msg = (
+        f"Model error for {task_id}: {error}\n"
+        f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
+        f"  Task reverted to open (not marked as failed)."
+    )
+    if model_err:
+        if reporter:
+            reporter.warning(model_err_msg)
+        else:
+            print(model_err_msg)
+
+    refreshed = must_find_by_id(layout, task_id, project)
+    title = str(refreshed.metadata.get("title", ""))
+    if model_err:
+        refreshed.metadata["last_run_status"] = "model_error"
+        update_artifact_status(layout, refreshed, "open", project)
+    else:
+        refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
+        update_artifact_status(layout, refreshed, "completed" if ok else "failed", project)
+        if reporter:
+            if ok:
+                reporter.completed(task_id, title)
+            else:
+                reporter.failed(task_id, title, error)
 
     return run_id, ok
 
 
 def _run_one_task_with_hooks(
-    root: Path,
+    layout: WorkspaceLayout,
     config: dict[str, Any],
     executor: Executor,
     p: PreparedTaskRun,
     *,
     ongoing_lock: threading.Lock,
     post_hook_lock: threading.Lock,
+    project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[str, bool]:
     """Run pre-hooks, executor, and finalize for a single task. Thread-safe for parallel use.
 
@@ -641,7 +763,7 @@ def _run_one_task_with_hooks(
     }
     pre_shell = _hook_commands(config, "pre_task_shell")
 
-    pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell", hook_env)
+    pre_shell_ok, pre_shell_log = _run_shell_hooks(layout.workspace_root, pre_shell, "pre_task_shell", hook_env)
     log_sections.append(pre_shell_log)
 
     error = ""
@@ -655,10 +777,10 @@ def _run_one_task_with_hooks(
     elif not is_executor_enabled(config):
         error = "executor.enabled is false in .onward.config.yaml (executor disabled)"
     else:
-        before_sha = get_head_sha(root)
+        before_sha = get_head_sha(layout.workspace_root)
         with ongoing_lock:
-            _register_active_run(root, run_id, task_id, model, run_log, str(run_record["started_at"]))
-        ex_result = executor.execute_task(root, p.ctx)
+            _register_active_run(layout, run_id, task_id, model, run_log, str(run_record["started_at"]), project)
+        ex_result = executor.execute_task(layout.workspace_root, p.ctx)
         if ex_result.task_id != task_id:
             error = f"executor result task_id mismatch ({ex_result.task_id!r} != {task_id!r})"
         elif ex_result.run_id != run_id:
@@ -670,17 +792,20 @@ def _run_one_task_with_hooks(
             ack_obj = ex_result.ack
 
     return _finalize_task_run(
-        root, config, p, ex_result, error, ok, ack_obj,
-        post_hook_lock=post_hook_lock, before_sha=before_sha,
+        layout, config, p, ex_result, error, ok, ack_obj,
+        post_hook_lock=post_hook_lock, before_sha=before_sha, project=project,
+        reporter=reporter,
     )
 
 
 def parallel_execute(
-    root: Path,
+    layout: WorkspaceLayout,
     config: dict[str, Any],
     executor: Executor,
     prepared_list: list[PreparedTaskRun],
     max_workers: int,
+    project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[bool, list[tuple[str, bool]]]:
     """Dispatch up to ``max_workers`` tasks concurrently using :class:`~concurrent.futures.ThreadPoolExecutor`.
 
@@ -702,12 +827,14 @@ def parallel_execute(
         for p in prepared_list:
             future = pool.submit(
                 _run_one_task_with_hooks,
-                root,
+                layout,
                 config,
                 executor,
                 p,
                 ongoing_lock=ongoing_lock,
                 post_hook_lock=post_hook_lock,
+                project=project,
+                reporter=reporter,
             )
             futures[future] = p
 
@@ -730,10 +857,12 @@ def parallel_execute(
 
 
 def _run_hooked_executor_batch(
-    root: Path,
+    layout: WorkspaceLayout,
     config: dict[str, Any],
     executor: Executor,
     prepared_list: list[PreparedTaskRun],
+    project: str | None = None,
+    reporter: WorkReporter | None = None,
 ) -> tuple[bool, list[tuple[str, bool]]]:
     """Pre/post hooks per task; sequential execution via :meth:`~onward.executor.Executor.execute_batch`.
 
@@ -748,7 +877,7 @@ def _run_hooked_executor_batch(
     post_md = _hook_markdown_path(config, "post_task_markdown")
 
     contexts = [p.ctx for p in prepared_list]
-    batch_iter = executor.execute_batch(root, contexts)
+    batch_iter = executor.execute_batch(layout.workspace_root, contexts)
     outcomes: list[tuple[str, bool]] = []
     wave_ok = True
 
@@ -768,7 +897,7 @@ def _run_hooked_executor_batch(
             "ONWARD_TASK_TITLE": str(task.metadata.get("title", "")),
         }
 
-        pre_shell_ok, pre_shell_log = _run_shell_hooks(root, pre_shell, "pre_task_shell", hook_env)
+        pre_shell_ok, pre_shell_log = _run_shell_hooks(layout.workspace_root, pre_shell, "pre_task_shell", hook_env)
         log_sections.append(pre_shell_log)
         error = ""
         ok = False
@@ -781,14 +910,15 @@ def _run_hooked_executor_batch(
         elif not is_executor_enabled(config):
             error = "executor.enabled is false in .onward.config.yaml (executor disabled)"
         else:
-            before_sha = get_head_sha(root)
+            before_sha = get_head_sha(layout.workspace_root)
             _register_active_run(
-                root,
+                layout,
                 run_id,
                 task_id,
                 model,
                 run_log,
                 str(run_record["started_at"]),
+                project,
             )
             try:
                 ex_result = next(batch_iter)
@@ -808,21 +938,22 @@ def _run_hooked_executor_batch(
                     ack_obj = ex_result.ack
 
         if ok and not error:
-            post_shell_ok, post_shell_log = _run_shell_hooks(root, post_shell, "post_task_shell", hook_env)
+            post_shell_ok, post_shell_log = _run_shell_hooks(layout.workspace_root, post_shell, "post_task_shell", hook_env)
             log_sections.append(post_shell_log)
             if not post_shell_ok:
                 ok = False
                 error = "post_task_shell hook failed"
         if ok and not error:
             post_md_ok, post_md_log = _run_markdown_hook(
-                root, hook_cmd, post_md, "post_task_markdown", model, task, run_id
+                layout.workspace_root, hook_cmd, post_md, "post_task_markdown", model, task, run_id,
+                layout=layout, project=project
             )
             log_sections.append(post_md_log)
             if not post_md_ok:
                 ok = False
                 error = "post_task_markdown hook failed"
 
-        files_changed = compute_files_changed(root, before_sha)
+        files_changed = compute_files_changed(layout.workspace_root, before_sha)
         token_usage = ex_result.token_usage if ex_result is not None else None
 
         if error:
@@ -843,18 +974,40 @@ def _run_hooked_executor_batch(
             run_record["task_result"] = parse_task_result(ack_obj)
         run_json.write_text(dump_run_json_record(run_record), encoding="utf-8")
 
-        ongoing = load_ongoing(root)
+        ongoing = load_ongoing(layout, project)
         remaining = [
             item
             for item in ongoing.get("active_runs", [])
             if str(item.get("id", "")) != run_id
         ]
         ongoing["active_runs"] = remaining
-        _write_ongoing(root, ongoing)
+        _write_ongoing(layout, ongoing, project)
 
-        refreshed = must_find_by_id(root, task_id)
-        refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
-        update_artifact_status(root, refreshed, "completed" if ok else "failed")
+        model_err = not ok and _is_model_error(ex_result, error)
+        model_err_msg = (
+            f"Model error for {task_id}: {error}\n"
+            f"  model={model!r} is not valid — fix the model in task frontmatter or .onward.config.yaml\n"
+            f"  Task reverted to open (not marked as failed)."
+        )
+        if model_err:
+            if reporter:
+                reporter.warning(model_err_msg)
+            else:
+                print(model_err_msg)
+
+        refreshed = must_find_by_id(layout, task_id, project)
+        title = str(refreshed.metadata.get("title", ""))
+        if model_err:
+            refreshed.metadata["last_run_status"] = "model_error"
+            update_artifact_status(layout, refreshed, "open", project)
+        else:
+            refreshed.metadata["last_run_status"] = "completed" if ok else "failed"
+            update_artifact_status(layout, refreshed, "completed" if ok else "failed", project)
+            if reporter:
+                if ok:
+                    reporter.completed(task_id, title)
+                else:
+                    reporter.failed(task_id, title, error)
 
         outcomes.append((run_id, ok))
         if not ok:
@@ -864,26 +1017,31 @@ def _run_hooked_executor_batch(
     return wave_ok, outcomes
 
 
-def _execute_task_run(root: Path, task: Artifact) -> tuple[bool, str]:
+def _execute_task_run(layout: WorkspaceLayout, task: Artifact, project: str | None = None, reporter: WorkReporter | None = None) -> tuple[bool, str]:
     task_id = str(task.metadata.get("id", ""))
-    config = load_workspace_config(root)
+    config = load_workspace_config(layout.workspace_root)
     executor = resolve_executor(config)
-    prepared = _prepare_task_run(root, must_find_by_id(root, task_id), config)
-    ok, _ = _run_hooked_executor_batch(root, config, executor, [prepared])
+    prepared = _prepare_task_run(layout, must_find_by_id(layout, task_id, project), config, project)
+    ok, _ = _run_hooked_executor_batch(layout, config, executor, [prepared], project, reporter=reporter)
     return ok, prepared.run_id
 
 
-def work_task(root: Path, task: Artifact) -> tuple[bool, str]:
+def validate_task_preflight(task: Artifact) -> list[str]:
+    """Run metadata validation on a task artifact. Returns a list of issue strings (empty = clean)."""
+    return validate_artifact(task)
+
+
+def work_task(layout: WorkspaceLayout, task: Artifact, project: str | None = None, reporter: WorkReporter | None = None) -> tuple[bool, str]:
     if str(task.metadata.get("type", "")) != "task":
         raise ValueError(f"{task.metadata.get('id')} is not a task")
 
-    config = load_workspace_config(root)
+    config = load_workspace_config(layout.workspace_root)
     preflight_err = preflight_executor_command(config)
     if preflight_err:
         raise ValueError(preflight_err)
 
     tid = str(task.metadata.get("id", ""))
-    fresh = must_find_by_id(root, tid)
+    fresh = must_find_by_id(layout, tid, project)
     current = str(fresh.metadata.get("status", ""))
     if current == "completed":
         return True, ""
@@ -914,13 +1072,22 @@ def work_task(root: Path, task: Artifact) -> tuple[bool, str]:
             "See docs/LIFECYCLE.md"
         )
 
-    update_artifact_status(root, fresh, "in_progress")
-    return _execute_task_run(root, fresh)
+    preflight_issues = validate_task_preflight(fresh)
+    if preflight_issues:
+        issue_list = "\n  - ".join(preflight_issues)
+        raise ValueError(f"task metadata validation failed:\n  - {issue_list}")
+
+    title = str(fresh.metadata.get("title", ""))
+    update_artifact_status(layout, fresh, "in_progress", project)
+    if reporter:
+        reporter.status_change(tid, title, "in_progress")
+        reporter.working_on(tid, title)
+    return _execute_task_run(layout, fresh, project, reporter=reporter)
 
 
-def _open_task_ids_for_chunk(root: Path, chunk_id: str) -> list[str]:
+def _open_task_ids_for_chunk(layout: WorkspaceLayout, chunk_id: str, project: str | None = None) -> list[str]:
     """Return IDs of all open/in_progress tasks belonging to the given chunk."""
-    artifacts = collect_artifacts(root)
+    artifacts = collect_artifacts(layout, project)
     return [
         str(a.metadata.get("id", ""))
         for a in artifacts
@@ -930,8 +1097,8 @@ def _open_task_ids_for_chunk(root: Path, chunk_id: str) -> list[str]:
     ]
 
 
-def ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact], bool]:
-    artifacts = collect_artifacts(root)
+def ordered_ready_chunk_tasks(layout: WorkspaceLayout, chunk_id: str, project: str | None = None) -> tuple[list[Artifact], bool]:
+    artifacts = collect_artifacts(layout, project)
     tasks = [
         a
         for a in artifacts
@@ -961,15 +1128,21 @@ def ordered_ready_chunk_tasks(root: Path, chunk_id: str) -> tuple[list[Artifact]
     return ready, not blocked_exists
 
 
-def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str]:
-    config = load_workspace_config(root)
+def run_chunk_post_markdown_hook(layout: WorkspaceLayout, chunk: Artifact, project: str | None = None) -> tuple[bool, str]:
+    """Run chunk post-markdown hook with project-specific and shared fallback.
+
+    Lookup order (multi-root mode):
+    1. Project-specific: `<project_root>/hooks/<filename>`
+    2. Configured path: `<hook_rel_path>` (usually `.onward/hooks/<filename>`)
+    """
+    config = load_workspace_config(layout.workspace_root)
     hook_rel_path = _hook_markdown_path(config, "post_chunk_markdown")
     if not hook_rel_path:
         return True, "(no hook)"
 
-    hook_path = root / hook_rel_path
+    hook_path, display_path = _resolve_hook_path(layout, hook_rel_path, project)
     if not hook_path.exists():
-        return False, f"hook file not found: {hook_rel_path}"
+        return False, f"hook file not found: {display_path}"
 
     if not is_executor_enabled(config):
         return False, "executor.enabled is false in .onward.config.yaml (executor disabled)"
@@ -986,12 +1159,12 @@ def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str
     if not isinstance(command_args, list):
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
-    model = model_setting(config, "review_default", model_setting(config, "default", "opus-latest"))
+    model = model_setting(config, "review_default", model_setting(config, "default", "opus"))
     payload = {
         "type": "hook",
         "phase": "post_chunk_markdown",
         "model": model,
-        "hook_path": hook_rel_path,
+        "hook_path": display_path,
         "hook_body": hook_path.read_text(encoding="utf-8"),
         "chunk": chunk.metadata,
         "chunk_body": chunk.body,
@@ -999,7 +1172,7 @@ def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str
     try:
         result = subprocess.run(
             cmd,
-            cwd=root,
+            cwd=layout.workspace_root,
             input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
             text=True,
             capture_output=True,
@@ -1015,48 +1188,81 @@ def run_chunk_post_markdown_hook(root: Path, chunk: Artifact) -> tuple[bool, str
     return True, ""
 
 
-def run_pre_chunk_shell_hooks(root: Path, chunk: Artifact) -> tuple[bool, str]:
+def run_pre_chunk_shell_hooks(layout: WorkspaceLayout, chunk: Artifact, project: str | None = None) -> tuple[bool, str]:
     """Shell commands once when ``onward work CHUNK-*`` starts, before the task loop."""
-    config = load_workspace_config(root)
+    config = load_workspace_config(layout.workspace_root)
     commands = _hook_commands(config, "pre_chunk_shell")
     chunk_id = str(chunk.metadata.get("id", ""))
     env = {
         "ONWARD_CHUNK_ID": chunk_id,
         "ONWARD_CHUNK_TITLE": str(chunk.metadata.get("title", "")),
     }
-    return _run_shell_hooks(root, commands, "pre_chunk_shell", env)
+    return _run_shell_hooks(layout.workspace_root, commands, "pre_chunk_shell", env)
 
 
-def work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
+def chunk_has_nonterminal_tasks(layout: WorkspaceLayout, chunk_id: str, project: str | None = None) -> list[str]:
+    """Return IDs of tasks in ``chunk_id`` that are NOT completed or canceled."""
+    return [
+        str(a.metadata.get("id", ""))
+        for a in collect_artifacts(layout, project)
+        if str(a.metadata.get("type", "")) == "task"
+        and str(a.metadata.get("chunk", "")) == chunk_id
+        and str(a.metadata.get("status", "")) not in {"completed", "canceled"}
+    ]
+
+
+def work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None, reporter: WorkReporter | None = None) -> int:
     """Run all ready tasks in a chunk using :meth:`~onward.executor.Executor.execute_batch` per wave."""
     chunk_id = str(chunk.metadata.get("id", ""))
+    chunk_title = str(chunk.metadata.get("title", ""))
     if str(chunk.metadata.get("status", "")) == "completed":
-        return 0
+        nonterminal = chunk_has_nonterminal_tasks(layout, chunk_id, project)
+        if nonterminal:
+            msg = (
+                f"Chunk {chunk_id} was marked completed but has non-terminal tasks: "
+                f"{', '.join(nonterminal)} — reopening chunk"
+            )
+            if reporter:
+                reporter.warning(msg)
+            else:
+                print(msg)
+            update_artifact_status(layout, must_find_by_id(layout, chunk_id, project), "in_progress", project)
+        else:
+            return 0
 
     preflight_err = preflight_executor_command(config)
     if preflight_err:
-        print(f"Error: {preflight_err}")
+        if reporter:
+            reporter.warning(f"Error: {preflight_err}")
+        else:
+            print(f"Error: {preflight_err}")
         return 1
 
     sequential = work_sequential_by_default(config)
     if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        update_artifact_status(root, chunk, "in_progress")
+        update_artifact_status(layout, chunk, "in_progress", project)
+        if reporter:
+            reporter.status_change(chunk_id, chunk_title, "in_progress")
 
-    pre_chunk_ok, pre_chunk_log = run_pre_chunk_shell_hooks(root, chunk)
+    pre_chunk_ok, pre_chunk_log = run_pre_chunk_shell_hooks(layout, chunk, project)
     if not pre_chunk_ok:
-        print(f"pre_chunk_shell hook failed:\n{pre_chunk_log}")
+        msg = f"pre_chunk_shell hook failed:\n{pre_chunk_log}"
+        if reporter:
+            reporter.warning(msg)
+        else:
+            print(msg)
         return 1
 
-    claimed_children = _open_task_ids_for_chunk(root, chunk_id)
+    claimed_children = _open_task_ids_for_chunk(layout, chunk_id, project)
     claim_run_id = f"CLAIM-{run_timestamp()}-{chunk_id}"
-    register_claim(root, claim_run_id, chunk_id, "chunk", claimed_children, os.getpid())
+    register_claim(layout, claim_run_id, chunk_id, "chunk", claimed_children, os.getpid(), project)
     try:
-        return _work_chunk_loop(root, chunk_id, config, sequential)
+        return _work_chunk_loop(layout, chunk_id, config, sequential, project, reporter=reporter)
     finally:
-        release_claim(root, claim_run_id)
+        release_claim(layout, claim_run_id, project)
 
 
-def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequential: bool) -> int:
+def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, Any], sequential: bool, project: str | None = None, reporter: WorkReporter | None = None) -> int:
     """Inner task loop for work_chunk (separated so claim try/finally is clean).
 
     When ``work.max_parallel_tasks > 1``, ready tasks are dispatched concurrently up to
@@ -1066,107 +1272,166 @@ def _work_chunk_loop(root: Path, chunk_id: str, config: dict[str, Any], sequenti
     """
     max_parallel = work_max_parallel_tasks(config)
 
+    all_artifacts = collect_artifacts(layout, project)
+    all_statuses = {str(a.metadata.get("id", "")): str(a.metadata.get("status", "")) for a in all_artifacts}
     all_chunk_tasks = [
         a
-        for a in collect_artifacts(root)
+        for a in all_artifacts
         if str(a.metadata.get("type", "")) == "task"
         and str(a.metadata.get("chunk", "")) == chunk_id
     ]
-    dag_errors = validate_chunk_dag(all_chunk_tasks)
+    dag_errors = validate_chunk_dag(all_chunk_tasks, all_statuses=all_statuses)
     if dag_errors:
         for err in dag_errors:
-            print(f"DAG error: {err}")
+            if reporter:
+                reporter.warning(f"DAG error: {err}")
+            else:
+                print(f"DAG error: {err}")
         return 1
 
     executor = resolve_executor(config)
 
-    while True:
-        ready_tasks, all_resolved = ordered_ready_chunk_tasks(root, chunk_id)
-        if not ready_tasks:
-            if not all_resolved:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
-                return 1
-            break
+    indent_ctx: contextlib.AbstractContextManager[None] = reporter.indent() if reporter is not None else contextlib.nullcontext()
+    with indent_ctx:
+        while True:
+            ready_tasks, all_resolved = ordered_ready_chunk_tasks(layout, chunk_id, project)
+            if not ready_tasks:
+                if not all_resolved:
+                    if reporter:
+                        reporter.warning(f"Chunk {chunk_id} has unresolved task dependencies")
+                    else:
+                        print(f"Chunk {chunk_id} has unresolved task dependencies")
+                    return 1
+                break
 
-        eligible: list[Artifact] = []
-        for candidate in ready_tasks:
-            tid = str(candidate.metadata.get("id", ""))
-            fresh = must_find_by_id(root, tid)
-            run_count = int(fresh.metadata.get("run_count", 0))
-            max_r = work_max_retries(config)
-            if max_r > 0 and run_count >= max_r:
-                print(
-                    f"Warning: {tid} has reached run_count={run_count} "
-                    f"(work.max_retries={max_r}); skipping. See docs/LIFECYCLE.md"
+            eligible: list[Artifact] = []
+            for candidate in ready_tasks:
+                tid = str(candidate.metadata.get("id", ""))
+                fresh = must_find_by_id(layout, tid, project)
+                run_count = int(fresh.metadata.get("run_count", 0))
+                max_r = work_max_retries(config)
+                if max_r > 0 and run_count >= max_r:
+                    if reporter:
+                        reporter.skipped(
+                            tid,
+                            str(fresh.metadata.get("title", "")),
+                            f"hit work.max_retries={max_r} (run_count={run_count}). See docs/LIFECYCLE.md",
+                        )
+                    else:
+                        print(
+                            f"Warning: {tid} has reached run_count={run_count} "
+                            f"(work.max_retries={max_r}); skipping. See docs/LIFECYCLE.md"
+                        )
+                    continue
+                eligible.append(fresh)
+
+            if not eligible:
+                msg = (
+                    f"Chunk {chunk_id}: no task could run (all ready tasks hit work.max_retries). "
+                    "Use onward retry on a task or adjust work.max_retries. See docs/LIFECYCLE.md"
                 )
-                continue
-            eligible.append(fresh)
-
-        if not eligible:
-            print(
-                f"Chunk {chunk_id}: no task could run (all ready tasks hit work.max_retries). "
-                "Use onward retry on a task or adjust work.max_retries. See docs/LIFECYCLE.md"
-            )
-            return 1
-
-        if not sequential and max_parallel == 1:
-            eligible = eligible[:1]
-        else:
-            eligible = eligible[:max_parallel]
-
-        wave: list[PreparedTaskRun] = []
-        for fresh in eligible:
-            tid = str(fresh.metadata.get("id", ""))
-            update_artifact_status(root, fresh, "in_progress")
-            wave.append(_prepare_task_run(root, must_find_by_id(root, tid), config))
-
-        if max_parallel > 1 and len(wave) > 1:
-            ok, outcomes = parallel_execute(root, config, executor, wave, max_workers=max_parallel)
-        else:
-            ok, outcomes = _run_hooked_executor_batch(root, config, executor, wave)
-        for run_id, task_ok in outcomes:
-            print(f"Run {run_id}: {'completed' if task_ok else 'failed'}")
-        if not ok:
-            print(f"Stopping chunk work for {chunk_id} after task failure")
-            print(
-                f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
-                f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
-            )
-            return 1
-
-        if not sequential and max_parallel == 1:
-            ready_again, all_resolved_again = ordered_ready_chunk_tasks(root, chunk_id)
-            if ready_again:
-                print(
-                    f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
-                    "run onward work again to continue."
-                )
-                return 0
-            if not all_resolved_again:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
+                if reporter:
+                    reporter.warning(msg)
+                else:
+                    print(msg)
                 return 1
 
-    refreshed_chunk = must_find_by_id(root, chunk_id)
+            if not sequential and max_parallel == 1:
+                eligible = eligible[:1]
+            else:
+                eligible = eligible[:max_parallel]
+
+            wave: list[PreparedTaskRun] = []
+            for fresh in eligible:
+                tid = str(fresh.metadata.get("id", ""))
+                title = str(fresh.metadata.get("title", ""))
+                update_artifact_status(layout, fresh, "in_progress", project)
+                if reporter:
+                    reporter.status_change(tid, title, "in_progress")
+                wave.append(_prepare_task_run(layout, must_find_by_id(layout, tid, project), config, project))
+
+            if max_parallel > 1 and len(wave) > 1:
+                ok, outcomes = parallel_execute(layout, config, executor, wave, max_workers=max_parallel, project=project, reporter=reporter)
+            else:
+                ok, outcomes = _run_hooked_executor_batch(layout, config, executor, wave, project, reporter=reporter)
+            if not reporter:
+                for run_id, task_ok in outcomes:
+                    print(f"Run {run_id}: {'completed' if task_ok else 'failed'}")
+            if not ok:
+                if reporter:
+                    reporter.warning(f"Stopping chunk work for {chunk_id} after task failure")
+                    reporter.warning(
+                        f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
+                        f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
+                    )
+                else:
+                    print(f"Stopping chunk work for {chunk_id} after task failure")
+                    print(
+                        f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
+                        f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
+                    )
+                return 1
+
+            if not sequential and max_parallel == 1:
+                ready_again, all_resolved_again = ordered_ready_chunk_tasks(layout, chunk_id, project)
+                if ready_again:
+                    msg = (
+                        f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
+                        "run onward work again to continue."
+                    )
+                    if reporter:
+                        reporter.info(msg)
+                    else:
+                        print(msg)
+                    return 0
+                if not all_resolved_again:
+                    if reporter:
+                        reporter.warning(f"Chunk {chunk_id} has unresolved task dependencies")
+                    else:
+                        print(f"Chunk {chunk_id} has unresolved task dependencies")
+                    return 1
+
+    nonterminal = chunk_has_nonterminal_tasks(layout, chunk_id, project)
+    if nonterminal:
+        msg = f"Chunk {chunk_id} still has non-terminal tasks: {', '.join(nonterminal)}"
+        if reporter:
+            reporter.warning(msg)
+        else:
+            print(msg)
+        return 1
+
+    refreshed_chunk = must_find_by_id(layout, chunk_id, project)
+    chunk_title = str(refreshed_chunk.metadata.get("title", ""))
     if str(refreshed_chunk.metadata.get("status", "")) == "completed":
-        print(f"Chunk {chunk_id} completed")
+        if reporter:
+            reporter.completed(chunk_id, chunk_title)
+        else:
+            print(f"Chunk {chunk_id} completed")
         return 0
-    hook_ok, hook_error = run_chunk_post_markdown_hook(root, refreshed_chunk)
+    hook_ok, hook_error = run_chunk_post_markdown_hook(layout, refreshed_chunk, project)
     if not hook_ok:
-        print(f"Chunk {chunk_id} post hook failed: {hook_error}")
+        msg = f"Chunk {chunk_id} post hook failed: {hook_error}"
+        if reporter:
+            reporter.warning(msg)
+        else:
+            print(f"Chunk {chunk_id} post hook failed: {hook_error}")
         return 1
     if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        update_artifact_status(root, refreshed_chunk, "completed")
-    print(f"Chunk {chunk_id} completed")
+        update_artifact_status(layout, refreshed_chunk, "completed", project)
+    if reporter:
+        reporter.completed(chunk_id, chunk_title)
+    else:
+        print(f"Chunk {chunk_id} completed")
     return 0
 
 
-def finalize_chunks_all_tasks_terminal(root: Path) -> tuple[list[str], list[str]]:
+def finalize_chunks_all_tasks_terminal(layout: WorkspaceLayout, project: str | None = None) -> tuple[list[str], list[str]]:
     """Move chunks to *completed* when every child task is terminal (completed/canceled).
 
     Runs ``post_chunk_markdown`` when configured, matching ``onward work CHUNK-*`` completion.
     Skips chunks with zero tasks. Returns ``(completed_chunk_ids, warnings)``.
     """
-    artifacts = collect_artifacts(root)
+    artifacts = collect_artifacts(layout, project)
     tasks_by_chunk: dict[str, list[Artifact]] = {}
     for a in artifacts:
         if str(a.metadata.get("type", "")) != "task":
@@ -1190,15 +1455,15 @@ def finalize_chunks_all_tasks_terminal(root: Path) -> tuple[list[str], list[str]
             continue
         if any(str(t.metadata.get("status", "")) not in {"completed", "canceled"} for t in chunk_tasks):
             continue
-        refreshed = must_find_by_id(root, chunk_id)
-        hook_ok, hook_err = run_chunk_post_markdown_hook(root, refreshed)
+        refreshed = must_find_by_id(layout, chunk_id, project)
+        hook_ok, hook_err = run_chunk_post_markdown_hook(layout, refreshed, project)
         if not hook_ok:
             warnings.append(
                 f"Chunk {chunk_id} has all tasks terminal but post hook failed ({hook_err}); chunk left open."
             )
             continue
         if str(refreshed.metadata.get("status", "")) in {"open", "in_progress"}:
-            update_artifact_status(root, refreshed, "completed")
+            update_artifact_status(layout, refreshed, "completed", project)
             completed.append(chunk_id)
     return completed, warnings
 
@@ -1218,12 +1483,12 @@ def _run_info_paths(run_dir: Path, target_id: str) -> list[Path]:
     return paths
 
 
-def collect_runs_for_target(root: Path, target_id: str, *, limit: int = 10) -> list[dict[str, Any]]:
+def collect_runs_for_target(layout: WorkspaceLayout, target_id: str, *, limit: int = 10, project: str | None = None) -> list[dict[str, Any]]:
     """Return run JSON records for ``target_id``, newest first (by ``started_at``), capped at ``limit``.
 
     Searches both new-layout ``runs/TASK-XXX/info-*.json`` and legacy ``runs/RUN-*-TASK-XXX.json``.
     """
-    run_dir = root / ".onward/runs"
+    run_dir = layout.runs_dir(project)
     if not run_dir.exists():
         return []
     records: list[dict[str, Any]] = []
@@ -1237,14 +1502,14 @@ def collect_runs_for_target(root: Path, target_id: str, *, limit: int = 10) -> l
     return records[:limit]
 
 
-def latest_run_for(root: Path, target_id: str) -> dict[str, Any] | None:
-    runs = collect_runs_for_target(root, target_id, limit=1)
+def latest_run_for(layout: WorkspaceLayout, target_id: str, project: str | None = None) -> dict[str, Any] | None:
+    runs = collect_runs_for_target(layout, target_id, limit=1, project=project)
     return runs[0] if runs else None
 
 
-def collect_run_records(root: Path) -> list[dict[str, Any]]:
+def collect_run_records(layout: WorkspaceLayout, project: str | None = None) -> list[dict[str, Any]]:
     """Return all run records across both legacy flat layout and new per-task layout."""
-    run_dir = root / ".onward/runs"
+    run_dir = layout.runs_dir(project)
     if not run_dir.exists():
         return []
     records: list[dict[str, Any]] = []
@@ -1270,7 +1535,7 @@ def collect_run_records(root: Path) -> list[dict[str, Any]]:
 
 
 def execute_plan_review(
-    root: Path,
+    layout: WorkspaceLayout,
     plan: Artifact,
     model: str,
     label: str,
@@ -1279,8 +1544,9 @@ def execute_plan_review(
     executor_command: str | None = None,
     executor_args: list[str] | None = None,
     emit_errors: bool = True,
+    project: str | None = None,
 ) -> tuple[bool, Path]:
-    config = load_workspace_config(root)
+    config = load_workspace_config(layout.workspace_root)
     block = config.get("executor", {})
     if not isinstance(block, dict):
         block = {}
@@ -1297,7 +1563,7 @@ def execute_plan_review(
     plan_id = str(plan.metadata.get("id", ""))
     timestamp = run_timestamp()
 
-    review_dir = root / ".onward/reviews"
+    review_dir = layout.reviews_dir(project)
     review_dir.mkdir(parents=True, exist_ok=True)
     review_path = review_dir / f"{plan_id}-{timestamp}-{label}.md"
 
@@ -1341,7 +1607,7 @@ def execute_plan_review(
     try:
         result = subprocess.run(
             cmd,
-            cwd=root,
+            cwd=layout.workspace_root,
             input=json.dumps(with_schema_version(payload), indent=2, ensure_ascii=False),
             text=True,
             capture_output=True,

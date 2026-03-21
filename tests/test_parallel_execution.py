@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from onward.artifacts import Artifact
-from onward.config import work_max_parallel_tasks
+from onward.config import work_max_parallel_tasks, WorkspaceLayout
 from onward.executor import Executor, ExecutorResult, TaskContext
-from onward.execution import validate_chunk_dag
+from onward.execution import validate_chunk_dag, _is_model_error
 
 
 # ---------------------------------------------------------------------------
@@ -102,16 +102,24 @@ def test_dag_diamond_is_valid() -> None:
 def test_dag_dep_on_completed_external_task_is_valid() -> None:
     """A depends_on reference to a task outside the chunk is OK if that task is completed."""
     task = _make_task("TASK-002", depends_on=["TASK-001"])
+    # With all_statuses provided, the external dep resolves as completed.
+    errors = validate_chunk_dag([task], all_statuses={"TASK-001": "completed"})
+    assert errors == []
+
+
+def test_dag_dep_on_completed_external_task_via_task_list() -> None:
+    """Passing the completed external task directly also suppresses the error."""
+    task = _make_task("TASK-002", depends_on=["TASK-001"])
     external = _make_task("TASK-001", status="completed")
-    # validate_chunk_dag receives only the chunk's tasks; TASK-001 is external/completed
-    errors = validate_chunk_dag([task])
-    # External + completed → treated as completed, no error
-    # But validate_chunk_dag only knows about tasks in the list; TASK-001 is not there.
-    # According to implementation, if dep not in task_ids AND status_by_id.get(dep) != "completed",
-    # it's an error. So with no external context, this WILL produce an error.
-    # This test documents the boundary: provide the completed external task to suppress.
-    errors_with_context = validate_chunk_dag([task, external])
-    assert errors_with_context == []
+    errors = validate_chunk_dag([task, external])
+    assert errors == []
+
+
+def test_dag_dep_on_open_external_task_is_error() -> None:
+    """External dep that is not completed is an error even with all_statuses."""
+    task = _make_task("TASK-002", depends_on=["TASK-001"])
+    errors = validate_chunk_dag([task], all_statuses={"TASK-001": "open"})
+    assert any("TASK-001" in e for e in errors)
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +162,57 @@ def test_dag_dangling_ref_to_open_external() -> None:
     tasks = [_make_task("TASK-002", depends_on=["TASK-GHOST"])]
     errors = validate_chunk_dag(tasks)
     assert any("TASK-GHOST" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# _is_model_error — model error detection
+# ---------------------------------------------------------------------------
+
+
+def _make_executor_result(
+    success: bool = False, output: str = "", error: str = "", return_code: int = 1,
+) -> ExecutorResult:
+    return ExecutorResult(
+        task_id="TASK-001", run_id="RUN-001", success=success,
+        output=output, error=error, ack=None, return_code=return_code,
+    )
+
+
+def test_is_model_error_claude_cli_pattern() -> None:
+    r = _make_executor_result(
+        output="There's an issue with the selected model (sonnet-4.6). "
+               "It may not exist or you may not have access to it."
+    )
+    assert _is_model_error(r, "executor exited with code 1") is True
+
+
+def test_is_model_error_invalid_model_string() -> None:
+    r = _make_executor_result(error="invalid model: foo-bar-baz")
+    assert _is_model_error(r, "executor exited with code 1") is True
+
+
+def test_is_model_error_unknown_model() -> None:
+    r = _make_executor_result(error="unknown model identifier")
+    assert _is_model_error(r, "") is True
+
+
+def test_is_model_error_not_available() -> None:
+    r = _make_executor_result(output="model xyz is not available for your account")
+    assert _is_model_error(r, "") is True
+
+
+def test_is_model_error_false_on_normal_failure() -> None:
+    r = _make_executor_result(error="syntax error in generated code")
+    assert _is_model_error(r, "executor exited with code 1") is False
+
+
+def test_is_model_error_false_on_success() -> None:
+    r = _make_executor_result(success=True, output="all good", return_code=0)
+    assert _is_model_error(r, "") is False
+
+
+def test_is_model_error_none_result() -> None:
+    assert _is_model_error(None, "executor exited with code 1") is False
 
 
 # ---------------------------------------------------------------------------
@@ -270,16 +329,16 @@ def _mock_artifacts(monkeypatch, task_id: str) -> None:
     """Patch must_find_by_id and update_artifact_status to avoid real disk I/O."""
     from onward import execution as exec_mod
 
-    def _fake_must_find(root, tid):
+    def _fake_must_find(layout, tid, project=None):
         return _make_task(tid)
 
-    def _fake_update_status(root, artifact, status):
+    def _fake_update_status(layout, artifact, status, project=None):
         pass
 
-    def _fake_load_ongoing(root):
+    def _fake_load_ongoing(layout, project=None):
         return {"version": 1, "updated_at": "2026-01-01T00:00:00Z", "active_runs": []}
 
-    def _fake_write_ongoing(root, payload):
+    def _fake_write_ongoing(layout, payload, project=None):
         pass
 
     monkeypatch.setattr(exec_mod, "must_find_by_id", _fake_must_find)
@@ -299,7 +358,7 @@ def test_parallel_execute_all_succeed(tmp_path: Path, monkeypatch) -> None:
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=2)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=2)
     assert ok is True
     assert len(outcomes) == 3
     assert all(task_ok for _, task_ok in outcomes)
@@ -316,7 +375,7 @@ def test_parallel_execute_failure_propagates(tmp_path: Path, monkeypatch) -> Non
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=2)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=2)
     assert ok is False
     assert any(not task_ok for _, task_ok in outcomes)
 
@@ -333,7 +392,7 @@ def test_parallel_execute_concurrency(tmp_path: Path, monkeypatch) -> None:
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=3)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=3)
     assert ok is True
     # With a delay and 3 workers, max concurrent should be > 1
     assert executor._max_active > 1
@@ -351,6 +410,6 @@ def test_parallel_execute_serial_max_workers_1(tmp_path: Path, monkeypatch) -> N
     for tid in tasks:
         _mock_artifacts(monkeypatch, tid)
 
-    ok, outcomes = parallel_execute(tmp_path, config, executor, prepared, max_workers=1)
+    ok, outcomes = parallel_execute(WorkspaceLayout.from_config(tmp_path, {}), config, executor, prepared, max_workers=1)
     assert ok is True
     assert executor._max_active == 1

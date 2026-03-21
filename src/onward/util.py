@@ -92,9 +92,9 @@ def _normalize_acceptance(value: Any) -> list[str]:
     return [single] if single else []
 
 
-def _normalize_effort(value: Any) -> str:
+def _normalize_complexity(value: Any) -> str:
     raw = _clean_string(str(value)).lower()
-    return raw if raw in {"xs", "s", "m", "l", "xl"} else ""
+    return raw if raw in {"low", "medium", "high"} else ""
 
 
 def _as_str_list(value: Any) -> list[str]:
@@ -315,6 +315,6 @@ extract_markdown_list_items = _extract_markdown_list_items
 markdown_section = _markdown_section
 normalize_acceptance = _normalize_acceptance
 normalize_priority = _normalize_priority
-normalize_effort = _normalize_effort
+normalize_complexity = _normalize_complexity
 get_head_sha = _get_head_sha
 compute_files_changed = _compute_files_changed

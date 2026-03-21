@@ -70,6 +70,7 @@ def test_collect_leaf_commands_matches_known_set(leaf_commands: list[str]) -> No
         "doctor",
         "init",
         "list",
+        "migrate",
         "new chunk",
         "new plan",
         "new task",

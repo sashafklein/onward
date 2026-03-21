@@ -34,7 +34,7 @@ Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in depende
 
 ## Project flags and metadata
 
-- **`--project <key>`** on `list`, `report`, `next`, `tree`, etc. scopes views to one project stream. Use a stable key your team agrees on. **`onward tree`** (and the report’s **Active work tree** section) list **open** plans, **open / in_progress** chunks, and tasks in **open**, **in_progress**, or **failed** — not completed or canceled leaves.
+- **`--project <key>`** on `list`, `report`, `next`, `tree`, etc. scopes views to one project stream. Use a stable key your team agrees on. **When `roots` is configured** (multi-root workspace), `--project` is **required** for artifact commands (unless `default_project` is set in config). **`onward tree`** (and the report’s **Active work tree** section) list **open** plans, **open / in_progress** chunks, and tasks in **open**, **in_progress**, or **failed** — not completed or canceled leaves.
 - **`--blocking`** — tasks/chunks that block others (good for “what stops the train?”).
 - **`--human`** — work that needs a human decision; agents should not silently steamroll these.
 
@@ -49,7 +49,7 @@ When you discover new work during a run, **create a new task** (with `depends_on
 
 ## Sync (optional)
 
-If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you can mirror `.onward/plans/` to another checkout with **`onward sync status`**, **`onward sync push`**, **`onward sync pull`**. Default **`local`** mode has no remote target — **`onward sync status`** still succeeds (exit 0); **`onward sync push`** / **`pull`** exit **1** with a hint (not a silent no-op). Full semantics: [README.md](../README.md) (sync section) and [INSTALLATION.md](../INSTALLATION.md).
+If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you can mirror your plans directory to another checkout with **`onward sync status`**, **`onward sync push`**, **`onward sync pull`**. Default **`local`** mode has no remote target — **`onward sync status`** still succeeds (exit 0); **`onward sync push`** / **`pull`** exit **1** with a hint (not a silent no-op). Full semantics: [README.md](../README.md) (sync section) and [INSTALLATION.md](../INSTALLATION.md).
 
 ---
 
@@ -57,9 +57,9 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ### 1. Planning and todos only in chat
 
-**Symptom:** No files under `.onward/plans/`, or plans exist but status never updates.
+**Symptom:** No artifact files in the configured root (default `.onward/`, may be customized), or plans exist but status never updates.
 
-**Recovery:** Run **`onward init`** / **`onward doctor`**. Create or update artifacts with **`onward new plan`**, **`onward new chunk`**, **`onward new task`**. Paste the repo’s **AGENTS.md** / install instructions so the agent must use Onward as the sole plan store.
+**Recovery:** Run **`onward init`** / **`onward doctor`**. Create or update artifacts with **`onward new plan`**, **`onward new chunk`**, **`onward new task`**. Paste the repo’s **AGENTS.md** / install instructions so the agent must use Onward as the sole plan store. Check `.onward.config.yaml` for the configured `root` or `roots` to see where artifacts should live.
 
 ---
 
@@ -71,11 +71,11 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ---
 
-### 3. Treating **`onward split`** as always model-backed
+### 3. Assuming **`onward split`** is purely local
 
-**Symptom:** Expecting an LLM to decompose the plan during `split`; surprise when behavior is purely local.
+**Symptom:** Running `split` without `executor.enabled: true` (or without a working executor command) and getting an error — or expecting offline behavior without `--heuristic`.
 
-**Recovery:** Read [CAPABILITIES.md](CAPABILITIES.md). **`onward split`** is **heuristic** (markdown sections → candidates) in the default path; it does **not** call the executor. Use **`onward review-plan`** when you want model-backed scrutiny of a plan. For decomposition, edit artifacts or use split as a starting point and refine files.
+**Recovery:** Read [CAPABILITIES.md](CAPABILITIES.md). **`onward split`** is **executor-backed by default**: it sends a `type: split` payload to the executor and expects JSON back. For offline decomposition (no model call), use **`onward split --heuristic`**, which derives candidates from markdown sections locally. In tests, set **`TRAIN_SPLIT_RESPONSE`** to a JSON string.
 
 ---
 
@@ -87,7 +87,7 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ---
 
-### 5. Ignoring **`human`** and **`blocked_by`**
+### 5. Ignoring **`human`** and **`depends_on`**
 
 **Symptom:** Agents pick tasks that need a person, or run work out of dependency order.
 
@@ -107,13 +107,13 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 **Symptom:** Next session or agent has no snapshot of status or recent runs.
 
-**Recovery:** Run **`onward report`** (and commit `.onward/plans/` if your team tracks plans in git). Make **`report`** the last step in your operating loop.
+**Recovery:** Run **`onward report`** (and commit your plans directory if your team tracks plans in git). Make **`report`** the last step in your operating loop.
 
 ---
 
 ## Executor preflight
 
-When `executor.enabled` is true, **`onward work`**, **`onward review-plan`**, and the **`post_chunk_markdown`** hook verify that `executor.command` exists on `PATH` or as an executable file path **before** starting a run. If it fails, fix `executor.command`, install the binary, or for automated tests use command **`true`**. A reference router ships at **`scripts/onward-exec`**. **`onward split`** does not use the executor today, so it does not run this check. Details: [CAPABILITIES.md](CAPABILITIES.md).
+When `executor.enabled` is true, **`onward work`**, **`onward review-plan`**, and the **`post_chunk_markdown`** hook verify that `executor.command` exists on `PATH` or as an executable file path **before** starting a run. The **built-in** executor (default) skips this check and verifies `claude` / `cursor` at run time instead. If preflight fails, fix `executor.command`, install the binary, or for automated tests use command **`true`**. A reference subprocess router ships at **`scripts/onward-exec`** for custom setups. Details: [CAPABILITIES.md](CAPABILITIES.md).
 
 ## Related docs
 
