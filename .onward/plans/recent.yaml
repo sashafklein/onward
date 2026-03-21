@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T20:56:34Z"
+generated_at: "2026-03-21T20:57:23Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -813,5 +813,17 @@ completed:
   - "TASK-053"
   - "TASK-055"
   - "TASK-056"
+  human: false
+  effort: "s"
+- id: "TASK-058"
+  title: "split.py: update normalize_effort → normalize_complexity and metadata key"
+  status: "completed"
+  updated_at: "2026-03-21T20:57:21Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-058-split-py-update-normalize-effort-normalize-complexity-and-metadata-key.md"
+  plan: "PLAN-007"
+  chunk: "CHUNK-016"
+  project: ""
+  depends_on:
+  - "TASK-053"
   human: false
   effort: "s"

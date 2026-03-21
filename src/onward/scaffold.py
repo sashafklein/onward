@@ -171,7 +171,7 @@ hooks:
 
 # Notes
 
-<!-- Optional. Frontmatter may include optional ``effort: xs|s|m|l|xl`` and ``estimated_files: <int>`` for chunks. -->
+<!-- Optional. Frontmatter may include optional ``complexity: low|medium|high`` and ``estimated_files: <int>`` for chunks. -->
 """,
         f"{artifact_root}/templates/task.md": """# Context
 
@@ -201,7 +201,7 @@ hooks:
 
 <!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
 
-<!-- Frontmatter may include optional ``effort: xs|s|m|l|xl``. -->
+<!-- Frontmatter may include optional ``complexity: low|medium|high``. -->
 """,
         f"{artifact_root}/templates/run.md": """# Execution summary
 
@@ -278,10 +278,10 @@ Rules: Return at least one chunk. Keep titles short and concrete. JSON only on s
 - **files** must list the paths you expect to read or edit (array of strings). Use [] only when truly unknown; prefer best guesses.
 - **acceptance** must be binary and verifiable (tests, CLI output, behavior).
 
-## Models and effort
+## Models and complexity
 
 - **model**: haiku for trivial edits; sonnet for typical work; opus for deep refactors or cross-cutting design.
-- **effort**: xs | s | m | l | xl — rough size (optional but preferred).
+- **complexity**: low | medium | high — rough size (optional but preferred).
 
 ## Ordering within the chunk
 
@@ -291,11 +291,11 @@ Rules: Return at least one chunk. Keep titles short and concrete. JSON only on s
 
 Output a single JSON object (no markdown code fences, no prose outside JSON). Required top-level key: tasks (non-empty array).
 
-Each element of tasks must include: title (string), description (string), acceptance (array of strings), model (string), human (boolean), depends_on_index (array of integers), files (array of strings), effort (string: xs|s|m|l|xl or empty string if unknown).
+Each element of tasks must include: title (string), description (string), acceptance (array of strings), model (string), human (boolean), depends_on_index (array of integers), files (array of strings), complexity (string: low|medium|high or empty string if unknown).
 
 Illustrative minimal object (structure only):
 
-{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
+{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet","human":false,"depends_on_index":[],"files":["src/foo.py"],"complexity":"medium"}]}
 
 Rules: Return at least one task. Each task needs at least one acceptance criterion. JSON only on stdout.
 """,

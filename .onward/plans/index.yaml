@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T20:56:34Z"
-index_version: 301
+generated_at: "2026-03-21T20:57:23Z"
+index_version: 304
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -850,8 +850,8 @@ tasks:
   effort: "s"
 - id: "TASK-058"
   title: "split.py: update normalize_effort → normalize_complexity and metadata key"
-  status: "in_progress"
-  updated_at: "2026-03-21T20:56:34Z"
+  status: "completed"
+  updated_at: "2026-03-21T20:57:21Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-058-split-py-update-normalize-effort-normalize-complexity-and-metadata-key.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"
@@ -862,8 +862,8 @@ tasks:
   effort: "s"
 - id: "TASK-059"
   title: "scaffold.py: update templates and split-chunk prompt for complexity"
-  status: "open"
-  updated_at: "2026-03-21T20:23:52Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T20:57:23Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-059-scaffold-py-update-templates-and-split-chunk-prompt-for-complexity.md"
   plan: "PLAN-007"
   chunk: "CHUNK-016"
