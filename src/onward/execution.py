@@ -1227,7 +1227,7 @@ def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, A
             return 1
 
         if not sequential and max_parallel == 1:
-            ready_again, all_resolved_again = ordered_ready_chunk_tasks(root, chunk_id)
+            ready_again, all_resolved_again = ordered_ready_chunk_tasks(layout, chunk_id, project)
             if ready_again:
                 print(
                     f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
@@ -1238,23 +1238,23 @@ def _work_chunk_loop(layout: WorkspaceLayout, chunk_id: str, config: dict[str, A
                 print(f"Chunk {chunk_id} has unresolved task dependencies")
                 return 1
 
-    nonterminal = chunk_has_nonterminal_tasks(root, chunk_id)
+    nonterminal = chunk_has_nonterminal_tasks(layout, chunk_id, project)
     if nonterminal:
         print(
             f"Chunk {chunk_id} still has non-terminal tasks: {', '.join(nonterminal)}"
         )
         return 1
 
-    refreshed_chunk = must_find_by_id(root, chunk_id)
+    refreshed_chunk = must_find_by_id(layout, chunk_id, project)
     if str(refreshed_chunk.metadata.get("status", "")) == "completed":
         print(f"Chunk {chunk_id} completed")
         return 0
-    hook_ok, hook_error = run_chunk_post_markdown_hook(root, refreshed_chunk)
+    hook_ok, hook_error = run_chunk_post_markdown_hook(layout, refreshed_chunk, project)
     if not hook_ok:
         print(f"Chunk {chunk_id} post hook failed: {hook_error}")
         return 1
     if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        update_artifact_status(root, refreshed_chunk, "completed")
+        update_artifact_status(layout, refreshed_chunk, "completed", project)
     print(f"Chunk {chunk_id} completed")
     return 0
 

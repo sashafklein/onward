@@ -25,7 +25,7 @@ from onward.util import (
     now_iso,
     slugify,
 )
-from onward.config import is_executor_enabled
+from onward.config import is_executor_enabled, WorkspaceLayout
 from onward.executor_payload import with_schema_version
 from onward.preflight import preflight_executor_command
 
@@ -139,6 +139,8 @@ def _run_split_executor(
     artifact: Artifact,
     prompt_name: str,
     split_model: str,
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
 ) -> str:
     preflight_err = preflight_executor_command(config)
     if preflight_err:
@@ -157,7 +159,13 @@ def _run_split_executor(
         command_args = []
     cmd = [command, *[str(item) for item in command_args]]
 
-    prompt_path = root / ".onward" / "prompts" / prompt_name
+    if layout is None:
+        layout = WorkspaceLayout(
+            workspace_root=root,
+            roots={None: root / ".onward"},
+            default_project=None,
+        )
+    prompt_path = layout.prompts_dir(project) / prompt_name
     if not prompt_path.is_file():
         raise ValueError(f"split prompt not found: {prompt_path.relative_to(root)}")
 
@@ -212,6 +220,8 @@ def run_split_model(
     *,
     heuristic: bool,
     config: dict[str, Any],
+    layout: WorkspaceLayout | None = None,
+    project: str | None = None,
 ) -> str:
     env_override = str(os.environ.get("TRAIN_SPLIT_RESPONSE", "")).strip()
     if env_override:
@@ -222,7 +232,7 @@ def run_split_model(
         else:
             payload = _heuristic_split_chunk_payload(artifact, default_task_model)
         return json.dumps(payload, indent=2)
-    return _run_split_executor(root, config, artifact, prompt_name, split_model)
+    return _run_split_executor(root, config, artifact, prompt_name, split_model, layout, project)
 
 
 def _extract_json_object(raw: str) -> str:

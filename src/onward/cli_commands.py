@@ -331,11 +331,15 @@ def cmd_sync_pull(args: argparse.Namespace) -> int:
 
 def cmd_new_plan(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    plan_id = next_id(root, "PLAN")
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = (args.project or "").strip() or None
+
+    plan_id = next_id(layout, "PLAN", project)
     now = now_iso()
     slug = slugify(args.title)
 
-    plan_dir = root / ".onward/plans" / f"{plan_id}-{slug}"
+    plan_dir = layout.plans_dir(project) / f"{plan_id}-{slug}"
     plan_dir.mkdir(parents=True, exist_ok=False)
     (plan_dir / "chunks").mkdir(parents=True, exist_ok=True)
     (plan_dir / "tasks").mkdir(parents=True, exist_ok=True)
@@ -353,11 +357,11 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
         "updated_at": now,
     }
 
-    body = load_artifact_template(root, "plan")
+    body = load_artifact_template(root, "plan", layout, project)
     target = plan_dir / "plan.md"
     target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     target_rel = str(target.relative_to(root))
     print(f"Created {plan_id} at {target_rel}")
     print(
@@ -368,23 +372,25 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
 
 def cmd_new_chunk(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
     plan_id = args.plan_id
 
-    plan_art = find_by_id(root, plan_id)
+    plan_art = find_by_id(layout, plan_id)
     if not plan_art:
         raise ValueError(f"plan not found: {plan_id}")
     if str(plan_art.metadata.get("type", "")) != "plan":
         raise ValueError(f"{plan_id} is not a plan")
 
-    plan_dir = find_plan_dir(root, plan_id)
-    chunk_id = next_id(root, "CHUNK")
-    now = now_iso()
-    slug = slugify(args.title)
-
     if args.project is None:
         proj = artifact_project(plan_art)
     else:
         proj = args.project
+
+    plan_dir = find_plan_dir(layout, plan_id, proj)
+    chunk_id = next_id(layout, "CHUNK", proj)
+    now = now_iso()
+    slug = slugify(args.title)
 
     metadata = {
         "id": chunk_id,
@@ -409,11 +415,11 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
     if getattr(args, "estimated_files", None) is not None:
         metadata["estimated_files"] = int(args.estimated_files)
 
-    body = load_artifact_template(root, "chunk")
+    body = load_artifact_template(root, "chunk", layout, proj)
     target = plan_dir / "chunks" / f"{chunk_id}-{slug}.md"
     target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     print(f"Created {chunk_id} at {target.relative_to(root)}")
     return 0
 
@@ -423,15 +429,23 @@ _BATCH_DEP_INDEX = re.compile(r"^\$(\d+)$")
 
 def cmd_new_task_batch(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    chunk = find_by_id(root, args.chunk_id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    chunk = find_by_id(layout, args.chunk_id)
     if not chunk:
         raise ValueError(f"chunk not found: {args.chunk_id}")
     if str(chunk.metadata.get("type", "")) != "chunk":
         raise ValueError(f"{args.chunk_id} is not a chunk")
 
+    if args.project is None:
+        base_project = artifact_project(chunk)
+    else:
+        base_project = args.project
+
     plan_id = str(chunk.metadata["plan"])
     chunk_id = str(chunk.metadata["id"])
-    plan_dir = find_plan_dir(root, plan_id)
+    plan_dir = find_plan_dir(layout, plan_id, base_project)
 
     batch_path = Path(args.batch).expanduser()
     if not batch_path.is_file():
@@ -453,14 +467,8 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
         if not title or not desc:
             raise ValueError(f"batch entry {i} must have non-empty title and description")
 
-    task_ids = next_ids(root, "TASK", len(raw))
-
-    if args.project is None:
-        base_project = artifact_project(chunk)
-    else:
-        base_project = args.project
-
-    body_template = load_artifact_template(root, "task")
+    task_ids = next_ids(layout, "TASK", len(raw), base_project)
+    body_template = load_artifact_template(root, "task", layout, base_project)
     writes: list[tuple[str, Path, str]] = []
 
     for i, entry in enumerate(raw):
@@ -535,7 +543,7 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
 
     for _tid, path, content in writes:
         path.write_text(content, encoding="utf-8")
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     for tid, path, _ in writes:
         print(f"Created {tid} at {path.relative_to(root)}")
     return 0
@@ -549,23 +557,27 @@ def cmd_new_task(args: argparse.Namespace) -> int:
     if not args.title:
         raise ValueError("task title is required unless --batch is used")
 
-    chunk = find_by_id(root, args.chunk_id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    chunk = find_by_id(layout, args.chunk_id)
     if not chunk:
         raise ValueError(f"chunk not found: {args.chunk_id}")
     if chunk.metadata.get("type") != "chunk":
         raise ValueError(f"{args.chunk_id} is not a chunk")
 
-    plan_id = str(chunk.metadata["plan"])
-    chunk_id = str(chunk.metadata["id"])
-    task_id = next_id(root, "TASK")
-    now = now_iso()
-    slug = slugify(args.title)
-
-    plan_dir = find_plan_dir(root, plan_id)
     if args.project is None:
         proj = artifact_project(chunk)
     else:
         proj = args.project
+
+    plan_id = str(chunk.metadata["plan"])
+    chunk_id = str(chunk.metadata["id"])
+    task_id = next_id(layout, "TASK", proj)
+    now = now_iso()
+    slug = slugify(args.title)
+
+    plan_dir = find_plan_dir(layout, plan_id, proj)
 
     metadata = {
         "id": task_id,
@@ -593,11 +605,11 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         else:
             print("Warning: invalid --effort value (expected xs|s|m|l|xl); leaving unset")
 
-    body = load_artifact_template(root, "task")
+    body = load_artifact_template(root, "task", layout, proj)
     target = plan_dir / "tasks" / f"{task_id}-{slug}.md"
     target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     print(f"Created {task_id} at {target.relative_to(root)}")
     return 0
 
@@ -814,7 +826,9 @@ def _print_task_show_extras(root: Path, artifact: Artifact) -> None:
 
 def cmd_show(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = find_by_id(root, args.id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    artifact = find_by_id(layout, args.id)
     if not artifact:
         print(f"Artifact not found: {args.id}")
         return 1
@@ -862,16 +876,19 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 def cmd_note(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    artifact = must_find_by_id(layout, args.id)
     artifact_id = str(artifact.metadata.get("id", ""))
+    project = artifact_project(artifact)
 
     message = getattr(args, "message", None)
     if message:
-        path = append_note(root, artifact, message)
+        path = append_note(layout, artifact, message, project)
         print(f"Note added to {artifact_id} at {path.relative_to(root)}")
         return 0
 
-    notes = read_notes(root, artifact_id)
+    notes = read_notes(layout, artifact_id, project)
     if not notes.strip():
         print(f"No notes for {artifact_id}.")
         return 0
@@ -883,14 +900,16 @@ def cmd_note(args: argparse.Namespace) -> int:
 
 def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    artifact = must_find_by_id(layout, args.id)
 
     current = str(artifact.metadata.get("status", ""))
     artifact.metadata["status"] = transition_status(current, action)
     artifact.metadata["updated_at"] = now_iso()
     write_artifact(artifact)
 
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     artifact_id = str(artifact.metadata.get("id", ""))
     print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
 
@@ -918,7 +937,9 @@ def cmd_cancel(args: argparse.Namespace) -> int:
 
 def cmd_retry(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    artifact = must_find_by_id(layout, args.id)
     if str(artifact.metadata.get("type", "")) != "task":
         raise ValueError("onward retry only applies to tasks (TASK-###)")
     current = str(artifact.metadata.get("status", ""))
@@ -926,7 +947,7 @@ def cmd_retry(args: argparse.Namespace) -> int:
     artifact.metadata["run_count"] = 0
     artifact.metadata["updated_at"] = now_iso()
     write_artifact(artifact)
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     artifact_id = str(artifact.metadata.get("id", ""))
     print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
     return 0
@@ -934,12 +955,16 @@ def cmd_retry(args: argparse.Namespace) -> int:
 
 def cmd_archive(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.plan_id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    artifact = must_find_by_id(layout, args.plan_id)
     if artifact.metadata.get("type") != "plan":
         raise ValueError(f"{args.plan_id} is not a plan")
 
     plan_dir = find_plan_dir(root, str(artifact.metadata["id"]))
-    archive_dir = root / ".onward/plans/.archive"
+    project = artifact_project(artifact)
+    archive_dir = layout.archive_dir(project)
     archive_dir.mkdir(parents=True, exist_ok=True)
     target = archive_dir / plan_dir.name
 
@@ -947,7 +972,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
         raise ValueError(f"archive target already exists: {target.relative_to(root)}")
 
     plan_dir.rename(target)
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
     print(f"Archived {args.plan_id} -> {target.relative_to(root)}")
     return 0
 
@@ -955,12 +980,16 @@ def cmd_archive(args: argparse.Namespace) -> int:
 def cmd_review_plan(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     require_workspace(root)
-    plan = must_find_by_id(root, args.plan_id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    plan = must_find_by_id(layout, args.plan_id)
     plan_type = str(plan.metadata.get("type", ""))
     if plan_type != "plan":
         raise ValueError(f"{args.plan_id} is not a plan (type={plan_type})")
 
-    config = load_workspace_config(root)
+    project = artifact_project(plan)
+
     slots, slot_err = build_plan_review_slots(config)
     if slot_err:
         raise ValueError(slot_err)
@@ -974,7 +1003,7 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
                 "no reviewers match --reviewer (labels are exact): " + ", ".join(sorted(wanted))
             )
 
-    prompt_path = root / ".onward/prompts/review-plan.md"
+    prompt_path = layout.prompts_dir(project) / "review-plan.md"
     if prompt_path.exists():
         prompt = prompt_path.read_text(encoding="utf-8")
     else:
@@ -1003,7 +1032,7 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
                 continue
             is_last = try_idx == n_tries
             ok, review_path = execute_plan_review(
-                root,
+                layout,
                 plan,
                 tri.model,
                 slot.label,
@@ -1011,6 +1040,7 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
                 executor_command=tri.executor,
                 executor_args=list(tri.executor_args),
                 emit_errors=is_last,
+                project=project,
             )
             if ok:
                 ok_slot = True
@@ -1064,11 +1094,12 @@ def _plan_chunks(root: Path, plan_id: str) -> list[Artifact]:
     return sorted(chunks, key=lambda a: str(a.metadata.get("id", "")))
 
 
-def _work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
-    return work_chunk(root, chunk, config)
+def _work_chunk(layout: WorkspaceLayout, chunk: Artifact, config: dict[str, Any], project: str | None = None) -> int:
+    return work_chunk(layout, chunk, config, project)
 
 
-def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
+def _work_plan(layout: WorkspaceLayout, plan: Artifact, config: dict[str, Any], project: str | None = None) -> int:
+    root = layout.workspace_root
     plan_id = str(plan.metadata.get("id", ""))
     st = str(plan.metadata.get("status", ""))
     if st == "completed":
@@ -1081,18 +1112,18 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
         return 0
 
     if st in {"open", "in_progress"}:
-        update_artifact_status(root, plan, "in_progress")
+        update_artifact_status(layout, plan, "in_progress", project)
 
     for c in chunks:
         cid = str(c.metadata.get("id", ""))
         if str(c.metadata.get("status", "")) == "completed":
-            bad = chunk_has_nonterminal_tasks(root, cid)
+            bad = chunk_has_nonterminal_tasks(layout, cid, project)
             if bad:
                 print(
                     f"Chunk {cid} was marked completed but has non-terminal tasks: "
                     f"{', '.join(bad)} — reopening chunk"
                 )
-                update_artifact_status(root, must_find_by_id(root, cid), "in_progress")
+                update_artifact_status(layout, must_find_by_id(layout, cid), "in_progress", project)
 
     chunks = _plan_chunks(root, plan_id)
     pending = [
@@ -1101,9 +1132,9 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
         if str(c.metadata.get("status", "")) not in {"completed", "canceled"}
     ]
     if not pending:
-        refreshed_plan = must_find_by_id(root, plan_id)
-        update_artifact_status(root, refreshed_plan, "completed")
-        _, warnings = finalize_chunks_all_tasks_terminal(root)
+        refreshed_plan = must_find_by_id(layout, plan_id)
+        update_artifact_status(layout, refreshed_plan, "completed", project)
+        _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
         for w in warnings:
             print(w)
         n_tasks = sum(
@@ -1121,7 +1152,7 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
         ready = [
             cid
             for cid in pending
-            if _chunk_depends_satisfied(must_find_by_id(root, cid), status_by_id)
+            if _chunk_depends_satisfied(must_find_by_id(layout, cid), status_by_id)
         ]
         if not ready:
             print(
@@ -1129,7 +1160,7 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
             )
             return 1
         cid = min(ready)
-        chunk_art = must_find_by_id(root, cid)
+        chunk_art = must_find_by_id(layout, cid)
         chunk_claimed = [
             str(a.metadata.get("id", ""))
             for a in collect_artifacts(root)
@@ -1138,19 +1169,19 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
             and str(a.metadata.get("status", "")) in {"open", "in_progress"}
         ]
         plan_claim_id = f"CLAIM-{run_timestamp()}-{cid}"
-        register_claim(root, plan_claim_id, cid, "plan", chunk_claimed, os.getpid())
+        register_claim(layout, plan_claim_id, cid, "plan", chunk_claimed, os.getpid(), project)
         try:
-            code = _work_chunk(root, chunk_art, config)
+            code = _work_chunk(layout, chunk_art, config, project)
         finally:
-            release_claim(root, plan_claim_id)
+            release_claim(layout, plan_claim_id, project)
         if code != 0:
             print(f"Stopping plan work for {plan_id} after chunk {cid} failure")
             return 1
         pending.remove(cid)
 
-    refreshed_plan = must_find_by_id(root, plan_id)
-    update_artifact_status(root, refreshed_plan, "completed")
-    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    refreshed_plan = must_find_by_id(layout, plan_id)
+    update_artifact_status(layout, refreshed_plan, "completed", project)
+    _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
     for w in warnings:
         print(w)
     n_tasks = sum(
@@ -1166,47 +1197,54 @@ def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
 
 def cmd_work(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    artifact = must_find_by_id(layout, args.id)
     artifact_type = str(artifact.metadata.get("type", ""))
+    project = artifact_project(artifact)
+
     if artifact_type == "task":
-        ok, run_id = work_task(root, artifact)
+        ok, run_id = work_task(layout, artifact, project)
         if run_id:
             print(f"Run {run_id}: {'completed' if ok else 'failed'}")
         else:
             print(f"{args.id} already completed")
         if ok and run_id and not getattr(args, "no_follow_ups", False):
-            rec = collect_runs_for_target(root, args.id, limit=1)
+            rec = collect_runs_for_target(layout, args.id, limit=1, project=project)
             run_rec = rec[0] if rec else {}
             tr = run_rec.get("task_result") or {}
             fus = tr.get("follow_ups") or []
             if isinstance(fus, list) and fus:
-                parent = must_find_by_id(root, args.id)
-                created, fu_warnings = create_follow_up_tasks(root, parent, fus)
+                parent = must_find_by_id(layout, args.id)
+                created, fu_warnings = create_follow_up_tasks(layout, parent, fus, project)
                 for w in fu_warnings:
                     print(f"Warning: {w}")
                 for cid in created:
                     print(f"Created follow-up task {cid}")
         if ok:
-            _, warnings = finalize_chunks_all_tasks_terminal(root)
+            _, warnings = finalize_chunks_all_tasks_terminal(layout, project)
             for w in warnings:
                 print(w)
         return 0 if ok else 1
-    config = load_workspace_config(root)
     if artifact_type == "plan":
-        return _work_plan(root, artifact, config)
+        return _work_plan(layout, artifact, config, project)
     if artifact_type != "chunk":
         raise ValueError(f"{args.id} is not a task, chunk, or plan")
-    return _work_chunk(root, artifact, config)
+    return _work_chunk(layout, artifact, config, project)
 
 
 def cmd_split(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifact = must_find_by_id(root, args.id)
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    artifact = must_find_by_id(layout, args.id)
     artifact_type = str(artifact.metadata.get("type", ""))
     if artifact_type not in {"plan", "chunk"}:
         raise ValueError(f"{args.id} is not splittable (expected PLAN-* or CHUNK-*)")
 
-    config = load_workspace_config(root)
+    project = artifact_project(artifact)
+
     default_model = model_setting(config, "default", "opus-latest")
     split_model = clean_string(args.model) or model_setting(config, "split_default", "") or default_model
     task_default_model = model_setting(config, "task_default", "sonnet-4-6")
@@ -1220,6 +1258,8 @@ def cmd_split(args: argparse.Namespace) -> int:
         task_default_model,
         heuristic=bool(getattr(args, "heuristic", False)),
         config=config,
+        layout=layout,
+        project=project,
     )
 
     if artifact_type == "plan":
@@ -1252,8 +1292,9 @@ def cmd_split(args: argparse.Namespace) -> int:
     if args.dry_run:
         split_kind = "plan→chunks" if artifact_type == "plan" else "chunk→tasks"
         child_type = "CHUNK" if artifact_type == "plan" else "TASK"
+        prompt_path = layout.prompts_dir(project) / prompt_name
         print(f"Split dry-run ({split_kind}) for {args.id} using model={split_model}")
-        print(f"Prompt: .onward/prompts/{prompt_name}")
+        print(f"Prompt: {prompt_path.relative_to(root)}")
         for artifact_id, path, _content in writes:
             print(f"{child_type}: create {artifact_id}\t{path.relative_to(root)}")
         return 0
@@ -1261,7 +1302,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     for _artifact_id, path, content in writes:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    regenerate_indexes(root)
+    regenerate_indexes(layout)
 
     for artifact_id, path, _content in writes:
         print(f"Created {artifact_id} at {path.relative_to(root)}")

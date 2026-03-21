@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T17:18:52Z"
+generated_at: "2026-03-21T17:21:43Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -276,6 +276,18 @@ completed:
   - "TASK-012"
   human: false
   effort: "l"
+- id: "TASK-020"
+  title: "Migrate config.py template/prompt resolution to use WorkspaceLayout"
+  status: "completed"
+  updated_at: "2026-03-21T17:21:42Z"
+  path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/tasks/TASK-020-migrate-config-py-template-prompt-resolution-to-use-workspacelayout.md"
+  plan: "PLAN-003"
+  chunk: "CHUNK-005"
+  project: ""
+  depends_on:
+  - "TASK-012"
+  human: false
+  effort: "s"
 - id: "TASK-032"
   title: "Add --md argument to report subparser in cli.py"
   status: "completed"

@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-005"
 project: ""
 title: "Migrate config.py template/prompt resolution to use WorkspaceLayout"
-status: "in_progress"
+status: "completed"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -16,8 +16,9 @@ depends_on:
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:31Z"
-updated_at: "2026-03-21T17:18:52Z"
+updated_at: "2026-03-21T17:21:42Z"
 run_count: 1
+last_run_status: "completed"
 ---
 
 # Context
