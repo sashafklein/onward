@@ -30,7 +30,7 @@ Verify:
 onward --help
 ```
 
-You should see the full command list: `init`, `doctor`, `new`, `list`, `report`, `next`, `start`, `complete`, `sync`, `work`, etc.
+You should see the full command list: `init`, `doctor`, `new`, `list`, `report`, `next`, `complete`, `sync`, `work`, etc.
 
 **`onward tree`** and **`onward report`** label each task with **`(A)`** (agent; default `human: false`) or **`(H)`** (human; `human: true`). `onward next` only suggests agent tasks. Run **`onward tree --help`** or **`onward report --help`** for the full legend.
 
@@ -84,7 +84,6 @@ This is your operating rhythm. Follow it relentlessly:
 ```
 onward report --project <key>   ← See the full picture
 onward next --project <key>     ← Pick the next thing
-onward start <ID>               ← Optional: mark in_progress
 onward work <TASK-ID>           ← Executor run; success → task completed
 onward report --project <key>   ← Session handoff
 ```
@@ -104,7 +103,6 @@ When the user describes a new initiative, feature, or project:
 ### During Execution
 
 - Prefer **`onward work <TASK-ID>`** for executor-backed tasks (status + run records).
-- Run **`onward start <ID>`** when you want **`in_progress`** before other steps (optional before `work`).
 - Run **`onward complete <ID>`** only when finishing **without** `work`.
 - If you discover follow-up work, blockers, or refactors: IMMEDIATELY create a new task
   with `onward new task <CHUNK-ID> "<title>"` and set `blocked_by`, `human`, and `project`
@@ -119,6 +117,7 @@ When the user describes a new initiative, feature, or project:
 - `onward list --blocking --human` — what human actions are blocking agent work
 - `onward tree --project <key>` — hierarchical view of all plans/chunks/tasks
 - `onward next --project <key>` — the single best thing to work on next
+- `onward ready --project <key>` — every task you could start now (grouped by plan/chunk)
 - `onward show <ID>` — full detail on any artifact (includes latest run info for tasks)
 - `onward recent` — recently completed artifacts and run records
 
@@ -171,9 +170,9 @@ onward note <ID> "message"
 onward note <ID>
 
 # Move work forward
-onward start <ID>
 onward complete <ID>
 onward cancel <ID>
+onward retry <ID>   # reset a failed task to open (after a failed onward work)
 onward work TASK-XXX          # execute a task (sends full context to executor)
 onward work CHUNK-XXX         # execute chunk tasks sequentially (dep-aware)
 
@@ -192,18 +191,17 @@ onward sync pull
 
 1. `onward report --project <key>` — orient yourself
 2. `onward next --project <key>` — select work
-3. `onward start <ID>` — optional: mark in_progress
-4. `onward work <TASK-ID>` — run executor (or use `complete` if closing without `work`)
-5. If follow-up work was discovered: `onward new task <CHUNK-ID> "<title>"`
-6. `onward report --project <key>` — hand off
-7. Return to step 1
+3. `onward work <TASK-ID>` — run executor (or use `complete` if closing without `work`)
+4. If follow-up work was discovered: `onward new task <CHUNK-ID> "<title>"`
+5. `onward report --project <key>` — hand off
+6. Return to step 1
 
 See **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)** for chunk runs and manual transitions.
 
 ## Rules
 
 - NEVER maintain plans outside of Onward artifacts
-- Use **`onward work`** for executor runs; use **`start` / `complete` / `cancel`** for visibility and non-executor closure (see LIFECYCLE doc)
+- Use **`onward work`** for executor runs; use **`complete` / `cancel` / `retry`** for non-executor closure (see LIFECYCLE doc)
 - ALWAYS capture discovered follow-up work as new Onward tasks immediately
 - ALWAYS run `onward report` at end of session to leave breadcrumbs for the next agent
 - Artifact files in `.onward/plans/` are the ONLY source of truth for project state
@@ -225,12 +223,11 @@ MANDATORY BEHAVIORS:
 - Create plans via `onward new plan` before any significant work
 - Decompose plans into chunks and tasks before implementation
 - Run `onward work <TASK-ID>` for executor-backed tasks (or `complete` when closing without `work`)
-- Optionally run `onward start <ID>` to mark in_progress before other steps
 - Capture ALL discovered follow-up work as new tasks immediately
 - End every session with `onward report` to preserve state for continuity
 - NEVER maintain planning state in chat, scratch files, or memory alone
 
-KEY COMMANDS: onward report, onward next, onward new, onward start, onward complete,
+KEY COMMANDS: onward report, onward next, onward new, onward complete, onward retry,
 onward list, onward tree, onward show, onward split, onward review-plan, onward note,
 onward sync (status|push|pull) when using branch/repo sync mode
 ```
@@ -245,8 +242,8 @@ If you need a minimal, dense reference to paste anywhere:
 ONWARD QUICK-REF:
   report   → see everything          next     → what to do now
   new plan → start initiative         new chunk/task → decompose
-  split    → heuristic decompose      review-plan → model-backed review
-  note     → scratch pad               start    → mark in_progress (optional)
+  split    → AI decompose (or --heuristic)  review-plan → model-backed review
+  note     → scratch pad
   work     → executor + status        complete → close without work / manual done
   cancel   → abandon work
   list     → filter artifacts         tree     → hierarchy view
@@ -254,7 +251,7 @@ ONWARD QUICK-REF:
   recent   → what just finished       onward archive → retire a plan
   sync     → mirror .onward/plans to branch or second repo (optional)
 
-WORKFLOW: report → next → (start?) → work → report (use complete when not using work; see docs/LIFECYCLE.md)
+WORKFLOW: report → next → work → report (use complete when not using work; see docs/LIFECYCLE.md)
 FLAGS: --project <key>  --blocking  --human  --no-color
 ```
 
@@ -293,7 +290,6 @@ onward tree --project myproject
 
 # 8. Start working
 onward next --project myproject
-# Optional: onward start TASK-001
 onward work TASK-001   # executor + hooks; on success task is completed
 # Or, if you closed the work without the executor: onward complete TASK-001
 
@@ -422,7 +418,7 @@ at execution time, so updating Onward automatically picks up new model versions.
 
 **Commands work but agent isn't using Onward** — Your agent configuration (AGENTS.md, SKILL.md, system prompt) is missing or the Onward instructions aren't prominent enough. Move them to the TOP of the file. Agents read top-down and prioritize early instructions.
 
-**Plans feel too big** — Use `onward split` to break plans into chunks and chunks into tasks (**heuristic** from your markdown sections today — not an LLM call; see **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)**). The goal is tasks small enough that one agent can finish in one session.
+**Plans feel too big** — Use `onward split` to break plans into chunks and chunks into tasks (executor-backed by default; **`--heuristic`** for offline markdown-only split; see **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)**). The goal is tasks small enough that one agent can finish in one session.
 
 **Lost track of what's happening** — `onward report` is your friend. Run it early, run it often, run it at the end of every session.
 

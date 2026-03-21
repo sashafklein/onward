@@ -4,15 +4,15 @@ type: "chunk"
 plan: "PLAN-011"
 project: ""
 title: "Infrastructure cleanup"
-status: "open"
+status: "completed"
 description: "Replace custom YAML parser with PyYAML, move model resolution to executor, clean up hooks, create FUTURE_ROADMAP."
 priority: "low"
 model: "sonnet-latest"
 estimated_files: 18
 depends_on:
-  - "CHUNK-008"
+- "CHUNK-008"
 created_at: "2026-03-20T15:52:26Z"
-updated_at: "2026-03-20T15:52:26Z"
+updated_at: "2026-03-20T21:03:13Z"
 ---
 
 # Summary

@@ -5,17 +5,18 @@ plan: "PLAN-011"
 chunk: "CHUNK-011"
 project: ""
 title: "Auto-create follow-up tasks from executor results"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
 executor: "ralph"
-depends_on: ["TASK-041"]
+depends_on:
+  - "TASK-041"
 blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T16:01:06Z"
-updated_at: "2026-03-20T16:01:06Z"
+updated_at: "2026-03-20T18:22:59Z"
 ---
 
 # Context

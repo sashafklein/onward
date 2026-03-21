@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-009"
 project: ""
 title: "Unify depends_on and blocked_by"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T16:01:03Z"
-updated_at: "2026-03-20T16:01:03Z"
+updated_at: "2026-03-20T17:59:26Z"
 ---
 
 # Context

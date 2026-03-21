@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-011"
 project: ""
 title: "Scale and ergonomics"
-status: "open"
+status: "completed"
 description: "Batch task creation, onward ready, effort metadata, multi-project filtering, index-based fast reads."
 priority: "medium"
 model: "sonnet-latest"
@@ -12,7 +12,7 @@ estimated_files: 20
 depends_on:
   - "CHUNK-008"
 created_at: "2026-03-20T15:52:26Z"
-updated_at: "2026-03-20T15:52:26Z"
+updated_at: "2026-03-20T20:10:49Z"
 ---
 
 # Summary
@@ -47,8 +47,8 @@ Add the operations needed to work at scale: batch task creation for rapid enqueu
 
 # Completion criteria
 
-- [ ] `onward new task CHUNK-X --batch tasks.json` creates N tasks from JSON array
-- [ ] `onward ready` shows actionable work across all plans, grouped by project
-- [ ] `effort` metadata is accepted and displayed in report/tree
-- [ ] `--project` works on list, next, ready, report, tree
-- [ ] index.yaml is read by list/next/ready for fast path
+- [x] `onward new task CHUNK-X --batch tasks.json` creates N tasks from JSON array
+- [x] `onward ready` shows actionable work across all plans, grouped by project
+- [x] `effort` metadata is accepted and displayed in report/tree
+- [x] `--project` works on list, next, ready, report, tree
+- [x] index.yaml is read by list/next/ready for fast path

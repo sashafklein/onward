@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-013"
 project: ""
 title: "Move model resolution to executor side"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T16:01:10Z"
-updated_at: "2026-03-20T16:01:10Z"
+updated_at: "2026-03-20T21:03:12Z"
 ---
 
 # Context

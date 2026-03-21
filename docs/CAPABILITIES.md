@@ -1,51 +1,67 @@
 # Capability truth table
 
-Short reference for **what is model-backed**, what is **local/heuristic**, and what exists only for **tests**. Keeps docs and mental models aligned with `src/onward/` (PLAN-010).
+Short reference for **what is model-backed**, what is **local/heuristic**, and what exists only for **tests**. Keeps docs and mental models aligned with `src/onward/`.
 
-## Executor-backed (subprocess + stdin JSON)
+## Executor-backed
 
-These invoke the command from `executor.command` (and `executor.args`) when `executor.enabled` is true, subject to each command’s checks:
+When `executor.enabled` is true, task work and split (non-heuristic) invoke an **executor implementation**:
+
+- **Built-in (default):** if `executor.command` is **absent**, empty, or the literal **`builtin`** (case-insensitive), Onward uses **`BuiltinExecutor`**. It builds prompts in Python, resolves **Claude Code** vs **Cursor agent** from the model string, and runs the CLI directly with **streamed** stdout/stderr to your terminal (and run logs). See [`executor_builtin.py`](../src/onward/executor_builtin.py) (`route_model_to_backend`).
+- **External subprocess:** if `executor.command` is set to any **other** string, Onward uses **`SubprocessExecutor`**: `[command, *args]` receives the same **stdin JSON** shape as before (`schema_version`, task payload, etc.). Output is captured for logs (not streamed interactively like the built-in path).
 
 **Strict task completion:** when `work.require_success_ack` is true, a successful **`onward work TASK-*`** requires a machine-readable JSON line on executor stdout/stderr (not exit 0 alone); see [WORK_HANDOFF.md](WORK_HANDOFF.md) and [schemas/onward-task-success-ack-v1.schema.json](schemas/onward-task-success-ack-v1.schema.json). The executor receives **`ONWARD_RUN_ID`** in its environment (matches stdin `run_id`).
 
-**Preflight:** before the first executor subprocess for `onward work`, `onward review-plan`, and `post_chunk_markdown`, Onward checks that the configured command is usable: a **bare name** must resolve via `PATH` (`shutil.which`); an **explicit path** must exist and be executable. Commands `true` and `false` skip the check so tests and minimal shells work without a real provider binary (including environments where `/usr/bin/true` is not how tests are configured). See [`preflight_executor_command`](../src/onward/preflight.py).
+**Preflight:** before executor-backed `onward work`, `onward review-plan`, and `post_chunk_markdown`, Onward checks the **configured command** when a subprocess executor is used: a **bare name** must resolve via `PATH` (`shutil.which`); an **explicit path** must exist and be executable. The **built-in** executor skips argv0 preflight (it checks `claude` / `cursor` at run time). Commands `true` and `false` skip the check so tests work. See [`preflight.py`](../src/onward/preflight.py).
 
 | Feature | Notes |
 | ------- | ----- |
-| `onward work TASK-*` | Full task payload + hooks; see [WORK_HANDOFF.md](WORK_HANDOFF.md). |
-| `onward work CHUNK-*` | Same per ready task; `post_chunk_markdown` hook after all tasks succeed. |
-| `onward work PLAN-*` | Runs each chunk in the plan in order (see [LIFECYCLE.md](LIFECYCLE.md)); same per-task behavior as chunk work. |
-| `onward review-plan` | One or more reviewer runs: default uses `review.double_review` + `models.review_default` / `models.default`, or an explicit matrix in `review.reviewers` (per-slot model, optional `command` / `args`, ordered `fallback`). Use `--reviewer LABEL` to run matching slots only (exact label). |
-| Markdown hooks | `pre_task_markdown`, `post_task_markdown`, `post_chunk_markdown` (shell hooks are **not** the executor). |
+| `onward work TASK-*` | Full task context + hooks; one `Executor.execute_task` (or one step of a one-item batch). |
+| `onward work CHUNK-*` | Collects **eligible ready tasks** for each **wave** (dependency order, `work.max_retries`, and `work.sequential_by_default`), then calls **`Executor.execute_batch`** once per wave. Tasks in a wave run **sequentially** through the batch iterator (pre-task shell → executor step → post hooks per task). After all waves succeed, **`post_chunk_markdown`** runs. See [LIFECYCLE.md](LIFECYCLE.md). |
+| `onward work PLAN-*` | Walks chunks like **`onward work CHUNK-*`** (batch per chunk wave). |
+| `onward review-plan` | One or more reviewer runs: default uses `review.double_review` + tiered models / `review.reviewers` matrix (per-slot model, optional `command` / `args`, ordered `fallback`). Use `--reviewer LABEL` for matching slots only. |
+| `onward split PLAN-*` / `CHUNK-*` | **Default:** `type: split` JSON on stdin; preflight like other executor-backed commands. **Override:** `--heuristic` — markdown-only (no executor). **Validation:** sizing/dependency checks; `--dry-run` / `--force`. |
+| Markdown hooks | `post_task_markdown`, `post_chunk_markdown` (shell hooks are **not** the executor). Chunk/task shell hooks: `pre_chunk_shell`, `pre_task_shell`, `post_task_shell`. |
 
 If `executor.enabled` is false, executor-backed steps are skipped or fail with a clear message (shell hooks may still run).
+
+## Model configuration (tiered)
+
+`models` in `.onward.config.yaml` uses **tier keys**: `default`, `high`, `medium`, `low`, `split`, `review_1`, `review_2`. Empty or null tier values participate in **automatic fallback chains** (e.g. `low` → `medium` → `high` → `default`). Resolution helpers live in [`config.py`](../src/onward/config.py) (`resolve_model_for_tier`, `resolve_model_for_task`).
+
+**Task model resolution (in order):**
+
+1. Non-empty **`model`** in task frontmatter — used as-is.
+2. **`effort: high|medium|low`** — maps to that tier (with fallbacks).
+3. Otherwise — **`default`** tier.
+
+**Deprecated (still read; `onward doctor` warns):** `task_default` (prefer `medium` + effort), `split_default` (prefer `split`), `review_default` (prefer `review_1`).
 
 ## Local / no model call
 
 | Feature | Notes |
 | ------- | ----- |
-| `onward split PLAN-*` / `CHUNK-*` | **Heuristic only today:** derives candidate chunks/tasks from markdown sections (e.g. Goals, Scope, Completion criteria) and builds JSON locally. Does **not** call the executor or an external model in the default code path — **no executor preflight** on `split`. |
+| `onward split PLAN-*` / `CHUNK-*` | Only with **`--heuristic`:** derives candidate chunks/tasks from markdown sections and builds JSON locally. |
 | `onward new`, `list`, `show`, `tree`, `report`, `next`, `progress`, `recent` | Filesystem + derived indexes. |
-| `onward start` / `complete` / `cancel` | Status transitions only; see [LIFECYCLE.md](LIFECYCLE.md). |
+| `onward complete` / `cancel` / `retry` | Status transitions only; see [LIFECYCLE.md](LIFECYCLE.md). |
 | `onward note`, `onward archive` | File updates. |
-| `onward doctor` | Config/workspace validation. |
+| `onward doctor` | Config/workspace validation (including tier keys and legacy model warnings). |
 | `onward sync` | Git operations; no LLM. |
 
-The `split` code path still accepts **`--model`** and writes **`model`** into new chunk/task metadata — that selects defaults for **future** `onward work`, not an LLM call during split.
+The **`--model`** flag on split overrides the resolved **split** tier model (after CLI flag, `model_setting` still honors legacy `split_default` when `split` is empty — prefer **`models.split`** going forward). Resolved models are written into new chunk/task metadata for **future** `onward work`.
 
 ## Test / development overrides
 
 | Mechanism | Purpose |
 | --------- | ------- |
-| `TRAIN_SPLIT_RESPONSE` | If set, `onward split` uses this string as the JSON response instead of heuristics (tests and local experiments). |
+| `TRAIN_SPLIT_RESPONSE` | If set, `onward split` uses this string as the JSON response **instead of** calling the executor (or heuristics) — tests and local experiments. |
 
 ## Lifecycle vs capabilities
 
-Artifact status rules are **orthogonal** to model usage: see [LIFECYCLE.md](LIFECYCLE.md) for `start` / `work` / `complete` / `cancel`.
+Artifact status rules are **orthogonal** to model usage: see [LIFECYCLE.md](LIFECYCLE.md) for `work` / `complete` / `cancel` / `retry`.
 
-## Multi-provider routing (future)
+## Archived: provider registry design
 
-A design for optional **provider registry** routing (multiple CLIs/backends) lives in [PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md). Until implemented and enabled in config, behavior remains **single configured executor** (`executor.command` / `executor.args`) plus `resolve_model_alias`.
+The old **multi-provider registry** YAML design was **not** implemented. See [PROVIDER_REGISTRY.md](PROVIDER_REGISTRY.md) for a pointer to the executor protocol and why that doc is archived.
 
 ### `review-plan` reviewer matrix (config)
 

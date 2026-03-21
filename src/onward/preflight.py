@@ -14,13 +14,6 @@ from onward.util import clean_string
 _SKIP_PREFLIGHT_COMMANDS = frozenset({"true", "false"})
 
 
-def _executor_command(config: dict[str, Any]) -> str:
-    block = config.get("executor", {})
-    if not isinstance(block, dict):
-        block = {}
-    return clean_string(block.get("command")) or "onward-exec"
-
-
 def _first_invocation_token(command: str) -> str:
     command = command.strip()
     if not command:
@@ -82,11 +75,17 @@ def preflight_executor_command(config: dict[str, Any]) -> str | None:
     if not is_executor_enabled(config):
         return None
 
-    command = _executor_command(config)
-    err = preflight_shell_invocation(command)
+    block = config.get("executor", {})
+    if not isinstance(block, dict):
+        block = {}
+    cmd = clean_string(block.get("command"))
+    # Built-in executor (same rule as :func:`onward.config.resolve_executor`): no argv0 to preflight.
+    if not cmd or cmd.lower() == "builtin":
+        return None
+    err = preflight_shell_invocation(cmd)
     if err is None:
         return None
-    token = _first_invocation_token(command)
+    token = _first_invocation_token(cmd)
     if "does not exist" in err:
         return (
             f"executor command path does not exist: {token!r} "

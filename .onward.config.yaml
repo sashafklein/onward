@@ -6,23 +6,27 @@ sync:
   repo: null
   worktree_path: .onward/sync
 
-ralph:
-  command: ralph
+executor:
+  command: ./scripts/onward-exec
   args: []
   enabled: true
 
 models:
-  default: opus-latest
-  task_default: sonnet-latest
-  split_default:
-  review_default: codex-latest
+  default: composer-2
+  high: opus-latest
+  medium: sonnet-latest
+  low: haiku-latest
+  split:
+  review_1: codex-latest
+  review_2:
 
 work:
   sequential_by_default: true
 
 hooks:
   pre_task_shell: []
-  post_task_shell: []
-  pre_task_markdown: null
-  post_task_markdown: .onward/hooks/post-task.md
-  post_chunk_markdown: .onward/hooks/post-chunk.md
+  pre_chunk_shell: []
+  post_task_shell:
+    - 'git add -A && git commit -m "onward: ${ONWARD_TASK_ID} — ${ONWARD_TASK_TITLE}" --allow-empty-message || true'
+  post_task_markdown:
+  post_chunk_markdown:

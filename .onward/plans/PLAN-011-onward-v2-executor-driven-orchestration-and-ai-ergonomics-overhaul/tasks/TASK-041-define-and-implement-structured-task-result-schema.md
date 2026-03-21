@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-011"
 project: ""
 title: "Define and implement structured task result schema"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T16:01:06Z"
-updated_at: "2026-03-20T16:01:06Z"
+updated_at: "2026-03-20T18:22:59Z"
 ---
 
 # Context

@@ -2,7 +2,7 @@
 
 This is the key design stance for passing work from parent agents to worker agents.
 
-Artifact **status** transitions (`start` / `complete` / `cancel` vs `work`) are specified in **[LIFECYCLE.md](LIFECYCLE.md)**. Which commands invoke the executor vs run locally is summarized in **[CAPABILITIES.md](CAPABILITIES.md)**.
+Artifact **status** transitions (`complete` / `cancel` / `retry` vs `work`) are specified in **[LIFECYCLE.md](LIFECYCLE.md)**. Which commands invoke the executor vs run locally is summarized in **[CAPABILITIES.md](CAPABILITIES.md)**.
 
 ## Decision
 
@@ -59,24 +59,15 @@ The task packet contains:
 
 The `chunk` and `plan` fields give the executor full context about the parent scope — goals, constraints, acceptance criteria, and approach — without requiring it to read the filesystem.
 
-## Model normalization
+## Model strings
 
-A forgiving alias resolver runs before executor launch.
+**Tasks:** Onward resolves a concrete model string before invoking the executor: explicit **`model`** in task frontmatter wins; else **`effort: high|medium|low`** maps to the matching **`models`** tier (with automatic fallbacks); else the **`default`** tier. Tier keys are **`default`**, **`high`**, **`medium`**, **`low`**, **`split`**, **`review_1`**, **`review_2`** — see [CAPABILITIES.md](CAPABILITIES.md). Legacy flat keys **`task_default`**, **`split_default`**, and **`review_default`** are still read for compatibility but are **deprecated**; **`onward doctor`** warns — migrate to tiers.
 
-Examples:
+**Split / flags:** `--model` on `onward split` overrides the resolved **split** tier model after CLI parsing.
 
-- `opus-latest` or `opus` -> `claude-opus-4-6`
-- `sonnet-latest` or `sonnet` -> `claude-sonnet-4-6`
-- `haiku-latest` or `haiku` -> `claude-haiku-4`
-- `codex-latest` or `codex` -> `codex-5-3`
-- `gpt5` -> `gpt-5`
+**External subprocess executor:** Onward passes the resolved identifier **through unchanged** on stdin; your command maps aliases (e.g. `sonnet-latest`) to vendor IDs.
 
-Resolution priority:
-
-1. task-level model in frontmatter
-2. `--model` flag (for split/review commands)
-3. config section models (`task_default`, `split_default`, `review_default`)
-4. config `models.default`
+**Built-in executor:** The same string selects **Claude Code** vs **Cursor agent** via heuristics in code (`route_model_to_backend`); the CLI then interprets the model id.
 
 ## Hook execution
 
@@ -84,15 +75,24 @@ Hooks run at well-defined lifecycle points around task and chunk execution:
 
 | Hook | Type | When |
 |------|------|------|
+| `pre_chunk_shell` | Shell command(s) | Once when `onward work CHUNK-*` starts, before any task in that chunk |
 | `pre_task_shell` | Shell command(s) | Before each task execution |
-| `pre_task_markdown` | Markdown via executor | Before each task execution (after shell hooks) |
 | `post_task_shell` | Shell command(s) | After successful task execution |
 | `post_task_markdown` | Markdown via executor | After successful task execution (after shell hooks) |
 | `post_chunk_markdown` | Markdown via executor | After all tasks in a chunk complete successfully |
 
-Shell hooks run as subprocess commands in the workspace root. Markdown hooks are passed through the configured **executor** subprocess with a JSON payload containing the hook body, phase, model, and task/chunk metadata. Any hook failure aborts execution and marks the run as failed.
+Shell hooks run as subprocess commands in the workspace root. Markdown hooks use the **stdin-JSON subprocess** shape (same idea as an external task executor): when the workspace **`executor.command`** is **`builtin`** or unset, Onward falls back to the reference **`onward-exec`** adapter so hooks still receive JSON on stdin. Any hook failure aborts execution and marks the run as failed.
+
+**Examples:** `pre_task_shell: ["git stash"]` before each task; `post_task_shell: ["git add -A && git commit -m 'onward: task done' --allow-empty"]` after a successful task; `pre_chunk_shell` for one-time setup (e.g. ensure a service is up) before the chunk’s task loop.
 
 ### Environment variables for shell hooks
+
+For **`pre_chunk_shell`**, Onward sets:
+
+| Variable | Meaning |
+| -------- | ------- |
+| `ONWARD_CHUNK_ID` | Chunk id (e.g. `CHUNK-001`). |
+| `ONWARD_CHUNK_TITLE` | Chunk `title` from frontmatter. |
 
 For **`pre_task_shell`** and **`post_task_shell`**, Onward merges these into the subprocess environment (in addition to the normal process environment):
 
@@ -116,16 +116,19 @@ git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK
 
 ## Executor bridge
 
-The bridge stays narrow in v1:
+Task execution uses the **`Executor`** abstraction in Python (see **`onward.executor`**):
 
-- Build executor command from config (`executor.command` + `executor.args`). The repo includes a reference router at **`scripts/onward-exec`** (stdin JSON → host CLI); point **`executor.command`** at it or at your own tool.
-- Pass the full handoff packet via stdin as JSON.
-- Set environment variable **`ONWARD_RUN_ID`** on the **executor** subprocess to the current run id (same value as `run_id` in the stdin payload) so executors can echo it back in acknowledgments.
-- Capture stdout/stderr to `.onward/runs/<run>.log`.
+- **Default:** **`executor.command`** absent, empty, or **`builtin`** → **`BuiltinExecutor`** runs **Claude** or **Cursor** directly, streams output to the terminal, and builds prompts in Python.
+- **Custom:** any other **`executor.command`** → **`SubprocessExecutor`** runs **`[command, *args]`** with the full handoff packet on **stdin** as JSON (same schema as before). The repo includes a reference router at **`scripts/onward-exec`** (stdin JSON → host CLI); you can still point **`executor.command`** at it or at your own tool.
+
+For both paths:
+
+- Set environment variable **`ONWARD_RUN_ID`** on the child process to the current run id (same value as `run_id` in the stdin payload for subprocess executors) so executors can echo it back in acknowledgments.
+- Capture combined output to `.onward/runs/<run>.log` (built-in executor tees streams to your TTY while logging).
 - Update `.ongoing.json` on lifecycle transitions (add on start, remove on finish).
 - Write final run snapshot with `completed` or `failed` status.
 
-This gives parent agents reliable oversight without coupling Onward to any single vendor CLI.
+Chunk work calls **`execute_batch`** per **wave** of ready tasks (sequential steps inside the batch); see [LIFECYCLE.md](LIFECYCLE.md).
 
 ### Task success acknowledgment (optional strict contract)
 
@@ -148,7 +151,7 @@ Minimal example line:
 
 If `onward_task_result.run_id` is present, it **must** equal `ONWARD_RUN_ID` (and the stdin `run_id`) or the run fails.
 
-When an acknowledgment is present and valid, Onward stores the **parsed JSON object** on the run record under **`success_ack`** for auditing. Markdown hooks (`pre_task_markdown`, `post_task_markdown`) and `onward review-plan` are **not** subject to this contract—only the **main task** executor invocation.
+When an acknowledgment is present and valid, Onward stores the **parsed JSON object** on the run record under **`success_ack`** for auditing. Markdown hooks (`post_task_markdown`, `post_chunk_markdown`) and `onward review-plan` are **not** subject to this contract—only the **main task** executor invocation.
 
 ## Parent-agent oversight surface
 
@@ -167,15 +170,17 @@ This keeps orchestration transparent and scriptable for overseer-style parent ag
 
 ## Chunk execution
 
-`onward work CHUNK-###` executes tasks sequentially with dependency awareness:
+`onward work CHUNK-###` executes tasks sequentially with dependency awareness, using **batch waves**:
 
 1. Set chunk status to `in_progress`.
-2. Collect open tasks belonging to the chunk.
-3. Check `depends_on` for each task; skip tasks whose dependencies aren't completed.
-4. Execute ready tasks one at a time via the full task lifecycle (hooks + executor).
-5. Stop on first task failure.
-6. Run `post_chunk_markdown` hook after all tasks complete.
-7. Mark chunk as `completed`.
+2. Run `pre_chunk_shell` hooks (once per `onward work CHUNK-*` invocation).
+3. Collect **ready** open tasks belonging to the chunk (`depends_on` / legacy `blocked_by` must be **`completed`**).
+4. Apply **`work.max_retries`** and **`work.sequential_by_default`** to form a **wave** of eligible tasks (when `sequential_by_default` is false, the wave is at most one task per invocation).
+5. For that wave, call **`Executor.execute_batch`**: for each task in order, run `pre_task_shell`, the executor step, then post-task hooks on success.
+6. Stop on first task failure in the wave.
+7. Repeat from step 3 until no runnable tasks remain.
+8. Run `post_chunk_markdown` hook after all tasks complete.
+9. Mark chunk as `completed`.
 
 Tasks blocked by unmet dependencies are reported but not executed. If no tasks are ready and blocked tasks remain, the chunk reports unresolved dependencies and exits with an error.
 

@@ -1,18 +1,14 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Mapping
+
+if TYPE_CHECKING:
+    from onward.executor import Executor
 
 from onward.util import clean_string, normalize_bool, parse_simple_yaml
-
-MODEL_FAMILIES: dict[str, str] = {
-    "opus": "claude-opus-4-6",
-    "sonnet": "claude-sonnet-4-6",
-    "haiku": "claude-haiku-4",
-    "codex": "codex-5-3",
-    "gpt5": "gpt-5",
-}
 
 # Declared keys for `.onward.config.yaml` (unknown keys fail `onward doctor`).
 # ``ralph`` is accepted for backward compatibility; prefer ``executor``.
@@ -24,19 +20,158 @@ CONFIG_SECTION_KEYS: dict[str, frozenset[str]] = {
     "sync": frozenset({"mode", "branch", "repo", "worktree_path"}),
     "executor": _EXECUTOR_SECTION_KEYS,
     "ralph": _EXECUTOR_SECTION_KEYS,
-    "models": frozenset({"default", "task_default", "split_default", "review_default"}),
+    "models": frozenset({
+        "default",
+        "high",
+        "medium",
+        "low",
+        "split",
+        "review_1",
+        "review_2",
+        # Legacy flat keys (read as aliases; doctor warns — migrate to tier keys).
+        "task_default",
+        "split_default",
+        "review_default",
+    }),
     "review": frozenset({"double_review", "reviewers"}),
-    "work": frozenset({"sequential_by_default", "require_success_ack"}),
+    "work": frozenset({"sequential_by_default", "require_success_ack", "max_retries"}),
     "hooks": frozenset({
         "pre_task_shell",
         "post_task_shell",
-        "pre_task_markdown",
+        "pre_chunk_shell",
         "post_task_markdown",
         "post_chunk_markdown",
     }),
 }
 
 _REMOVED_WORK_KEYS = frozenset({"create_worktree", "worktree_root", "base_branch"})
+
+# Tier fallbacks after the tier's own value (see PLAN-012 tiered models).
+_MODEL_TIER_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "high": ("default",),
+    "medium": ("high", "default"),
+    "low": ("medium", "high", "default"),
+    "split": ("default",),
+    "review_1": ("high", "default"),
+    "review_2": ("high", "default"),
+}
+
+_MODEL_TIER_NAMES = frozenset(_MODEL_TIER_FALLBACKS.keys())
+
+# Keys under ``models`` whose values are model id strings or YAML null (tier fallbacks).
+_MODEL_SCALAR_KEYS = frozenset(
+    {
+        "default",
+        "high",
+        "medium",
+        "low",
+        "split",
+        "review_1",
+        "review_2",
+        "task_default",
+        "split_default",
+        "review_default",
+    },
+)
+
+# Effort frontmatter values that map to tier names (unknown values use the default tier).
+_EFFORT_TIER_VALUES = frozenset({"high", "medium", "low"})
+
+# Legacy flat keys still read by `model_setting()` when present; map to tiers when absent.
+_LEGACY_MODEL_KEY_TO_TIER = {
+    "task_default": "medium",
+    "split_default": "split",
+    "review_default": "review_1",
+}
+
+# When resolving tier ``split`` / ``review_1``, fall back to these legacy keys if the tier key is empty.
+_TIER_LEGACY_MODEL_KEY: dict[str, str] = {
+    "split": "split_default",
+    "review_1": "review_default",
+}
+
+
+def _nonempty_model_string(raw: Any) -> str:
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    return s
+
+
+def _tier_effective_model_string(models: dict[str, Any], tier_key: str) -> str:
+    """Value for a tier key, including legacy ``split_default`` / ``review_default`` aliases."""
+    v = _nonempty_model_string(models.get(tier_key))
+    if v:
+        return v
+    legacy = _TIER_LEGACY_MODEL_KEY.get(tier_key)
+    if legacy:
+        return _nonempty_model_string(models.get(legacy))
+    return ""
+
+
+def effective_default_model(config: dict[str, Any]) -> str:
+    """Resolved ``models.default``, or ``opus-latest`` when unset or empty."""
+    models = config.get("models", {})
+    if not isinstance(models, dict):
+        return "opus-latest"
+    s = _nonempty_model_string(models.get("default"))
+    return s if s else "opus-latest"
+
+
+def resolve_model_for_tier(config: dict[str, Any], tier_name: str) -> str:
+    """Resolve a model for a tier, walking automatic fallback keys until non-empty.
+
+    Legacy ``models.split_default`` / ``models.review_default`` are used when ``split`` /
+    ``review_1`` are empty (non-empty tier keys win). ``task_default`` is not a tier alias here.
+
+    ``models.default`` is required logically; when missing or empty, ``opus-latest`` is used
+    as the ultimate default (same as historical ``model_setting(..., "default", "opus-latest")``).
+    """
+    models = config.get("models", {})
+    if not isinstance(models, dict):
+        models = {}
+
+    default_eff = effective_default_model(config)
+    if tier_name == "default":
+        return default_eff
+
+    chain = _MODEL_TIER_FALLBACKS.get(tier_name)
+    if chain is None:
+        return default_eff
+
+    for k in (tier_name,) + chain:
+        if k == "default":
+            val = default_eff
+        else:
+            val = _tier_effective_model_string(models, k)
+        if val:
+            return val
+    return default_eff
+
+
+def resolve_model_for_task(config: dict[str, Any], task_metadata: Mapping[str, Any]) -> str:
+    """Pick the executor model for a task from config and artifact metadata.
+
+    Resolution order:
+
+    1. Non-empty ``task_metadata["model"]`` — returned as-is.
+    2. ``task_metadata["effort"]`` of ``high`` / ``medium`` / ``low`` (case-insensitive) —
+       :func:`resolve_model_for_tier` for that tier.
+    3. Otherwise — :func:`resolve_model_for_tier` for ``"default"``.
+
+    Other effort strings (e.g. ``xl``) are ignored for tier mapping and behave like step 3.
+    """
+    explicit = _nonempty_model_string(task_metadata.get("model"))
+    if explicit:
+        return explicit
+
+    raw_effort = task_metadata.get("effort")
+    if raw_effort is not None:
+        e = str(raw_effort).strip().lower()
+        if e in _EFFORT_TIER_VALUES:
+            return resolve_model_for_tier(config, e)
+
+    return resolve_model_for_tier(config, "default")
 
 
 def _migrate_ralph_to_executor(config: dict[str, Any]) -> dict[str, Any]:
@@ -47,16 +182,44 @@ def _migrate_ralph_to_executor(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def config_raw_deprecation_warnings(raw_config: dict[str, Any]) -> list[str]:
-    """Warnings for ``onward doctor`` when legacy top-level ``ralph`` appears on disk."""
+    """Warnings for ``onward doctor`` when legacy config appears on disk."""
     if not isinstance(raw_config, dict):
         return []
+    out: list[str] = []
     has_ralph = "ralph" in raw_config
     has_executor = "executor" in raw_config
     if has_ralph and not has_executor:
-        return ["config key 'ralph' is deprecated; rename to 'executor'"]
-    if has_ralph and has_executor:
-        return ["config key 'ralph' is deprecated and ignored; use 'executor' only"]
-    return []
+        out.append("config key 'ralph' is deprecated; rename to 'executor'")
+    elif has_ralph and has_executor:
+        out.append("config key 'ralph' is deprecated and ignored; use 'executor' only")
+
+    models = raw_config.get("models")
+    if isinstance(models, dict):
+        if "task_default" in models:
+            out.append(
+                "config.models.task_default is deprecated; use models.medium (and task effort/model) "
+                "for the default task tier"
+            )
+        if "split_default" in models:
+            if _nonempty_model_string(models.get("split")) and _nonempty_model_string(models.get("split_default")):
+                out.append(
+                    "config.models.split_default is deprecated and ignored because models.split is set; "
+                    "remove split_default"
+                )
+            else:
+                out.append("config.models.split_default is deprecated; rename to models.split")
+        if "review_default" in models:
+            if _nonempty_model_string(models.get("review_1")) and _nonempty_model_string(
+                models.get("review_default"),
+            ):
+                out.append(
+                    "config.models.review_default is deprecated and ignored because models.review_1 is set; "
+                    "remove review_default"
+                )
+            else:
+                out.append("config.models.review_default is deprecated; rename to models.review_1")
+
+    return out
 
 
 def _repo_value_set(repo_val: Any) -> bool:
@@ -98,6 +261,20 @@ def validate_config_contract_issues(config: dict[str, Any]) -> list[str]:
             elif k not in allowed:
                 issues.append(f"unsupported config key {path!r}")
 
+    models = config.get("models")
+    if isinstance(models, dict):
+        for mk, mv in models.items():
+            if mk not in _MODEL_SCALAR_KEYS:
+                continue
+            if mv is None:
+                continue
+            if not isinstance(mv, str):
+                issues.append(f"config.models.{mk} must be a string or null when set")
+            elif not str(mv).strip():
+                issues.append(
+                    f"config.models.{mk} must be a non-empty string when set (use null for tier fallback)",
+                )
+
     review = config.get("review")
     if isinstance(review, dict):
         revw = review.get("reviewers")
@@ -111,7 +288,7 @@ def validate_config_contract_issues(config: dict[str, Any]) -> list[str]:
 
     hooks = config.get("hooks")
     if isinstance(hooks, dict):
-        for hk in ("pre_task_shell", "post_task_shell"):
+        for hk in ("pre_task_shell", "post_task_shell", "pre_chunk_shell"):
             if hk in hooks and not isinstance(hooks.get(hk), list):
                 issues.append(f"config.hooks.{hk} must be a list")
 
@@ -128,6 +305,54 @@ def validate_config_contract_issues(config: dict[str, Any]) -> list[str]:
             )
 
     return issues
+
+
+def config_validation_warnings(config: dict[str, Any]) -> list[str]:
+    """Advisory messages for ``onward doctor`` (tiered models, built-in executor, routing hints)."""
+    out: list[str] = []
+    if not isinstance(config, dict):
+        return out
+
+    models = config.get("models")
+    if not isinstance(models, dict):
+        models = {}
+
+    if not _nonempty_model_string(models.get("default")):
+        out.append(
+            "config.models.default is unset or empty; Onward falls back to opus-latest. "
+            "Set models.default explicitly.",
+        )
+
+    if is_executor_enabled(config):
+        block = config.get("executor", {})
+        if not isinstance(block, dict):
+            block = {}
+        cmd = clean_string(block.get("command"))
+        uses_builtin = not cmd or cmd.lower() == "builtin"
+        if uses_builtin and shutil.which("claude") is None and shutil.which("cursor") is None:
+            out.append(
+                "built-in executor is selected but neither 'claude' nor 'cursor' was found on PATH; "
+                "install a CLI or set executor.command to an external executor",
+            )
+
+    from onward.executor_builtin import model_string_matches_cli_routing_hint
+
+    for tier_k in sorted(_MODEL_SCALAR_KEYS):
+        if tier_k not in models:
+            continue
+        raw = models.get(tier_k)
+        if raw is None or not isinstance(raw, str):
+            continue
+        s = _nonempty_model_string(raw)
+        if not s:
+            continue
+        if not model_string_matches_cli_routing_hint(s):
+            out.append(
+                f"config.models.{tier_k} model {s!r} does not match built-in CLI routing hints "
+                f"(claude/codex/opus/sonnet/haiku vs cursor/gemini); it will use the Claude CLI backend",
+            )
+
+    return out
 
 
 def load_workspace_config(root: Path) -> dict[str, Any]:
@@ -170,31 +395,51 @@ def work_require_success_ack(config: dict[str, Any]) -> bool:
     return normalize_bool(work.get("require_success_ack"))
 
 
+def work_max_retries(config: dict[str, Any]) -> int:
+    """Max failed runs before ``onward work`` refuses (``run_count`` threshold). 0 = unlimited."""
+    work = config.get("work", {})
+    if not isinstance(work, dict) or "max_retries" not in work:
+        return 3
+    raw = work.get("max_retries")
+    if raw is None or raw == "":
+        return 3
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return 3
+    return max(0, n)
+
+
 def model_setting(config: dict[str, Any], key: str, fallback: str) -> str:
+    """Read a model string from ``config.models``.
+
+    Supports legacy keys ``task_default`` / ``split_default`` / ``review_default``: when those
+    keys are absent or empty, resolution uses the matching tier (medium / split / review_1).
+    Tier names and ``default`` use :func:`resolve_model_for_tier`.
+    """
     models = config.get("models", {})
-    if isinstance(models, dict):
-        value = str(models.get(key, "")).strip()
-        if value:
-            return value
+    if not isinstance(models, dict):
+        return fallback
+
+    direct = _nonempty_model_string(models.get(key))
+    if direct:
+        return direct
+
+    legacy_tier = _LEGACY_MODEL_KEY_TO_TIER.get(key)
+    if legacy_tier is not None:
+        return resolve_model_for_tier(config, legacy_tier)
+
+    if key == "default" or key in _MODEL_TIER_NAMES:
+        return resolve_model_for_tier(config, key)
+
     return fallback
-
-
-def resolve_model_alias(model: str) -> str:
-    normalized = model.strip().lower().replace("_", "-")
-    if normalized.endswith("-latest"):
-        family = normalized[: -len("-latest")]
-        if family in MODEL_FAMILIES:
-            return MODEL_FAMILIES[family]
-    if normalized in MODEL_FAMILIES:
-        return MODEL_FAMILIES[normalized]
-    return model.strip()
 
 
 @dataclass(frozen=True)
 class PlanReviewTry:
     """One executor attempt for a plan review slot (model + argv)."""
 
-    model_resolved: str
+    model: str
     executor: str
     executor_args: tuple[str, ...]
 
@@ -205,6 +450,34 @@ class PlanReviewSlot:
 
     label: str
     tries: tuple[PlanReviewTry, ...]
+
+
+def resolve_executor(config: dict[str, Any]) -> Executor:
+    """Pick :class:`~onward.executor.SubprocessExecutor` vs :class:`~onward.executor.BuiltinExecutor`.
+
+    When ``executor.command`` is set to a non-empty string other than ``\"builtin\"`` (case-insensitive),
+    the external stdin-JSON protocol is used. Otherwise :class:`~onward.executor.BuiltinExecutor` runs
+    Claude/Cursor CLIs directly.
+
+    ``require_success_ack`` applies to both built-in and subprocess executors via :func:`work_require_success_ack`.
+    """
+    from onward.executor import BuiltinExecutor, SubprocessExecutor
+
+    block = config.get("executor", {})
+    if not isinstance(block, dict):
+        return BuiltinExecutor(config)
+
+    cmd = clean_string(block.get("command"))
+    if cmd and cmd.lower() != "builtin":
+        args = block.get("args", [])
+        if not isinstance(args, list):
+            args = []
+        return SubprocessExecutor(
+            cmd,
+            [str(x) for x in args],
+            require_success_ack=work_require_success_ack(config),
+        )
+    return BuiltinExecutor(config)
 
 
 def _workspace_executor_argv(config: dict[str, Any]) -> tuple[str, list[str]]:
@@ -238,12 +511,12 @@ def _parse_review_fallback_try(
         m = fb.strip()
         if not m:
             return None, "empty fallback model"
-        return PlanReviewTry(resolve_model_alias(m), inh_exe, tuple(inh_args)), None
+        return PlanReviewTry(m, inh_exe, tuple(inh_args)), None
     if isinstance(fb, dict):
         raw = str(fb.get("model", "")).strip()
         if not raw:
             return None, "fallback entry missing model"
-        m = resolve_model_alias(raw)
+        m = raw.strip()
         if clean_string(str(fb.get("command", ""))):
             exe, args = _review_executor_from_entry(fb, config)
         else:
@@ -260,13 +533,13 @@ def _legacy_plan_review_slots(config: dict[str, Any]) -> list[PlanReviewSlot]:
     if isinstance(double, str):
         double = double.strip().lower() in {"1", "true", "yes", "y"}
 
-    default_model = model_setting(config, "default", "opus-latest")
-    review_model = model_setting(config, "review_default", default_model)
+    review_model = resolve_model_for_tier(config, "review_1")
+    second_model = resolve_model_for_tier(config, "review_2")
     exe, args = _workspace_executor_argv(config)
-    base_try = PlanReviewTry(resolve_model_alias(review_model), exe, tuple(args))
+    base_try = PlanReviewTry(review_model.strip(), exe, tuple(args))
     slots = [PlanReviewSlot(label="reviewer-1", tries=(base_try,))]
     if double:
-        second = PlanReviewTry(resolve_model_alias(default_model), exe, tuple(args))
+        second = PlanReviewTry(second_model.strip(), exe, tuple(args))
         slots.append(PlanReviewSlot(label="reviewer-2", tries=(second,)))
     return slots
 
@@ -275,7 +548,7 @@ def build_plan_review_slots(config: dict[str, Any]) -> tuple[list[PlanReviewSlot
     """Resolve review-plan slots from config.
 
     When ``review.reviewers`` is absent, empty, or null, uses ``double_review`` and
-    ``models.review_default`` / ``models.default`` (legacy behavior).
+    ``models.review_1`` / ``models.review_2`` (with tier fallbacks; see ``resolve_model_for_tier``).
 
     Returns ``([], err)`` on invalid ``reviewers`` shape.
     """
@@ -304,7 +577,7 @@ def build_plan_review_slots(config: dict[str, Any]) -> tuple[list[PlanReviewSlot
         exe, args = _review_executor_from_entry(entry, config)
         inherited: tuple[str, list[str]] = (exe, list(args))
         tries_list: list[PlanReviewTry] = [
-            PlanReviewTry(resolve_model_alias(raw_model), exe, tuple(args)),
+            PlanReviewTry(raw_model.strip(), exe, tuple(args)),
         ]
         fallback = entry.get("fallback")
         if fallback is not None:

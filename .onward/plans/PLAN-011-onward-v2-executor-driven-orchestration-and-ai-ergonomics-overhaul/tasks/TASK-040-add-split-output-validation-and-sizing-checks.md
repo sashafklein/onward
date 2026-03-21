@@ -5,17 +5,18 @@ plan: "PLAN-011"
 chunk: "CHUNK-010"
 project: ""
 title: "Add split output validation and sizing checks"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
 executor: "ralph"
-depends_on: ["TASK-038"]
+depends_on:
+  - "TASK-038"
 blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T16:01:04Z"
-updated_at: "2026-03-20T16:01:04Z"
+updated_at: "2026-03-20T18:17:36Z"
 ---
 
 # Context

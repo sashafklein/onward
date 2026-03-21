@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -11,20 +14,28 @@ from onward.artifacts import (
     append_note,
     artifact_glob,
     artifact_project,
+    artifacts_from_index_or_collect,
     blocking_ids,
     collect_artifacts,
+    create_follow_up_tasks,
     find_by_id,
+    find_dependents,
     find_plan_dir,
     format_artifact,
     is_human_task,
+    list_from_index,
     must_find_by_id,
     next_id,
+    next_ids,
     parse_artifact,
     read_notes,
     regenerate_indexes,
     render_active_work_tree_lines,
     report_rows,
+    resolve_project,
     select_next_artifact,
+    summarize_effort_remaining,
+    task_is_next_actionable,
     transition_status,
     update_artifact_status,
     validate_artifact,
@@ -33,22 +44,20 @@ from onward.artifacts import (
 from onward.config import (
     build_plan_review_slots,
     config_raw_deprecation_warnings,
+    config_validation_warnings,
     load_artifact_template,
     load_workspace_config,
     model_setting,
-    resolve_model_alias,
     validate_config_contract_issues,
-    work_sequential_by_default,
 )
 from onward.preflight import preflight_shell_invocation
 from onward.execution import (
     collect_run_records,
+    collect_runs_for_target,
     execute_plan_review,
     finalize_chunks_all_tasks_terminal,
-    latest_run_for,
     load_ongoing,
-    ordered_ready_chunk_tasks,
-    run_chunk_post_markdown_hook,
+    work_chunk,
     work_task,
 )
 from onward.scaffold import (
@@ -74,12 +83,16 @@ from onward.split import (
     prepare_chunk_writes,
     prepare_task_writes,
     run_split_model,
+    validate_split_output,
 )
 from onward.util import (
     as_str_list,
     clean_string,
     colorize,
     dump_simple_yaml,
+    normalize_acceptance,
+    normalize_bool,
+    normalize_effort,
     now_iso,
     parse_simple_yaml,
     slugify,
@@ -131,6 +144,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     config = load_workspace_config(root)
     issues.extend(validate_config_contract_issues(config))
+    for w in config_validation_warnings(config):
+        print(f"Warning: {w}")
     issues.extend(validate_sync_config(root, config))
 
     for rel_path in REQUIRED_PATHS:
@@ -155,6 +170,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 issues.append(f"missing .gitignore entry: {entry}")
 
     seen_ids: set[str] = set()
+    blocked_by_warnings: list[str] = []
     for path in artifact_glob(root):
         try:
             artifact = parse_artifact(path)
@@ -170,6 +186,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             if artifact_id in seen_ids:
                 issues.append(f"duplicate id found: {artifact_id}")
             seen_ids.add(artifact_id)
+
+        if as_str_list(artifact.metadata.get("blocked_by")):
+            blocked_by_warnings.append(
+                f"{artifact.file_path.relative_to(root)}: 'blocked_by' is deprecated; use 'depends_on' instead"
+            )
+
+    for msg in blocked_by_warnings:
+        print(f"Warning: {msg}")
 
     if issues:
         print("Doctor found issues:")
@@ -219,7 +243,7 @@ def cmd_new_plan(args: argparse.Namespace) -> int:
     metadata = {
         "id": plan_id,
         "type": "plan",
-        "project": args.project or "",
+        "project": "" if args.project is None else args.project,
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -246,16 +270,27 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     plan_id = args.plan_id
 
+    plan_art = find_by_id(root, plan_id)
+    if not plan_art:
+        raise ValueError(f"plan not found: {plan_id}")
+    if str(plan_art.metadata.get("type", "")) != "plan":
+        raise ValueError(f"{plan_id} is not a plan")
+
     plan_dir = find_plan_dir(root, plan_id)
     chunk_id = next_id(root, "CHUNK")
     now = now_iso()
     slug = slugify(args.title)
 
+    if args.project is None:
+        proj = artifact_project(plan_art)
+    else:
+        proj = args.project
+
     metadata = {
         "id": chunk_id,
         "type": "chunk",
         "plan": plan_id,
-        "project": args.project or "",
+        "project": proj,
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -264,6 +299,15 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
         "created_at": now,
         "updated_at": now,
     }
+    raw_eff = getattr(args, "effort", None)
+    if raw_eff is not None and str(raw_eff).strip():
+        eff = normalize_effort(raw_eff)
+        if eff:
+            metadata["effort"] = eff
+        else:
+            print("Warning: invalid --effort value (expected xs|s|m|l|xl); leaving unset")
+    if getattr(args, "estimated_files", None) is not None:
+        metadata["estimated_files"] = int(args.estimated_files)
 
     body = load_artifact_template(root, "chunk")
     target = plan_dir / "chunks" / f"{chunk_id}-{slug}.md"
@@ -274,8 +318,137 @@ def cmd_new_chunk(args: argparse.Namespace) -> int:
     return 0
 
 
+_BATCH_DEP_INDEX = re.compile(r"^\$(\d+)$")
+
+
+def cmd_new_task_batch(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    chunk = find_by_id(root, args.chunk_id)
+    if not chunk:
+        raise ValueError(f"chunk not found: {args.chunk_id}")
+    if str(chunk.metadata.get("type", "")) != "chunk":
+        raise ValueError(f"{args.chunk_id} is not a chunk")
+
+    plan_id = str(chunk.metadata["plan"])
+    chunk_id = str(chunk.metadata["id"])
+    plan_dir = find_plan_dir(root, plan_id)
+
+    batch_path = Path(args.batch).expanduser()
+    if not batch_path.is_file():
+        raise ValueError(f"batch file not found: {batch_path}")
+    try:
+        raw = json.loads(batch_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in batch file: {exc}") from exc
+    if not isinstance(raw, list):
+        raise ValueError("batch file must contain a JSON array")
+    if len(raw) == 0:
+        raise ValueError("batch array is empty")
+
+    for i, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(f"batch entry {i} must be a JSON object")
+        title = clean_string(entry.get("title", ""))
+        desc = clean_string(entry.get("description", ""))
+        if not title or not desc:
+            raise ValueError(f"batch entry {i} must have non-empty title and description")
+
+    task_ids = next_ids(root, "TASK", len(raw))
+
+    if args.project is None:
+        base_project = artifact_project(chunk)
+    else:
+        base_project = args.project
+
+    body_template = load_artifact_template(root, "task")
+    writes: list[tuple[str, Path, str]] = []
+
+    for i, entry in enumerate(raw):
+        assert isinstance(entry, dict)
+        title = clean_string(entry.get("title", ""))
+        desc = clean_string(entry.get("description", ""))
+        model = clean_string(entry.get("model", "")) or "sonnet-latest"
+        human = normalize_bool(entry.get("human", False))
+
+        deps_in = entry.get("depends_on") or []
+        if not isinstance(deps_in, list):
+            raise ValueError(f"batch entry {i}: depends_on must be a list")
+        dep_ids: list[str] = []
+        for dep in deps_in:
+            ds = str(dep).strip()
+            if not ds:
+                continue
+            m = _BATCH_DEP_INDEX.match(ds)
+            if m:
+                j = int(m.group(1))
+                if j < 0 or j >= len(raw):
+                    raise ValueError(f"batch entry {i}: invalid intra-batch reference {ds!r}")
+                dep_ids.append(task_ids[j])
+            else:
+                dep_ids.append(ds)
+        seen_d: set[str] = set()
+        dep_ids = [d for d in dep_ids if d not in seen_d and not seen_d.add(d)]
+
+        files = entry.get("files") or []
+        if not isinstance(files, list):
+            raise ValueError(f"batch entry {i}: files must be a list")
+        file_list = [str(x).strip() for x in files if str(x).strip()]
+
+        acc = entry.get("acceptance") or []
+        if isinstance(acc, list):
+            acceptance = [str(x).strip() for x in acc if str(x).strip()]
+        else:
+            acceptance = normalize_acceptance(acc)
+
+        tid = task_ids[i]
+        now = now_iso()
+        metadata: dict[str, Any] = {
+            "id": tid,
+            "type": "task",
+            "plan": plan_id,
+            "chunk": chunk_id,
+            "project": base_project,
+            "title": title,
+            "status": "open",
+            "description": desc,
+            "human": human,
+            "model": model,
+            "executor": "onward-exec",
+            "depends_on": dep_ids,
+            "files": file_list,
+            "acceptance": acceptance,
+            "created_at": now,
+            "updated_at": now,
+        }
+        eff = normalize_effort(entry.get("effort", ""))
+        if eff:
+            metadata["effort"] = eff
+
+        slug = slugify(title)
+        target = plan_dir / "tasks" / f"{tid}-{slug}.md"
+        writes.append((tid, target, format_artifact(metadata, body_template)))
+
+    if args.dry_run:
+        for tid, path, _ in writes:
+            print(f"dry-run: would create {tid}\t{path.relative_to(root)}")
+        return 0
+
+    for _tid, path, content in writes:
+        path.write_text(content, encoding="utf-8")
+    regenerate_indexes(root)
+    for tid, path, _ in writes:
+        print(f"Created {tid} at {path.relative_to(root)}")
+    return 0
+
+
 def cmd_new_task(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    if getattr(args, "batch", None):
+        return cmd_new_task_batch(args)
+
+    if not args.title:
+        raise ValueError("task title is required unless --batch is used")
+
     chunk = find_by_id(root, args.chunk_id)
     if not chunk:
         raise ValueError(f"chunk not found: {args.chunk_id}")
@@ -289,12 +462,17 @@ def cmd_new_task(args: argparse.Namespace) -> int:
     slug = slugify(args.title)
 
     plan_dir = find_plan_dir(root, plan_id)
+    if args.project is None:
+        proj = artifact_project(chunk)
+    else:
+        proj = args.project
+
     metadata = {
         "id": task_id,
         "type": "task",
         "plan": plan_id,
         "chunk": chunk_id,
-        "project": args.project or "",
+        "project": proj,
         "title": args.title,
         "status": "open",
         "description": args.description or "",
@@ -302,12 +480,18 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         "model": args.model,
         "executor": "onward-exec",
         "depends_on": [],
-        "blocked_by": [],
         "files": [],
         "acceptance": [],
         "created_at": now,
         "updated_at": now,
     }
+    raw_eff = getattr(args, "effort", None)
+    if raw_eff is not None and str(raw_eff).strip():
+        eff = normalize_effort(raw_eff)
+        if eff:
+            metadata["effort"] = eff
+        else:
+            print("Warning: invalid --effort value (expected xs|s|m|l|xl); leaving unset")
 
     body = load_artifact_template(root, "task")
     target = plan_dir / "tasks" / f"{task_id}-{slug}.md"
@@ -324,34 +508,46 @@ def cmd_list(args: argparse.Namespace) -> int:
     project_filter = (args.project or "").strip()
     blockers_only = bool(args.blocking)
     human_only = bool(args.human)
-    artifacts = collect_artifacts(root)
-    blocker_ids = blocking_ids(artifacts) if blockers_only else set()
 
-    rows: list[dict[str, str]] = []
-    for artifact in artifacts:
-        m = artifact.metadata
-        row_type = str(m.get("type", ""))
-        if artifact_type != "all" and row_type != artifact_type:
-            continue
-        if project_filter and artifact_project(artifact) != project_filter:
-            continue
-        if blockers_only and str(m.get("id", "")) not in blocker_ids:
-            continue
-        if human_only and not is_human_task(artifact):
-            continue
-        rows.append(
-            {
-                "id": str(m.get("id", "")),
-                "type": row_type,
-                "status": str(m.get("status", "")),
-                "project": artifact_project(artifact),
-                "human": "true" if is_human_task(artifact) else "false",
-                "title": str(m.get("title", "")),
-                "path": str(artifact.file_path.relative_to(root)),
-            }
-        )
+    indexed = list_from_index(
+        root,
+        type_filter=artifact_type,
+        project_filter=project_filter,
+        blocking=blockers_only,
+        human_only=human_only,
+    )
+    if indexed is not None:
+        rows = indexed
+    else:
+        artifacts = collect_artifacts(root)
+        blocker_ids = blocking_ids(artifacts) if blockers_only else set()
+        by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
 
-    rows.sort(key=lambda r: (r["type"], r["id"]))
+        rows = []
+        for artifact in artifacts:
+            m = artifact.metadata
+            row_type = str(m.get("type", ""))
+            if artifact_type != "all" and row_type != artifact_type:
+                continue
+            if project_filter and resolve_project(artifact, by_id) != project_filter:
+                continue
+            if blockers_only and str(m.get("id", "")) not in blocker_ids:
+                continue
+            if human_only and not is_human_task(artifact):
+                continue
+            rows.append(
+                {
+                    "id": str(m.get("id", "")),
+                    "type": row_type,
+                    "status": str(m.get("status", "")),
+                    "project": resolve_project(artifact, by_id),
+                    "human": "true" if is_human_task(artifact) else "false",
+                    "title": str(m.get("title", "")),
+                    "path": str(artifact.file_path.relative_to(root)),
+                }
+            )
+
+        rows.sort(key=lambda r: (r["type"], r["id"]))
 
     if not rows:
         print("No artifacts found")
@@ -365,6 +561,105 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_task_show_extras(root: Path, artifact: Artifact) -> None:
+    """Extra sections for ``onward show TASK-*`` (run history, structured result, deps)."""
+    tty = sys.stdout.isatty()
+    artifact_id = str(artifact.metadata.get("id", ""))
+
+    rc = artifact.metadata.get("run_count")
+    lrs = artifact.metadata.get("last_run_status")
+    if rc is not None or lrs is not None:
+        print()
+        print("Retry / execution:")
+        if rc is not None:
+            print(f"  run_count: {rc}")
+        if lrs is not None:
+            ls = str(lrs)
+            print(f"  last_run_status: {colorize(ls, status_color(ls), tty)}")
+
+    runs = collect_runs_for_target(root, artifact_id, limit=10)
+    print()
+    print("Run history:")
+    if not runs:
+        print("  (no runs recorded)")
+    else:
+        for r in runs:
+            rid = str(r.get("id", ""))
+            st = str(r.get("status", ""))
+            st_disp = colorize(st, status_color(st), tty)
+            print(f"  {rid}  {st_disp}  started={r.get('started_at')}  finished={r.get('finished_at')}")
+            print(f"    log: {r.get('log_path')}")
+
+    last_result: dict[str, Any] | None = None
+    for r in runs:
+        if str(r.get("status", "")) != "completed":
+            continue
+        tr = r.get("task_result")
+        if isinstance(tr, dict) and tr:
+            last_result = tr
+            break
+
+    print()
+    print("Last result:")
+    if not last_result:
+        print("  (no structured result on completed runs)")
+    else:
+        summ = (last_result.get("summary") or "").strip()
+        if summ:
+            print(f"  summary: {summ}")
+        files = last_result.get("files_changed") or []
+        if files:
+            print("  files_changed:")
+            for fpath in files:
+                print(f"    - {fpath}")
+        am = last_result.get("acceptance_met") or []
+        if am:
+            print("  acceptance_met:")
+            for line in am:
+                print(f"    - {line}")
+        au = last_result.get("acceptance_unmet") or []
+        if au:
+            print("  acceptance_unmet:")
+            for line in au:
+                print(f"    - {line}")
+        fus = last_result.get("follow_ups") or []
+        if fus:
+            print("  follow_ups:")
+            for fu in fus:
+                if isinstance(fu, dict):
+                    print(f"    - {fu.get('title', '')}: {fu.get('description', '')}")
+
+    artifacts = collect_artifacts(root)
+    status_by_id = {
+        str(a.metadata.get("id", "")): str(a.metadata.get("status", "")) for a in artifacts
+    }
+
+    deps = as_str_list(artifact.metadata.get("depends_on")) + as_str_list(
+        artifact.metadata.get("blocked_by")
+    )
+    print()
+    print("Dependencies:")
+    if not deps:
+        print("  (none)")
+    else:
+        for dep_id in deps:
+            st = status_by_id.get(dep_id, "?")
+            print(f"  {dep_id}  [{colorize(st, status_color(st), tty)}]")
+
+    dependents = find_dependents(artifacts, artifact_id)
+    print()
+    print("Blocked tasks:")
+    if not dependents:
+        print("  (none)")
+    else:
+        for d in dependents:
+            did = str(d.metadata.get("id", ""))
+            st = str(d.metadata.get("status", ""))
+            print(
+                f"  {did}  [{colorize(st, status_color(st), tty)}]  {d.metadata.get('title', '')}"
+            )
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     artifact = find_by_id(root, args.id)
@@ -372,28 +667,28 @@ def cmd_show(args: argparse.Namespace) -> int:
         print(f"Artifact not found: {args.id}")
         return 1
 
+    project = (getattr(args, "project", "") or "").strip()
+    if project:
+        artifacts = collect_artifacts(root)
+        by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
+        if resolve_project(artifact, by_id) != project:
+            print(f"Artifact not in project {project!r} (resolved)")
+            return 1
+
     print(f"# {artifact.metadata.get('id')} {artifact.metadata.get('title')}")
     print(f"type: {artifact.metadata.get('type')}")
     print(f"status: {artifact.metadata.get('status')}")
+    eff = str(artifact.metadata.get("effort", "")).strip()
+    if eff:
+        print(f"effort: {eff}")
     print(f"path: {artifact.file_path.relative_to(root)}")
     print()
     print(dump_simple_yaml(artifact.metadata).rstrip())
     print("---")
     print(artifact.body.rstrip())
 
-    artifact_id = str(artifact.metadata.get("id", ""))
     if str(artifact.metadata.get("type", "")) == "task":
-        run = latest_run_for(root, artifact_id)
-        if run:
-            print()
-            print("Latest run:")
-            print(f"  id: {run.get('id')}")
-            print(f"  status: {run.get('status')}")
-            print(f"  started_at: {run.get('started_at')}")
-            print(f"  finished_at: {run.get('finished_at')}")
-            print(f"  log: {run.get('log_path')}")
-            if run.get("error"):
-                print(f"  error: {run.get('error')}")
+        _print_task_show_extras(root, artifact)
     return 0
 
 
@@ -445,16 +740,28 @@ def _cmd_set_status(args: argparse.Namespace, action: str) -> int:
     return 0
 
 
-def cmd_start(args: argparse.Namespace) -> int:
-    return _cmd_set_status(args, "start")
-
-
 def cmd_complete(args: argparse.Namespace) -> int:
     return _cmd_set_status(args, "complete")
 
 
 def cmd_cancel(args: argparse.Namespace) -> int:
     return _cmd_set_status(args, "cancel")
+
+
+def cmd_retry(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    artifact = must_find_by_id(root, args.id)
+    if str(artifact.metadata.get("type", "")) != "task":
+        raise ValueError("onward retry only applies to tasks (TASK-###)")
+    current = str(artifact.metadata.get("status", ""))
+    artifact.metadata["status"] = transition_status(current, "retry")
+    artifact.metadata["run_count"] = 0
+    artifact.metadata["updated_at"] = now_iso()
+    write_artifact(artifact)
+    regenerate_indexes(root)
+    artifact_id = str(artifact.metadata.get("id", ""))
+    print(f"{artifact_id} status: {current} -> {artifact.metadata.get('status')}")
+    return 0
 
 
 def cmd_archive(args: argparse.Namespace) -> int:
@@ -516,13 +823,13 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
         for try_idx, tri in enumerate(slot.tries, start=1):
             print(
                 f"review-plan: slot={slot.label} try={try_idx}/{n_tries} "
-                f"model={tri.model_resolved} executor={tri.executor}"
+                f"model={tri.model} executor={tri.executor}"
             )
             pre_err = preflight_shell_invocation(tri.executor)
             if pre_err:
                 print(
                     f"review-plan: slot={slot.label} fallback_reason=preflight_failed "
-                    f"try={try_idx}/{n_tries} model={tri.model_resolved} executor={tri.executor} "
+                    f"try={try_idx}/{n_tries} model={tri.model} executor={tri.executor} "
                     f"detail={pre_err}"
                 )
                 continue
@@ -530,7 +837,7 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
             ok, review_path = execute_plan_review(
                 root,
                 plan,
-                tri.model_resolved,
+                tri.model,
                 slot.label,
                 prompt,
                 executor_command=tri.executor,
@@ -542,7 +849,7 @@ def cmd_review_plan(args: argparse.Namespace) -> int:
                 break
             print(
                 f"review-plan: slot={slot.label} fallback_reason=executor_failed "
-                f"try={try_idx}/{n_tries} model={tri.model_resolved} executor={tri.executor}"
+                f"try={try_idx}/{n_tries} model={tri.model} executor={tri.executor}"
             )
         if ok_slot and review_path is not None:
             review_paths.append(review_path)
@@ -590,54 +897,7 @@ def _plan_chunks(root: Path, plan_id: str) -> list[Artifact]:
 
 
 def _work_chunk(root: Path, chunk: Artifact, config: dict[str, Any]) -> int:
-    chunk_id = str(chunk.metadata.get("id", ""))
-    if str(chunk.metadata.get("status", "")) == "completed":
-        return 0
-    sequential = work_sequential_by_default(config)
-    if str(chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        update_artifact_status(root, chunk, "in_progress")
-
-    while True:
-        ready_tasks, all_resolved = ordered_ready_chunk_tasks(root, chunk_id)
-        if not ready_tasks:
-            if not all_resolved:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
-                return 1
-            break
-        next_task = ready_tasks[0]
-        ok, run_id = work_task(root, next_task)
-        print(f"Run {run_id}: {'completed' if ok else 'failed'}")
-        if not ok:
-            print(f"Stopping chunk work for {chunk_id} after task failure")
-            print(
-                f"Chunk {chunk_id} is usually still in_progress; fix the task or run "
-                f"onward work {chunk_id} again. See docs/LIFECYCLE.md"
-            )
-            return 1
-        if not sequential:
-            ready_again, all_resolved_again = ordered_ready_chunk_tasks(root, chunk_id)
-            if ready_again:
-                print(
-                    f"Chunk {chunk_id}: stopping after one task (work.sequential_by_default is false); "
-                    "run onward work again to continue."
-                )
-                return 0
-            if not all_resolved_again:
-                print(f"Chunk {chunk_id} has unresolved task dependencies")
-                return 1
-
-    refreshed_chunk = must_find_by_id(root, chunk_id)
-    if str(refreshed_chunk.metadata.get("status", "")) == "completed":
-        print(f"Chunk {chunk_id} completed")
-        return 0
-    hook_ok, hook_error = run_chunk_post_markdown_hook(root, refreshed_chunk)
-    if not hook_ok:
-        print(f"Chunk {chunk_id} post hook failed: {hook_error}")
-        return 1
-    if str(refreshed_chunk.metadata.get("status", "")) in {"open", "in_progress"}:
-        update_artifact_status(root, refreshed_chunk, "completed")
-    print(f"Chunk {chunk_id} completed")
-    return 0
+    return work_chunk(root, chunk, config)
 
 
 def _work_plan(root: Path, plan: Artifact, config: dict[str, Any]) -> int:
@@ -722,6 +982,22 @@ def cmd_work(args: argparse.Namespace) -> int:
             print(f"Run {run_id}: {'completed' if ok else 'failed'}")
         else:
             print(f"{args.id} already completed")
+        if ok and run_id and not getattr(args, "no_follow_ups", False):
+            run_path = root / ".onward/runs" / f"{run_id}.json"
+            if run_path.exists():
+                try:
+                    rec = json.loads(run_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    rec = {}
+                tr = rec.get("task_result") or {}
+                fus = tr.get("follow_ups") or []
+                if isinstance(fus, list) and fus:
+                    parent = must_find_by_id(root, args.id)
+                    created, fu_warnings = create_follow_up_tasks(root, parent, fus)
+                    for w in fu_warnings:
+                        print(f"Warning: {w}")
+                    for cid in created:
+                        print(f"Created follow-up task {cid}")
         if ok:
             _, warnings = finalize_chunks_all_tasks_terminal(root)
             for w in warnings:
@@ -748,16 +1024,40 @@ def cmd_split(args: argparse.Namespace) -> int:
     task_default_model = model_setting(config, "task_default", "sonnet-latest")
 
     prompt_name = "split-plan.md" if artifact_type == "plan" else "split-chunk.md"
-    raw = run_split_model(artifact, prompt_name, split_model, task_default_model)
+    raw = run_split_model(
+        root,
+        artifact,
+        prompt_name,
+        split_model,
+        task_default_model,
+        heuristic=bool(getattr(args, "heuristic", False)),
+        config=config,
+    )
 
     if artifact_type == "plan":
         parsed = parse_split_payload(raw, "chunks")
         normalized = normalize_chunk_candidates(parsed, default_model)
         writes = prepare_chunk_writes(root, artifact, normalized)
+        split_kind = "plan"
     else:
         parsed = parse_split_payload(raw, "tasks")
         normalized = normalize_task_candidates(parsed, task_default_model)
         writes = prepare_task_writes(root, artifact, normalized)
+        split_kind = "chunk"
+
+    warnings, val_errors = validate_split_output(normalized, split_kind)
+    force = bool(getattr(args, "force", False))
+    for w in warnings:
+        print(f"Warning: {w}")
+    for e in val_errors:
+        if args.dry_run:
+            print(f"Error: {e}")
+        elif force:
+            print(f"Warning: {e} (ignored with --force)")
+        else:
+            print(f"Error: {e}")
+    if not args.dry_run and val_errors and not force:
+        return 1
 
     assert_writes_safe(root, writes)
 
@@ -782,11 +1082,16 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 def cmd_progress(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    project = (getattr(args, "project", "") or "").strip()
+    artifacts = collect_artifacts(root)
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     rows: list[str] = []
 
-    for artifact in collect_artifacts(root):
+    for artifact in artifacts:
         status = str(artifact.metadata.get("status", ""))
         if status != "in_progress":
+            continue
+        if project and resolve_project(artifact, by_id) != project:
             continue
         rows.append(
             "\t".join(
@@ -830,11 +1135,16 @@ def cmd_progress(args: argparse.Namespace) -> int:
 
 def cmd_recent(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
+    project = (getattr(args, "project", "") or "").strip()
+    artifacts = collect_artifacts(root)
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     rows: list[tuple[str, str, str, str, str, str]] = []
 
-    for artifact in collect_artifacts(root):
+    for artifact in artifacts:
         status = str(artifact.metadata.get("status", ""))
         if status != "completed":
+            continue
+        if project and resolve_project(artifact, by_id) != project:
             continue
         rows.append(
             (
@@ -853,6 +1163,10 @@ def cmd_recent(args: argparse.Namespace) -> int:
         if status not in {"completed", "failed"}:
             continue
         target = str(rec.get("target", ""))
+        if project:
+            targ_art = by_id.get(target)
+            if targ_art is None or resolve_project(targ_art, by_id) != project:
+                continue
         rows.append(
             (
                 finished,
@@ -874,12 +1188,67 @@ def cmd_recent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ready(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    _, warnings = finalize_chunks_all_tasks_terminal(root)
+    for w in warnings:
+        print(w)
+    artifacts = artifacts_from_index_or_collect(root)
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
+    project = (args.project or "").strip() or None
+    status_by_id = {
+        str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
+        for a in artifacts
+        if a.metadata.get("id")
+    }
+    ready_tasks = [
+        a
+        for a in artifacts
+        if str(a.metadata.get("type", "")) == "task" and task_is_next_actionable(a, status_by_id)
+    ]
+    if project:
+        ready_tasks = [a for a in ready_tasks if resolve_project(a, by_id) == project]
+    ready_tasks.sort(key=lambda a: str(a.metadata.get("id", "")))
+    if not ready_tasks:
+        print("No ready tasks")
+        return 0
+
+    plans_by_id = {str(a.metadata.get("id", "")): a for a in artifacts if str(a.metadata.get("type", "")) == "plan"}
+    chunks_by_id = {str(a.metadata.get("id", "")): a for a in artifacts if str(a.metadata.get("type", "")) == "chunk"}
+    tty = not args.no_color
+
+    grouped: dict[str, dict[str, list[Artifact]]] = defaultdict(lambda: defaultdict(list))
+    for t in ready_tasks:
+        pid = str(t.metadata.get("plan", ""))
+        cid = str(t.metadata.get("chunk", ""))
+        grouped[pid][cid].append(t)
+
+    for pid in sorted(grouped.keys()):
+        plan = plans_by_id.get(pid)
+        ptitle = plan.metadata.get("title", pid) if plan else pid
+        print(f"{pid} {ptitle}")
+        for cid in sorted(grouped[pid].keys()):
+            chunk = chunks_by_id.get(cid)
+            ctitle = str(chunk.metadata.get("title", cid)) if chunk else cid
+            cst = str(chunk.metadata.get("status", "")) if chunk else ""
+            cst_disp = colorize(cst, status_color(cst), tty) if cst else ""
+            print(f"  {cid} [{cst_disp}] {ctitle}")
+            for task in sorted(grouped[pid][cid], key=lambda a: str(a.metadata.get("id", ""))):
+                marker = "H" if is_human_task(task) else "A"
+                tid = str(task.metadata.get("id", ""))
+                ttitle = str(task.metadata.get("title", ""))
+                eff = str(task.metadata.get("effort", "")).strip()
+                eff_s = f" [{eff}]" if eff else ""
+                print(f"    {tid} ({marker}) {ttitle}{eff_s}")
+    return 0
+
+
 def cmd_next(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
     _, warnings = finalize_chunks_all_tasks_terminal(root)
     for w in warnings:
         print(w)
-    artifacts = collect_artifacts(root)
+    artifacts = artifacts_from_index_or_collect(root)
     chosen = select_next_artifact(artifacts, project=(args.project or "").strip() or None)
     if chosen:
         print(
@@ -893,7 +1262,7 @@ def cmd_next(args: argparse.Namespace) -> int:
 
 def cmd_tree(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    artifacts = collect_artifacts(root)
+    artifacts = artifacts_from_index_or_collect(root)
     project = (args.project or "").strip() or None
     lines = render_active_work_tree_lines(artifacts, root, project=project, color_enabled=not args.no_color)
     if not lines:
@@ -911,7 +1280,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     _, warnings = finalize_chunks_all_tasks_terminal(root)
     for w in warnings:
         print(w)
-    artifacts = collect_artifacts(root)
+    artifacts = artifacts_from_index_or_collect(root)
     blockers = blocking_ids(artifacts)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts}
 
@@ -920,10 +1289,32 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"project: {project}")
     print()
 
+    print(colorize("[Effort remaining]", "cyan", color_enabled))
+    eff_counts = summarize_effort_remaining(artifacts)
+    print(
+        "  "
+        + "  ".join(
+            f"{k}: {eff_counts[k]}"
+            for k in ("xs", "s", "m", "l", "xl", "unestimated")
+        )
+    )
+    print()
+
     print(colorize("[In Progress]", "cyan", color_enabled))
     in_progress = report_rows(artifacts, root, status="in_progress", project=project)
     if in_progress:
         for row in in_progress:
+            parts = row.split("\t")
+            parts[2] = colorize(parts[2], status_color(parts[2]), color_enabled)
+            print("\t".join(parts))
+    else:
+        print("none")
+    print()
+
+    print(colorize("[Upcoming]", "cyan", color_enabled))
+    upcoming = report_rows(artifacts, root, status="open", project=project)
+    if upcoming:
+        for row in upcoming:
             parts = row.split("\t")
             parts[2] = colorize(parts[2], status_color(parts[2]), color_enabled)
             print("\t".join(parts))
@@ -956,7 +1347,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         artifact = by_id.get(blocker_id)
         if not artifact:
             continue
-        if project and artifact_project(artifact) != project:
+        if project and resolve_project(artifact, by_id) != project:
             continue
         if not is_human_task(artifact):
             continue
@@ -983,7 +1374,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         a
         for a in artifacts
         if str(a.metadata.get("status", "")) == "completed"
-        and (not project or artifact_project(a) == project)
+        and (not project or resolve_project(a, by_id) == project)
     ]
     completed.sort(key=lambda a: str(a.metadata.get("updated_at", "")), reverse=True)
     if completed:

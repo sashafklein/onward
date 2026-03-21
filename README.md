@@ -43,10 +43,9 @@ This is the heartbeat of Onward-driven development:
 │                                                          │
 │   1.  onward report           ← see where you are        │
 │   2.  onward next             ← pick what's next           │
-│   3.  onward start TASK-X     ← optional: claim / visibility │
-│   4.  onward work TASK-X      ← executor + status (success → completed) │
-│   5.  onward report           ← session handoff          │
-│   6.  goto 1                  ← keep moving                │
+│   3.  onward work TASK-X      ← executor + status (success → completed) │
+│   4.  onward report           ← session handoff          │
+│   5.  goto 1                  ← keep moving                │
 │                                                          │
 │   Use onward complete when closing work without work.    │
 │   See docs/LIFECYCLE.md for the full policy.             │
@@ -96,8 +95,8 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward new plan "Title" --project key` | Create a new plan               |
 | `onward new chunk PLAN-001 "Title"`     | Add a chunk to a plan           |
 | `onward new task CHUNK-001 "Title"`     | Add a task to a chunk           |
-| `onward split PLAN-001`                 | Heuristic plan→chunks (markdown-derived; [capabilities](docs/CAPABILITIES.md)) |
-| `onward split CHUNK-001`                | Heuristic chunk→tasks (same) |
+| `onward split PLAN-001`                 | Plan→chunks via executor + prompts (use `--heuristic` for offline markdown split; [capabilities](docs/CAPABILITIES.md)) |
+| `onward split CHUNK-001`                | Chunk→tasks (same) |
 | `onward review-plan PLAN-001`           | Run adversarial review(s); optional per-slot providers/fallbacks via `review.reviewers` ([CAPABILITIES.md](docs/CAPABILITIES.md)) |
 
 ### Seeing What's Happening
@@ -106,8 +105,9 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | ----------------------------- | --------------------------------- |
 | `onward report --project key` | Full status dashboard             |
 | `onward list --project key`   | List all artifacts                |
-| `onward tree --project key`   | Open plans with **active** chunks/tasks (`open` / `in_progress` only) |
+| `onward tree --project key`   | Open plans with **active** chunks/tasks (`open` / `in_progress` / `failed` for tasks) |
 | `onward next --project key`   | What should be worked on next     |
+| `onward ready --project key`  | All actionable tasks (grouped by plan/chunk) |
 | `onward progress`             | What's currently in flight        |
 | `onward recent`               | What just got done (artifacts + runs) |
 | `onward show TASK-001`        | Full detail on one artifact (+ latest run for tasks) |
@@ -146,13 +146,13 @@ What gets synchronized:
 
 ### Moving Work Forward
 
-Status rules: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)** — `onward work` advances task/chunk status around the executor; `start` is optional; use `complete` when closing work **without** `work`.
+Status rules: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)** — `onward work` advances task/chunk status around the executor; use `complete` when closing work **without** `work`.
 
 | Command                    | What it does                              |
 | -------------------------- | ----------------------------------------- |
-| `onward start TASK-001`    | Mark as in-progress (optional before `work`) |
 | `onward complete TASK-001` | Mark done without running executor        |
 | `onward cancel TASK-001`   | Mark as canceled                          |
+| `onward retry TASK-001`    | Reset a failed task to open for another `work` |
 | `onward work TASK-001`     | Run executor; on success task → completed |
 | `onward work CHUNK-001`    | Run ready chunk tasks (dep-aware; set `work.sequential_by_default: false` for one task per invocation) |
 | `onward archive PLAN-001`  | Archive a completed plan                  |
@@ -328,7 +328,7 @@ If you skip agent setup, you have a nice CLI. If you do it, you have **structure
 
 ### Model vs local behavior
 
-Not every command calls your configured executor. **`onward split`** is **heuristic** (markdown sections → structured candidates) unless you inject test JSON via `TRAIN_SPLIT_RESPONSE`. **`onward work`** and **`onward review-plan`** use the executor when enabled. Full table: **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)**.
+Not every command calls your configured executor. **`onward split`** uses the executor by default (`type: split` stdin JSON); use **`--heuristic`** for offline markdown decomposition, or **`TRAIN_SPLIT_RESPONSE`** in tests. **`onward work`** and **`onward review-plan`** use the executor when enabled. Full table: **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)**.
 
 ### Forward Momentum
 
@@ -389,6 +389,7 @@ Bootstrap a consumer workspace that uses this repo as the source:
 | [docs/WORK_HANDOFF.md](docs/WORK_HANDOFF.md)                               | Execution handoff design                    |
 | [docs/schemas/onward-executor-stdin-v1.schema.json](docs/schemas/onward-executor-stdin-v1.schema.json) | Executor stdin JSON (versioned)             |
 | [docs/PROVIDER_REGISTRY.md](docs/PROVIDER_REGISTRY.md)                     | Multi-provider routing design (opt-in; not implemented) |
+| [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md)                           | Deferred ideas & vision (not committed work) |
 | [docs/DOGFOOD.md](docs/DOGFOOD.md)                                         | Dogfood workflow                            |
 
 ---

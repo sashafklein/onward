@@ -9,17 +9,17 @@ Right now this repo supports:
 - workspace bootstrap (`onward init`)
 - structural validation (`onward doctor`, including `sync:` config checks)
 - artifact creation (`onward new plan`, `onward new chunk`, `onward new task`)
-- decomposition via `onward split` (**heuristic** from markdown sections; `TRAIN_SPLIT_RESPONSE` env for tests — see [CAPABILITIES.md](CAPABILITIES.md))
+- decomposition via `onward split` (executor-backed by default; **`--heuristic`** for markdown-only; `TRAIN_SPLIT_RESPONSE` env for tests — see [CAPABILITIES.md](CAPABILITIES.md))
 - adversarial plan review (`onward review-plan` with configurable single/double reviewer)
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
 - active work tree (`onward tree` with `--project`; omits completed/canceled chunks and tasks; task lines show `(A)` agent vs `(H)` human — see `onward tree --help`)
 - consolidated status (`onward report`; same task markers plus `[Blocking Human Tasks]` — see `onward report --help`)
 - artifact inspection (`onward show <ID>` — tasks include latest run info)
 - per-artifact notes (`onward note <ID> ["message"]`)
-- state transitions (`onward start`, `onward complete`, `onward cancel`) and executor-driven status from `onward work` — see [LIFECYCLE.md](LIFECYCLE.md)
+- state transitions (`onward complete`, `onward cancel`, `onward retry`) and executor-driven status from `onward work` — see [LIFECYCLE.md](LIFECYCLE.md)
 - task/chunk execution handoff (`onward work` — passes full chunk/plan context to executor, dependency-aware chunk execution, pre/post hooks)
 - active/completed views (`onward progress`, `onward recent` — recent includes run records)
-- next-item suggestion (`onward next`)
+- next-item suggestion (`onward next`) and full ready-task listing (`onward ready`)
 - plan archival (`onward archive PLAN-###`)
 - optional plan sync (`onward sync status`, `onward sync push`, `onward sync pull` when `sync.mode` is `branch` or `repo`)
 
@@ -104,7 +104,7 @@ Test coverage currently includes:
 - list/show behavior (including latest run info for tasks)
 - duplicate ID detection
 - frontmatter parser/serializer round-trip behavior
-- split: dry-run, plan-to-chunks, chunk-to-tasks, invalid JSON, validation errors, collision detection, deterministic IDs
+- split: dry-run, plan-to-chunks, chunk-to-tasks, invalid JSON, validation errors, collision detection, deterministic IDs, executor payload, `--force`, dependency cycles
 - work: task success/failure lifecycle, chunk sequential execution with dependency ordering, shell/markdown hooks, executor payload enrichment (chunk + plan context)
 - recent: includes both completed artifacts and terminal run records
 - review-plan: single and double reviewer flows

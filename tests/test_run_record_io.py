@@ -3,7 +3,14 @@
 import json
 from pathlib import Path
 
+from onward.executor import ExecutorResult
 from onward.util import dump_run_json_record, read_run_json_record
+
+from tests.workspace_helpers import (
+    clear_post_chunk_markdown,
+    clear_post_task_markdown,
+    clear_post_task_shell,
+)
 
 
 def test_dump_run_record_is_valid_json_round_trip():
@@ -112,4 +119,83 @@ error: ""
     assert cli.main(["show", "--root", str(tmp_path), "TASK-001"]) == 0
     out = capsys.readouterr().out
     assert "RUN-legacy-TASK-001" in out
-    assert "status: completed" in out
+    assert "completed" in out
+
+
+def _set_builtin_executor(root: Path) -> None:
+    config_path = root / ".onward.config.yaml"
+    raw = config_path.read_text(encoding="utf-8")
+    config_path.write_text(raw.replace("  command: onward-exec", '  command: builtin'), encoding="utf-8")
+
+
+def _prepare_task_for_tier_low_model(task_path: Path) -> None:
+    """Drop explicit ``model`` (``onward new task`` defaults to sonnet-latest) and set tier effort."""
+    lines = task_path.read_text(encoding="utf-8").splitlines()
+    filtered = [ln for ln in lines if not ln.lstrip().startswith("model:")]
+    text = "\n".join(filtered)
+    if 'effort: "low"' not in text:
+        text = text.replace('type: "task"\n', 'type: "task"\neffort: "low"\n', 1)
+    task_path.write_text(text.rstrip() + "\n", encoding="utf-8")
+
+
+def test_run_record_builtin_executor_and_tier_resolved_model(tmp_path: Path, monkeypatch, capsys):
+    """Run JSON stores executor label and tier-resolved model (not raw task metadata)."""
+    from onward import cli
+
+    class _RecordingExecutor:
+        def __init__(self) -> None:
+            self.active_snapshots: list[list[dict]] = []
+
+        def execute_task(self, root: Path, ctx):  # noqa: ANN001
+            from onward.execution import load_ongoing
+
+            ongoing = load_ongoing(root)
+            self.active_snapshots.append(list(ongoing.get("active_runs", [])))
+            return ExecutorResult(
+                task_id=str(ctx.task.metadata.get("id", "")),
+                run_id=ctx.run_id,
+                success=True,
+                output="executor stdout line",
+                error="",
+                ack=None,
+                return_code=0,
+            )
+
+        def execute_batch(self, root: Path, tasks):  # noqa: ANN001
+            for ctx in tasks:
+                yield self.execute_task(root, ctx)
+
+    recorder = _RecordingExecutor()
+    monkeypatch.setattr("onward.execution.resolve_executor", lambda _cfg: recorder)
+
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    clear_post_task_shell(tmp_path)
+    clear_post_task_markdown(tmp_path)
+    clear_post_chunk_markdown(tmp_path)
+    _set_builtin_executor(tmp_path)
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    _prepare_task_for_tier_low_model(task_path)
+    capsys.readouterr()
+
+    assert cli.main(["work", "--root", str(tmp_path), "TASK-001"]) == 0
+
+    run_file = next((tmp_path / ".onward/runs").glob("RUN-*-TASK-001.json"))
+    rec = json.loads(run_file.read_text(encoding="utf-8"))
+    assert rec["executor"] == "builtin"
+    assert rec["model"] == "haiku-latest"
+    assert rec["status"] == "completed"
+
+    assert len(recorder.active_snapshots) == 1
+    assert len(recorder.active_snapshots[0]) == 1
+    assert recorder.active_snapshots[0][0]["target"] == "TASK-001"
+    assert recorder.active_snapshots[0][0]["id"] == rec["id"]
+
+    log_text = run_file.with_suffix(".log").read_text(encoding="utf-8")
+    assert "$ builtin" in log_text
+    assert "executor stdout line" in log_text
+
+    ongoing = json.loads((tmp_path / ".onward/ongoing.json").read_text(encoding="utf-8"))
+    assert ongoing.get("active_runs") == []

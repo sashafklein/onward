@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-011"
 project: ""
 title: "Status model cleanup"
-status: "open"
+status: "completed"
 description: "Add failed status, circuit breaker, kill onward start, unify depends_on/blocked_by."
 priority: "high"
 model: "sonnet-latest"
@@ -12,7 +12,7 @@ estimated_files: 20
 depends_on:
   - "CHUNK-008"
 created_at: "2026-03-20T15:52:26Z"
-updated_at: "2026-03-20T15:52:26Z"
+updated_at: "2026-03-20T17:59:26Z"
 ---
 
 # Summary

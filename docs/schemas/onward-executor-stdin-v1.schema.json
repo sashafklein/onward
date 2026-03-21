@@ -2,12 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "onward-executor-stdin-v1",
   "title": "Onward executor stdin JSON (v1)",
-  "description": "JSON written to the configured executor's stdin for onward work, review-plan, and markdown hooks. Onward always sets integer schema_version on write; legacy captures may omit it (treat as v1 when reading). Bump the schema when fields change incompatibly.",
+  "description": "JSON written to the configured executor's stdin for onward work, onward split, review-plan, and markdown hooks. Onward always sets integer schema_version on write; legacy captures may omit it (treat as v1 when reading). Bump the schema when fields change incompatibly.",
   "oneOf": [
     { "$ref": "#/$defs/task" },
     { "$ref": "#/$defs/review" },
     { "$ref": "#/$defs/hookTaskMarkdown" },
-    { "$ref": "#/$defs/hookChunkMarkdown" }
+    { "$ref": "#/$defs/hookChunkMarkdown" },
+    { "$ref": "#/$defs/split" }
   ],
   "$defs": {
     "task": {
@@ -65,7 +66,7 @@
         "schema_version": { "type": "integer", "const": 1 },
         "phase": {
           "type": "string",
-          "enum": ["pre_task_markdown", "post_task_markdown"]
+          "const": "post_task_markdown"
         }
       }
     },
@@ -86,6 +87,24 @@
         "type": { "const": "hook" },
         "schema_version": { "type": "integer", "const": 1 },
         "phase": { "const": "post_chunk_markdown" }
+      }
+    },
+    "split": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "schema_version",
+        "model",
+        "prompt",
+        "artifact_metadata",
+        "artifact_body",
+        "split_type"
+      ],
+      "properties": {
+        "type": { "const": "split" },
+        "schema_version": { "type": "integer", "const": 1 },
+        "split_type": { "type": "string", "enum": ["plan", "chunk"] }
       }
     }
   }

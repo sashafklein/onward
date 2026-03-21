@@ -42,18 +42,20 @@ executor:
   enabled: true
 
 models:
-  # Fallback model for generic operations when no more specific model is set.
-  # Supports aliases: opus-latest, sonnet-latest, codex-latest, haiku-latest.
+  # Ultimate fallback and baseline tier (required logically; empty uses opus-latest).
   default: opus-latest
-  # Default model for newly created tasks.
-  task_default: sonnet-latest
-  # Default model used by `onward split` decomposition (blank = use default).
-  split_default:
-  # Default model for review-oriented hooks/workflows.
-  review_default: codex-latest
+  # Tiered defaults with automatic fallbacks (null/blank walks the chain — see docs/CAPABILITIES.md).
+  high: opus-latest
+  medium: sonnet-latest
+  low: haiku-latest
+  # Split decomposition; blank falls back through split -> default.
+  split:
+  # Plan review slots; blank falls back review_1/review_2 -> high -> default.
+  review_1: codex-latest
+  review_2:
 
 review:
-  # If true, plan reviews spawn two independent reviewers (review_default + default).
+  # If true, plan reviews spawn two independent reviewers (review_1 + review_2 tiers).
   double_review: true
   # Optional: explicit reviewer slots with ordered fallbacks (see docs/CAPABILITIES.md).
   # When review.reviewers is a non-empty list, double_review is ignored for slot count.
@@ -65,18 +67,20 @@ work:
   # When true, exit code 0 is not enough: the executor must print a JSON success ack line
   # (see docs/WORK_HANDOFF.md). Default false for backward compatibility.
   require_success_ack: false
+  # Refuse `onward work` when the task's run_count reaches this (after failed runs). 0 = unlimited.
+  max_retries: 3
 
 hooks:
   # Shell commands run before each task (empty list means disabled).
   pre_task_shell: []
+  # Shell commands once when `onward work CHUNK-*` starts, before any task in that chunk.
+  pre_chunk_shell: []
   # Shell commands run after each task (ONWARD_* env vars are set — see docs/WORK_HANDOFF.md).
   post_task_shell:
     - "git add -A && git commit -m 'onward: completed ${ONWARD_TASK_ID} - ${ONWARD_TASK_TITLE}' --allow-empty"
-  # Optional markdown hook path executed before each task (null disables).
-  pre_task_markdown: null
-  # Optional markdown hook path executed after each task.
+  # Optional markdown hook path executed after each successful task (executor-backed).
   post_task_markdown: .onward/hooks/post-task.md
-  # Optional markdown hook path executed after chunk completion.
+  # Optional markdown hook path executed after chunk completion (executor-backed).
   post_chunk_markdown: .onward/hooks/post-chunk.md
 """,
     ".onward/templates/plan.md": """# Summary
@@ -145,7 +149,7 @@ hooks:
 
 # Notes
 
-<!-- Optional -->
+<!-- Optional. Frontmatter may include optional ``effort: xs|s|m|l|xl`` and ``estimated_files: <int>`` for chunks. -->
 """,
     ".onward/templates/task.md": """# Context
 
@@ -174,6 +178,8 @@ hooks:
 # Handoff notes
 
 <!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+
+<!-- Frontmatter may include optional ``effort: xs|s|m|l|xl``. -->
 """,
     ".onward/templates/run.md": """# Execution summary
 
@@ -191,44 +197,85 @@ hooks:
 
 <!-- Blockers, refactors, or for-later tasks discovered during execution. -->
 """,
-    ".onward/prompts/split-plan.md": """You are decomposing a plan into executable chunks.
+    ".onward/prompts/split-plan.md": """You decompose a **plan** into **chunks** of work. Each chunk is a coherent slice that can be executed and tested on its own. Follow the sizing and structure rules below.
 
-Output strict JSON with this exact shape:
-{
-  "chunks": [
-    {
-      "title": "string",
-      "description": "string",
-      "priority": "low|medium|high",
-      "model": "string"
-    }
-  ]
-}
+## Sizing and scope
 
-Constraints:
-- Return at least one chunk.
-- Keep chunk titles short and concrete.
-- Do not include markdown fences or any non-JSON text.
+- Target **20–30 files touched** per chunk (count likely edits across the repo: source, tests, docs, config). If the codebase is small, prefer fewer, deeper chunks rather than many tiny ones.
+- Prefer **3–8 chunks** for a typical plan; merge or split if you are far outside that range.
+- Each chunk must have **clear boundaries**: what it delivers, what it explicitly does not do, and how we know it is done.
+
+## File touch map
+
+For every chunk, estimate which paths are involved using three buckets (repo-relative paths or globs):
+
+- **must**: files or directories that will definitely change.
+- **likely**: files that will probably change or need inspection.
+- **deferred**: follow-ups or optional paths explicitly not in this chunk.
+
+If you are unsure of paths, use coarse entries (e.g. src/onward/) rather than omitting the map.
+
+## Dependencies between chunks
+
+- Output **depends_on_index**: a JSON array of **0-based indices** into your chunks array pointing to chunks that must complete before this one.
+- Only reference earlier or independent chunks; never create cycles. A chunk must not depend on a later index.
+- Use an empty array when the chunk has no chunk-level dependencies.
+
+## Acceptance and testing
+
+- **acceptance**: an array of **binary, checkable** criteria (tests pass, command succeeds, behavior X observable). Avoid vague wording.
+
+## Priority and model
+
+- **priority**: low, medium, or high (default medium).
+- **model**: suggest an executor model alias for work in this chunk (haiku-latest, sonnet-latest, opus-latest, etc.).
+
+## Output format
+
+Output a single JSON object (no markdown code fences, no prose outside JSON). Required top-level key: chunks (non-empty array).
+
+Each element of chunks must include: title (string), description (string), priority (low|medium|high), model (string), depends_on_index (array of integers), files (object with keys must, likely, deferred — each an array of strings), acceptance (array of strings).
+
+Illustrative minimal object (structure only):
+
+{"chunks":[{"title":"A","description":"...","priority":"medium","model":"sonnet-latest","depends_on_index":[],"files":{"must":[],"likely":[],"deferred":[]},"acceptance":["checkable criterion"]}]}
+
+Rules: Return at least one chunk. Keep titles short and concrete. JSON only on stdout.
 """,
-    ".onward/prompts/split-chunk.md": """You are decomposing a chunk into executable tasks.
+    ".onward/prompts/split-chunk.md": """You decompose a **chunk** into **tasks** small enough for one focused execution pass. Each task must be self-contained: an implementer can finish it using only this task's title, description, acceptance, and file list—without hunting the parent plan for missing context.
 
-Output strict JSON with this exact shape:
-{
-  "tasks": [
-    {
-      "title": "string",
-      "description": "string",
-      "acceptance": ["string"],
-      "model": "string",
-      "human": false
-    }
-  ]
-}
+## Sizing
 
-Constraints:
-- Return at least one task.
-- Each task must include one or more acceptance checks.
-- Do not include markdown fences or any non-JSON text.
+- Target **≤6 files** touched per task (repo-relative paths). If a task would exceed that, split it.
+- If you must list **7–9 files**, flag it in the file list but prefer splitting.
+- More than **9 files** in one task is unacceptable—split into multiple tasks.
+
+## Self-containment
+
+- **description** must state what to do and where, with enough concrete detail that "see the plan" is never required.
+- **files** must list the paths you expect to read or edit (array of strings). Use [] only when truly unknown; prefer best guesses.
+- **acceptance** must be binary and verifiable (tests, CLI output, behavior).
+
+## Models and effort
+
+- **model**: haiku-latest for trivial edits; sonnet-latest for typical work; opus-latest for deep refactors or cross-cutting design.
+- **effort**: xs | s | m | l | xl — rough size (optional but preferred).
+
+## Ordering within the chunk
+
+- **depends_on_index**: 0-based indices into your tasks array for tasks that must finish before this one. No cycles. Empty array if none.
+
+## Output format
+
+Output a single JSON object (no markdown code fences, no prose outside JSON). Required top-level key: tasks (non-empty array).
+
+Each element of tasks must include: title (string), description (string), acceptance (array of strings), model (string), human (boolean), depends_on_index (array of integers), files (array of strings), effort (string: xs|s|m|l|xl or empty string if unknown).
+
+Illustrative minimal object (structure only):
+
+{"tasks":[{"title":"Add helper","description":"Implement X in src/foo.py","acceptance":["tests pass"],"model":"sonnet-latest","human":false,"depends_on_index":[],"files":["src/foo.py"],"effort":"s"}]}
+
+Rules: Return at least one task. Each task needs at least one acceptance criterion. JSON only on stdout.
 """,
     ".onward/prompts/review-plan.md": """You are an adversarial plan reviewer. Your job is to find gaps, risks, and issues that the plan author missed. Be thorough and direct.
 

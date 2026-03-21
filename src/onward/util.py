@@ -5,6 +5,52 @@ import json
 import re
 from typing import Any
 
+import yaml
+from yaml.nodes import MappingNode, ScalarNode
+
+
+class _ArtifactDumper(yaml.SafeDumper):
+    """YAML dumper tuned for Onward artifacts: plain mapping keys, double-quoted string scalars."""
+
+    def represent_mapping(self, tag: str, mapping: Any, flow_style: bool | None = None) -> yaml.Node:
+        """Like SafeRepresenter.represent_mapping, but simple string keys stay plain (not quoted)."""
+        value: list[tuple[yaml.Node, yaml.Node]] = []
+        node = MappingNode(tag, value, flow_style=flow_style)
+        if self.alias_key is not None:
+            self.represented_objects[self.alias_key] = node
+        best_style = True
+        if hasattr(mapping, "items"):
+            mapping = list(mapping.items())
+            if self.sort_keys:
+                try:
+                    mapping = sorted(mapping)
+                except TypeError:
+                    pass
+        for item_key, item_value in mapping:
+            if isinstance(item_key, str) and re.match(r"^[a-zA-Z_][a-zA-Z0-9_-]*$", item_key):
+                node_key = self.represent_scalar("tag:yaml.org,2002:str", item_key)
+            else:
+                node_key = self.represent_data(item_key)
+            node_value = self.represent_data(item_value)
+            if not (isinstance(node_key, ScalarNode) and not node_key.style):
+                best_style = False
+            if not (isinstance(node_value, ScalarNode) and not node_value.style):
+                best_style = False
+            value.append((node_key, node_value))
+        if flow_style is None:
+            if self.default_flow_style is not None:
+                node.flow_style = self.default_flow_style
+            else:
+                node.flow_style = best_style
+        return node
+
+
+def _represent_str_quoted(dumper: yaml.Dumper, data: str) -> yaml.Node:
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style='"')
+
+
+_ArtifactDumper.add_representer(str, _represent_str_quoted)
+
 
 def _now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -44,6 +90,11 @@ def _normalize_acceptance(value: Any) -> list[str]:
     return [single] if single else []
 
 
+def _normalize_effort(value: Any) -> str:
+    raw = _clean_string(str(value)).lower()
+    return raw if raw in {"xs", "s", "m", "l", "xl"} else ""
+
+
 def _as_str_list(value: Any) -> list[str]:
     if value is None:
         return []
@@ -77,254 +128,43 @@ def _status_color(status: str) -> str:
         "in_progress": "blue",
         "completed": "green",
         "canceled": "magenta",
+        "failed": "red",
     }.get(status, "cyan")
 
 
 # ---------------------------------------------------------------------------
-# Custom YAML parser / dumper (no PyYAML dependency)
+# YAML (PyYAML)
 # ---------------------------------------------------------------------------
 
 
-def _parse_scalar(raw: str) -> Any:
-    value = raw.strip()
-    if value in {"null", "~"}:
-        return None
-    if value == "true":
-        return True
-    if value == "false":
-        return False
-    if value.startswith('"') and value.endswith('"'):
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            return value[1:-1]
-    if value.startswith("[") and value.endswith("]"):
-        inner = value[1:-1].strip()
-        if not inner:
-            return []
-        return [_parse_scalar(part.strip()) for part in inner.split(",")]
-    if re.fullmatch(r"-?\d+", value):
-        return int(value)
-    if re.fullmatch(r"-?\d+\.\d+", value):
-        return float(value)
-    return value
-
-
-def _read_dash_sequence(lines: list[str], j: int, min_indent: int) -> tuple[list[Any], int]:
-    """Read ``- item`` lines strictly deeper than ``min_indent`` (list under a key)."""
-    seq: list[Any] = []
-    while j < len(lines):
-        row = lines[j]
-        if not row.strip():
-            j += 1
-            continue
-        ri = len(row) - len(row.lstrip())
-        if ri <= min_indent:
-            break
-        ls = row.lstrip()
-        if not ls.startswith("- "):
-            break
-        frag = ls[2:].strip()
-        entry_indent = ri
-        if ":" in frag:
-            sk, sv = frag.split(":", 1)
-            sk, sv = sk.strip(), sv.strip()
-            entry: dict[str, Any] = {sk: (_parse_scalar(sv) if sv else "")}
-            j += 1
-            if not sv:
-                while j < len(lines):
-                    r2 = lines[j]
-                    if not r2.strip():
-                        j += 1
-                        continue
-                    r2i = len(r2) - len(r2.lstrip())
-                    if r2i <= entry_indent:
-                        break
-                    if r2.lstrip().startswith("- "):
-                        break
-                    if ":" not in r2.strip():
-                        break
-                    tk, tv = r2.strip().split(":", 1)
-                    entry[tk.strip()] = _parse_scalar(tv.strip()) if tv.strip() else ""
-                    j += 1
-            else:
-                while j < len(lines):
-                    r2 = lines[j]
-                    if not r2.strip():
-                        j += 1
-                        continue
-                    r2i = len(r2) - len(r2.lstrip())
-                    if r2i <= entry_indent:
-                        break
-                    if r2.lstrip().startswith("- "):
-                        break
-                    if ":" not in r2.strip():
-                        break
-                    tk, tv = r2.strip().split(":", 1)
-                    if not tv.strip():
-                        break
-                    entry[tk.strip()] = _parse_scalar(tv.strip())
-                    j += 1
-            seq.append(entry)
-            continue
-        seq.append(_parse_scalar(frag))
-        j += 1
-    return seq, j
-
-
-def _mapping_yaml_list_item(lines: list[str], j: int) -> tuple[dict[str, Any], int]:
-    """Parse one ``  - key: val`` mapping item and optional ``    more:`` / nested lists."""
-    line = lines[j]
-    if not line.startswith("  -"):
-        raise ValueError(f"expected indented list item: {line!r}")
-    rest = line[4:].strip() if line.startswith("  - ") else line[3:].strip()
-    if not rest or ":" not in rest:
-        raise ValueError(f"expected mapping list item (key: value): {line!r}")
-    k, v = rest.split(":", 1)
-    k, v = k.strip(), v.strip()
-    obj: dict[str, Any] = {}
-    j += 1
-    if not v:
-        seq, j = _read_dash_sequence(lines, j, min_indent=3)
-        obj[k] = seq
-        return obj, j
-    obj[k] = _parse_scalar(v)
-    while j < len(lines):
-        row = lines[j]
-        if not row.strip():
-            j += 1
-            continue
-        ri = len(row) - len(row.lstrip())
-        if ri < 4:
-            break
-        if ri == 2 and row.lstrip().startswith("-"):
-            break
-        inner = row.strip()
-        if ":" not in inner:
-            raise ValueError(f"expected key: value, got {row!r}")
-        nk, nv = inner.split(":", 1)
-        nk, nv = nk.strip(), nv.strip()
-        if not nv:
-            seq, j = _read_dash_sequence(lines, j + 1, min_indent=ri)
-            obj[nk] = seq
-            continue
-        obj[nk] = _parse_scalar(nv)
-        j += 1
-    return obj, j
-
-
 def _parse_simple_yaml(text: str) -> dict[str, Any]:
-    lines = text.splitlines()
-    i = 0
-    result: dict[str, Any] = {}
-
-    while i < len(lines):
-        line = lines[i]
-        if not line.strip() or line.lstrip().startswith("#"):
-            i += 1
-            continue
-
-        if line.startswith("  "):
-            raise ValueError(f"unexpected indentation near: {line}")
-
-        if ":" not in line:
-            raise ValueError(f"invalid yaml line: {line}")
-
-        key, remainder = line.split(":", 1)
-        key = key.strip()
-        remainder = remainder.strip()
-
-        if remainder:
-            result[key] = _parse_scalar(remainder)
-            i += 1
-            continue
-
-        j = i + 1
-        list_items: list[Any] = []
-        nested_lines: list[str] = []
-
-        while j < len(lines):
-            child = lines[j]
-            if not child.strip():
-                j += 1
-                continue
-            if not child.startswith("  "):
-                break
-
-            if child.startswith("  - "):
-                tail = child[4:].strip()
-                if ":" in tail:
-                    item, j = _mapping_yaml_list_item(lines, j)
-                    list_items.append(item)
-                    continue
-                list_items.append(_parse_scalar(tail))
-                j += 1
-                continue
-            nested_lines.append(child[2:])
-            j += 1
-
-        if list_items and nested_lines:
-            raise ValueError(f"mixed nested yaml not supported for key: {key}")
-
-        if list_items:
-            result[key] = list_items
-        elif nested_lines:
-            result[key] = _parse_simple_yaml("\n".join(nested_lines))
-        else:
-            result[key] = ""
-
-        i = j
-
-    return result
-
-
-def _format_scalar(value: Any) -> str:
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    return json.dumps(str(value))
-
-
-def _dump_simple_yaml_lines(data: Any, indent: int = 0) -> list[str]:
-    pad = " " * indent
-
-    if isinstance(data, dict):
-        out: list[str] = []
-        for key, value in data.items():
-            if isinstance(value, dict):
-                if not value:
-                    out.append(f"{pad}{key}: {{}}")
-                    continue
-                out.append(f"{pad}{key}:")
-                out.extend(_dump_simple_yaml_lines(value, indent + 2))
-            elif isinstance(value, list):
-                if not value:
-                    out.append(f"{pad}{key}: []")
-                    continue
-                out.append(f"{pad}{key}:")
-                out.extend(_dump_simple_yaml_lines(value, indent + 2))
-            else:
-                out.append(f"{pad}{key}: {_format_scalar(value)}")
-        return out
-
-    if isinstance(data, list):
-        out = []
-        for item in data:
-            if isinstance(item, (dict, list)):
-                out.append(f"{pad}-")
-                out.extend(_dump_simple_yaml_lines(item, indent + 2))
-            else:
-                out.append(f"{pad}- {_format_scalar(item)}")
-        return out
-
-    return [f"{pad}{_format_scalar(data)}"]
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("empty yaml")
+    try:
+        loaded = yaml.safe_load(stripped)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid yaml: {exc}") from exc
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise ValueError("yaml root must be a mapping")
+    return loaded
 
 
 def _dump_simple_yaml(data: dict[str, Any]) -> str:
-    return "\n".join(_dump_simple_yaml_lines(data)) + "\n"
+    dumped = yaml.dump(
+        data,
+        Dumper=_ArtifactDumper,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+        width=4096,
+        indent=2,
+    )
+    if not dumped.endswith("\n"):
+        dumped += "\n"
+    return dumped
 
 
 # Older run snapshots may omit keys Onward now writes; readers merge these defaults (real values win).
@@ -428,3 +268,4 @@ extract_markdown_list_items = _extract_markdown_list_items
 markdown_section = _markdown_section
 normalize_acceptance = _normalize_acceptance
 normalize_priority = _normalize_priority
+normalize_effort = _normalize_effort

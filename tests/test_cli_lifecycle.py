@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
+import pytest
+
 from onward import cli
+from onward.artifacts import transition_status
 
 from tests.workspace_helpers import clear_post_task_shell
 
@@ -25,6 +28,11 @@ def _new_task(tmp_path: Path) -> None:
     assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "Ship"]) == 0
 
 
+def test_transition_status_rejects_removed_start_action() -> None:
+    with pytest.raises(ValueError, match="unknown transition target"):
+        transition_status("open", "start")
+
+
 def test_complete_when_already_completed_mentions_lifecycle(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _set_executor(tmp_path, "true")
@@ -38,20 +46,6 @@ def test_complete_when_already_completed_mentions_lifecycle(tmp_path: Path, caps
     assert code == 1
     assert "docs/LIFECYCLE.md" in out
     assert "already completed" in out
-
-
-def test_start_when_in_progress_mentions_lifecycle(tmp_path: Path, capsys):
-    _init_workspace(tmp_path)
-    _new_task(tmp_path)
-    capsys.readouterr()
-    assert cli.main(["start", "--root", str(tmp_path), "TASK-001"]) == 0
-    capsys.readouterr()
-
-    code = cli.main(["start", "--root", str(tmp_path), "TASK-001"])
-    out = capsys.readouterr().out
-    assert code == 1
-    assert "docs/LIFECYCLE.md" in out
-    assert "already in_progress" in out
 
 
 def test_cancel_when_already_canceled_mentions_lifecycle(tmp_path: Path, capsys):

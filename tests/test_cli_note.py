@@ -3,6 +3,8 @@ from pathlib import Path
 from onward import cli
 from onward.artifacts import find_by_id
 
+from tests.workspace_helpers import set_artifact_status_in_frontmatter
+
 
 def _init_workspace(root: Path) -> None:
     assert cli.main(["init", "--root", str(root)]) == 0
@@ -106,7 +108,8 @@ def test_complete_shows_notes(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _create_plan_and_task(tmp_path)
 
-    cli.main(["start", "--root", str(tmp_path), "TASK-001"])
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    set_artifact_status_in_frontmatter(task_path, "in_progress")
     cli.main(["note", "--root", str(tmp_path), "TASK-001", "remember to update docs"])
     capsys.readouterr()
 
@@ -122,7 +125,8 @@ def test_cancel_shows_notes(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _create_plan_and_task(tmp_path)
 
-    cli.main(["start", "--root", str(tmp_path), "TASK-001"])
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    set_artifact_status_in_frontmatter(task_path, "in_progress")
     cli.main(["note", "--root", str(tmp_path), "TASK-001", "this approach won't work"])
     capsys.readouterr()
 
@@ -138,7 +142,8 @@ def test_complete_no_notes_no_section(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _create_plan_and_task(tmp_path)
 
-    cli.main(["start", "--root", str(tmp_path), "TASK-001"])
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    set_artifact_status_in_frontmatter(task_path, "in_progress")
     capsys.readouterr()
 
     code = cli.main(["complete", "--root", str(tmp_path), "TASK-001"])
@@ -148,14 +153,17 @@ def test_complete_no_notes_no_section(tmp_path: Path, capsys):
     assert "Related notes" not in out
 
 
-def test_start_does_not_show_notes(tmp_path: Path, capsys):
+def test_progress_does_not_emit_related_notes_section(tmp_path: Path, capsys):
     _init_workspace(tmp_path)
     _create_plan_and_task(tmp_path)
 
     cli.main(["note", "--root", str(tmp_path), "TASK-001", "a note exists"])
     capsys.readouterr()
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    set_artifact_status_in_frontmatter(task_path, "in_progress")
+    capsys.readouterr()
 
-    code = cli.main(["start", "--root", str(tmp_path), "TASK-001"])
+    code = cli.main(["progress", "--root", str(tmp_path)])
     out = capsys.readouterr().out
 
     assert code == 0

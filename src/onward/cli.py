@@ -17,12 +17,13 @@ from onward.cli_commands import (
     cmd_next,
     cmd_note,
     cmd_progress,
+    cmd_ready,
     cmd_recent,
     cmd_report,
+    cmd_retry,
     cmd_review_plan,
     cmd_show,
     cmd_split,
-    cmd_start,
     cmd_sync_pull,
     cmd_sync_push,
     cmd_sync_status,
@@ -44,7 +45,7 @@ Task markers (each task line in report’s [Active work tree] and in `onward tre
        dependencies are satisfied.
   (H)  Human task — human: true; not suggested by `onward next`.
 `onward report` also prints [Blocking Human Tasks]: human tasks whose IDs appear in
-another open/in-progress artifact’s depends_on or blocked_by lists.
+another open/in-progress artifact’s depends_on list (legacy blocked_by is treated the same).
 """
 
 
@@ -83,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--description", default="", help="Plan description")
     plan_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
     plan_parser.add_argument("--model", default="opus-latest", help="Default model")
-    plan_parser.add_argument("--project", default="", help="Optional project key")
+    plan_parser.add_argument("--project", default=None, help="Optional project key (omit for empty)")
     plan_parser.set_defaults(func=cmd_new_plan)
 
     chunk_parser = new_subparsers.add_parser("chunk", help="Create a chunk")
@@ -92,15 +93,55 @@ def build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("--description", default="", help="Chunk description")
     chunk_parser.add_argument("--priority", default="medium", help="Priority (low|medium|high)")
     chunk_parser.add_argument("--model", default="opus-latest", help="Default model")
-    chunk_parser.add_argument("--project", default="", help="Optional project key")
+    chunk_parser.add_argument(
+        "--project",
+        default=None,
+        help="Optional project key (omit to inherit from plan; use --project '' for none)",
+    )
+    chunk_parser.add_argument(
+        "--effort",
+        default=None,
+        help="T-shirt size: xs|s|m|l|xl (invalid values ignored)",
+    )
+    chunk_parser.add_argument(
+        "--estimated-files",
+        type=int,
+        default=None,
+        help="Rough file touch count for this chunk (informational)",
+    )
     chunk_parser.set_defaults(func=cmd_new_chunk)
 
     task_parser = new_subparsers.add_parser("task", help="Create a task")
     task_parser.add_argument("chunk_id", help="Owning chunk ID (e.g., CHUNK-001)")
-    task_parser.add_argument("title", help="Task title")
+    task_parser.add_argument(
+        "title",
+        nargs="?",
+        default=None,
+        help="Task title (omit when using --batch)",
+    )
+    task_parser.add_argument(
+        "--batch",
+        metavar="FILE",
+        default=None,
+        help="Create multiple tasks from a JSON array in FILE",
+    )
+    task_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --batch: validate and print planned tasks without writing files",
+    )
     task_parser.add_argument("--description", default="", help="Task description")
     task_parser.add_argument("--model", default="sonnet-latest", help="Model")
-    task_parser.add_argument("--project", default="", help="Optional project key")
+    task_parser.add_argument(
+        "--project",
+        default=None,
+        help="Optional project key (omit to inherit from chunk; use --project '' for none)",
+    )
+    task_parser.add_argument(
+        "--effort",
+        default=None,
+        help="T-shirt size: xs|s|m|l|xl (invalid values ignored)",
+    )
     task_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
     task_parser.set_defaults(func=cmd_new_task)
 
@@ -120,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     show_parser = subparsers.add_parser("show", help="Show one artifact")
     show_parser.add_argument("id", help="Artifact ID (PLAN-###, CHUNK-###, TASK-###)")
     show_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    show_parser.add_argument("--project", default="", help="When set, hide artifact if it does not match this project (resolved)")
     show_parser.set_defaults(func=cmd_show)
 
     note_parser = subparsers.add_parser("note", help="Add or view notes on an artifact")
@@ -127,11 +169,6 @@ def build_parser() -> argparse.ArgumentParser:
     note_parser.add_argument("message", nargs="?", default=None, help="Note text (omit to view existing notes)")
     note_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     note_parser.set_defaults(func=cmd_note)
-
-    start_parser = subparsers.add_parser("start", help="Move artifact to in_progress")
-    start_parser.add_argument("id", help="Artifact ID")
-    start_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
-    start_parser.set_defaults(func=cmd_start)
 
     complete_parser = subparsers.add_parser("complete", help="Move artifact to completed")
     complete_parser.add_argument("id", help="Artifact ID")
@@ -143,6 +180,14 @@ def build_parser() -> argparse.ArgumentParser:
     cancel_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     cancel_parser.set_defaults(func=cmd_cancel)
 
+    retry_parser = subparsers.add_parser(
+        "retry",
+        help="Reset a failed task to open (clears run_count for another onward work)",
+    )
+    retry_parser.add_argument("id", help="Task ID (TASK-###)")
+    retry_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    retry_parser.set_defaults(func=cmd_retry)
+
     archive_parser = subparsers.add_parser("archive", help="Archive a plan")
     archive_parser.add_argument("plan_id", help="Plan ID (PLAN-###)")
     archive_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
@@ -150,12 +195,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     split_parser = subparsers.add_parser(
         "split",
-        help="Heuristic split: plan→chunks or chunk→tasks (markdown-derived; see docs/CAPABILITIES.md)",
+        help="Split a plan into chunks or a chunk into tasks (AI executor by default; see docs/CAPABILITIES.md)",
     )
     split_parser.add_argument("id", help="Artifact ID (PLAN-### or CHUNK-###)")
     split_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     split_parser.add_argument("--dry-run", action="store_true", help="Print planned artifacts without writing files")
     split_parser.add_argument("--model", default="", help="Override split model")
+    split_parser.add_argument(
+        "--heuristic",
+        action="store_true",
+        help="Offline split using markdown heuristics (no executor)",
+    )
+    split_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Write artifacts even when split validation reports errors",
+    )
     split_parser.set_defaults(func=cmd_split)
 
     review_plan_parser = subparsers.add_parser("review-plan", help="Run adversarial review(s) of a plan")
@@ -172,17 +227,35 @@ def build_parser() -> argparse.ArgumentParser:
 
     work_parser = subparsers.add_parser("work", help="Execute a task or sequentially execute a chunk")
     work_parser.add_argument("id", help="Artifact ID (TASK-### or CHUNK-###)")
+    work_parser.add_argument(
+        "--no-follow-ups",
+        action="store_true",
+        help="Do not create tasks from structured follow_ups in the executor result (tasks only)",
+    )
     work_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     work_parser.set_defaults(func=cmd_work)
 
     progress_parser = subparsers.add_parser("progress", help="Show in-progress artifacts")
     progress_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    progress_parser.add_argument("--project", default="", help="Filter by project key (resolved)")
     progress_parser.set_defaults(func=cmd_progress)
 
     recent_parser = subparsers.add_parser("recent", help="Show recently completed artifacts")
     recent_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
     recent_parser.add_argument("--limit", type=int, default=10, help="Max items to show")
+    recent_parser.add_argument("--project", default="", help="Filter by project key (resolved)")
     recent_parser.set_defaults(func=cmd_recent)
+
+    ready_parser = subparsers.add_parser(
+        "ready",
+        help="List actionable tasks across plans (grouped by plan and chunk)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=TASK_MARKER_LEGEND_EPILOG,
+    )
+    ready_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    ready_parser.add_argument("--project", default="", help="Filter by project key (resolved)")
+    ready_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
+    ready_parser.set_defaults(func=cmd_ready)
 
     next_parser = subparsers.add_parser("next", help="Suggest next open artifact")
     next_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
@@ -191,7 +264,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     tree_parser = subparsers.add_parser(
         "tree",
-        help="Show open plans with chunks/tasks in open or in_progress (excludes completed/canceled)",
+        help="Show open plans with chunks/tasks in open, in_progress, or failed (excludes completed/canceled)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=TASK_MARKER_LEGEND_EPILOG,
     )

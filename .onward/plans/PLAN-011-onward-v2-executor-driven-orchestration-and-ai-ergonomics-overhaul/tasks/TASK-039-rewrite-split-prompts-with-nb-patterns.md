@@ -5,7 +5,7 @@ plan: "PLAN-011"
 chunk: "CHUNK-010"
 project: ""
 title: "Rewrite split prompts with nb patterns"
-status: "open"
+status: "completed"
 description: ""
 human: false
 model: "sonnet-latest"
@@ -15,7 +15,7 @@ blocked_by: []
 files: []
 acceptance: []
 created_at: "2026-03-20T16:01:04Z"
-updated_at: "2026-03-20T16:01:04Z"
+updated_at: "2026-03-20T18:17:36Z"
 ---
 
 # Context

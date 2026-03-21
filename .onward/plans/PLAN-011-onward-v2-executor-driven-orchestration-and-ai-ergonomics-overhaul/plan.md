@@ -3,12 +3,12 @@ id: "PLAN-011"
 type: "plan"
 project: ""
 title: "Onward v2: executor-driven orchestration and AI ergonomics overhaul"
-status: "open"
+status: "completed"
 description: "Overhaul Onward from a task tracker into a real AI orchestration tool with working executor integration, intelligent splitting, structured feedback, and multi-agent coordination."
 priority: "high"
 model: "opus-latest"
 created_at: "2026-03-20T15:50:24Z"
-updated_at: "2026-03-20T15:50:24Z"
+updated_at: "2026-03-20T22:39:08Z"
 ---
 
 # Summary

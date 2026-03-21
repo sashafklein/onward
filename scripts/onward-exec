@@ -11,19 +11,18 @@ import subprocess
 import sys
 from typing import Any
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
-# Extend here for additional CLIs (codex, gpt, etc.).
-def _model_uses_claude_cli(model: str) -> bool:
+
+def _route_cli(model: str) -> str:
+    """Return 'cursor' or 'claude' based on model string."""
     m = (model or "").strip().lower()
-    if not m:
-        return True
     if "claude" in m:
-        return True
-    # Common Onward aliases resolve to claude-* model ids
+        return "claude"
     if m.startswith("opus") or m.startswith("sonnet") or m.startswith("haiku"):
-        return True
-    return False
+        return "claude"
+    # Everything else (composer-*, gpt-*, gemini-*, cursor-*, etc.) -> cursor agent
+    return "cursor"
 
 
 def _plan_context_lines(plan: dict[str, Any] | None) -> list[str]:
@@ -105,12 +104,34 @@ def resolve_model(payload: dict[str, Any]) -> str:
         task = payload.get("task")
         if isinstance(task, dict) and task.get("model"):
             return str(task["model"])
-        return "opus-latest"
+        return "composer-2"
     if ptype == "hook":
-        return str(payload.get("model", "") or "opus-latest")
+        return str(payload.get("model", "") or "composer-2")
     if ptype == "review":
-        return str(payload.get("model", "") or "opus-latest")
-    return "opus-latest"
+        return str(payload.get("model", "") or "composer-2")
+    return "composer-2"
+
+
+def run_cursor_agent(model: str, prompt: str, *, dry_run: bool) -> int:
+    if dry_run:
+        sys.stdout.write(prompt)
+        if not prompt.endswith("\n"):
+            sys.stdout.write("\n")
+        return 0
+    exe = shutil.which("cursor")
+    if not exe:
+        print(
+            "error: 'cursor' CLI not found on PATH (install it or use --dry-run)",
+            file=sys.stderr,
+        )
+        return 1
+    cmd = [exe, "agent", "--model", model, "--yolo", "--trust", "-p", prompt]
+    proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+    return int(proc.returncode)
 
 
 def run_claude(model: str, prompt: str, *, dry_run: bool) -> int:
@@ -126,12 +147,8 @@ def run_claude(model: str, prompt: str, *, dry_run: bool) -> int:
             file=sys.stderr,
         )
         return 1
-    proc = subprocess.run(
-        [exe, "--model", model, "-p", prompt],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    cmd = [exe, "--model", model, "--dangerously-skip-permissions", "-p", prompt]
+    proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if proc.stdout:
         sys.stdout.write(proc.stdout)
     if proc.stderr:
@@ -185,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ptype = str(payload.get("type", ""))
     model = resolve_model(payload)
+    cli = _route_cli(model)
 
     if ptype == "task":
         prompt = build_task_prompt(payload)
@@ -196,14 +214,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: unknown payload type {ptype!r}", file=sys.stderr)
         return 1
 
-    if not _model_uses_claude_cli(model):
-        print(
-            f"error: no CLI route for model {model!r} (extend scripts/onward-exec)",
-            file=sys.stderr,
-        )
-        return 1
+    if cli == "cursor":
+        code = run_cursor_agent(model, prompt, dry_run=args.dry_run)
+    else:
+        code = run_claude(model, prompt, dry_run=args.dry_run)
 
-    code = run_claude(model, prompt, dry_run=args.dry_run)
     if (
         code == 0
         and not args.dry_run

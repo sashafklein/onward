@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-011"
 project: ""
 title: "Structured feedback and recovery"
-status: "open"
+status: "completed"
 description: "Executor returns structured results (files changed, follow-ups, acceptance status). Recovery docs for failure handling."
 priority: "medium"
 model: "sonnet-latest"
@@ -13,7 +13,7 @@ depends_on:
   - "CHUNK-008"
   - "CHUNK-009"
 created_at: "2026-03-20T15:52:26Z"
-updated_at: "2026-03-20T15:52:26Z"
+updated_at: "2026-03-20T18:23:00Z"
 ---
 
 # Summary

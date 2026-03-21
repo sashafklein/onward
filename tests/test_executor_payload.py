@@ -48,7 +48,7 @@ def test_validate_hook_task_payload_ok():
     p = with_schema_version(
         {
             "type": "hook",
-            "phase": "pre_task_markdown",
+            "phase": "post_task_markdown",
             "run_id": "RUN-1",
             "model": "m",
             "hook_path": "h.md",
@@ -70,6 +70,20 @@ def test_validate_hook_chunk_payload_ok():
             "hook_body": "x",
             "chunk": {},
             "chunk_body": "c",
+        }
+    )
+    assert validate_executor_stdin_payload(p) == []
+
+
+def test_validate_split_payload_ok():
+    p = with_schema_version(
+        {
+            "type": "split",
+            "model": "opus-latest",
+            "prompt": "instructions",
+            "artifact_metadata": {"id": "PLAN-001", "type": "plan"},
+            "artifact_body": "# Plan\n",
+            "split_type": "plan",
         }
     )
     assert validate_executor_stdin_payload(p) == []
@@ -125,3 +139,4 @@ def test_schema_file_is_valid_json():
     data = json.loads(raw)
     assert data["$defs"]["task"]["properties"]["type"]["const"] == "task"
     assert data["$defs"]["task"]["required"]
+    assert data["$defs"]["split"]["properties"]["type"]["const"] == "split"

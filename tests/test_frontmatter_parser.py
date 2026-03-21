@@ -40,7 +40,7 @@ def test_parse_simple_yaml_rejects_mixed_nested_block():
   nested: value
 """
 
-    with pytest.raises(ValueError, match="mixed nested yaml"):
+    with pytest.raises(ValueError, match="invalid yaml"):
         parse_simple_yaml(invalid)
 
 

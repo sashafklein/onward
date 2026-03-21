@@ -32,6 +32,16 @@ _HOOK_COMMON = frozenset({"type", "schema_version", "phase", "model", "hook_path
 _HOOK_TASK_EXTRA = frozenset({"run_id", "task", "task_body"})
 _HOOK_CHUNK_EXTRA = frozenset({"chunk", "chunk_body"})
 
+_SPLIT_REQUIRED = frozenset({
+    "type",
+    "schema_version",
+    "model",
+    "prompt",
+    "artifact_metadata",
+    "artifact_body",
+    "split_type",
+})
+
 
 def with_schema_version(payload: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of the executor stdin payload with `schema_version` set."""
@@ -84,6 +94,10 @@ def validate_executor_stdin_payload(payload: dict[str, Any]) -> list[str]:
             missing = sorted(_HOOK_TASK_EXTRA - set(effective))
             if missing:
                 issues.append(f"task hook payload missing keys: {', '.join(missing)}")
+    elif ptype == "split":
+        missing = sorted(_SPLIT_REQUIRED - set(effective))
+        if missing:
+            issues.append(f"split payload missing keys: {', '.join(missing)}")
     else:
         issues.append(f"unknown or missing payload type {ptype!r}")
 

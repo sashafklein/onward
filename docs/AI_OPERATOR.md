@@ -12,9 +12,8 @@ Use this every session:
 
 1. **`onward report`** — see plans, chunks, tasks, blockers, and recent activity.
 2. **`onward next`** — pick a suggested open item (optional: filter with `--project <key>`).
-3. **`onward start TASK-###`** — optional; marks `in_progress` for visibility before you do anything else.
-4. **`onward work TASK-###`** — runs hooks + executor; on **success** the task is already **`completed`**.
-5. **`onward report`** again — hand off cleanly to the next session or agent.
+3. **`onward work TASK-###`** — runs hooks + executor; on **success** the task is already **`completed`**.
+4. **`onward report`** again — hand off cleanly to the next session or agent.
 
 Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in dependency order, then runs the chunk post hook. Plan-sized execution: **`onward work PLAN-###`** walks every non-terminal chunk in ID order (respecting chunk **`depends_on`**), same per-chunk behavior as above, then completes the plan. Details: [LIFECYCLE.md](LIFECYCLE.md).
 
@@ -26,8 +25,8 @@ Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in depende
 | --------- | ------- |
 | You are using the configured executor to do the task (normal path) | **`onward work TASK-###`** |
 | You finished the work **outside** `onward work` (editor-only, different tool, emergency) and want to mark it done | **`onward complete TASK-###`** |
-| You want to show “I’m on this” before running the executor | **`onward start TASK-###`** *(optional)* |
 | You are abandoning the item | **`onward cancel TASK-###`** |
+| A task **`failed`** last run and you want to reset it for another **`work`** | **`onward retry TASK-###`** |
 
 **Do not** run **`onward complete`** after a **successful** **`onward work`** on the same task — the task is already **`completed`**; `complete` will error.
 
@@ -35,16 +34,16 @@ Chunk-sized execution: **`onward work CHUNK-###`** drains ready tasks in depende
 
 ## Project flags and metadata
 
-- **`--project <key>`** on `list`, `report`, `next`, `tree`, etc. scopes views to one project stream. Use a stable key your team agrees on. **`onward tree`** (and the report’s **Active work tree** section) list only **open** plans and **open / in_progress** chunks and tasks — not completed or canceled leaves.
+- **`--project <key>`** on `list`, `report`, `next`, `tree`, etc. scopes views to one project stream. Use a stable key your team agrees on. **`onward tree`** (and the report’s **Active work tree** section) list **open** plans, **open / in_progress** chunks, and tasks in **open**, **in_progress**, or **failed** — not completed or canceled leaves.
 - **`--blocking`** — tasks/chunks that block others (good for “what stops the train?”).
 - **`--human`** — work that needs a human decision; agents should not silently steamroll these.
 
 In artifact frontmatter:
 
 - **`human: true`** — mark tasks that require a person (reviews, secrets, policy).
-- **`blocked_by: [TASK-###, …]`** — encode real dependencies; keeps `next` and chunk ordering honest.
+- **`depends_on: [TASK-###, …]`** — encode real dependencies; keeps `next` and chunk ordering honest. Legacy **`blocked_by`** is still read with the same completion-based rules; prefer **`depends_on`** for new tasks.
 
-When you discover new work during a run, **create a new task** (with `blocked_by` / `human` / `project` as appropriate) — do not leave it only in chat.
+When you discover new work during a run, **create a new task** (with `depends_on` / `human` / `project` as appropriate) — do not leave it only in chat.
 
 ---
 
@@ -88,23 +87,15 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ---
 
-### 5. Using **`start`** as mandatory before every task
-
-**Symptom:** Extra friction; agents think `start` → manual work → `complete` is the only valid path.
-
-**Recovery:** **`onward start`** is optional. You may run **`onward work`** directly from **`open`**. Use **`start`** when you want visible “claimed” state before execution.
-
----
-
-### 6. Ignoring **`human`** and **`blocked_by`**
+### 5. Ignoring **`human`** and **`blocked_by`**
 
 **Symptom:** Agents pick tasks that need a person, or run work out of dependency order.
 
-**Recovery:** Use **`onward list --human`** and **`onward list --blocking`** (with **`--project`** as needed). Fix frontmatter on tasks so **`blocked_by`** reflects real order; mark **`human: true`** where appropriate.
+**Recovery:** Use **`onward list --human`** and **`onward list --blocking`** (with **`--project`** as needed). Fix frontmatter on tasks so **`depends_on`** reflects real order; mark **`human: true`** where appropriate.
 
 ---
 
-### 7. Expecting sync push/pull in **`local`** mode
+### 6. Expecting sync push/pull in **`local`** mode
 
 **Symptom:** CLI refuses push/pull with a message about `sync.mode` (exit code **1**).
 
@@ -112,7 +103,7 @@ If **`sync.mode`** in `.onward.config.yaml` is **`branch`** or **`repo`**, you c
 
 ---
 
-### 8. Ending a session without **`onward report`**
+### 7. Ending a session without **`onward report`**
 
 **Symptom:** Next session or agent has no snapshot of status or recent runs.
 
@@ -129,6 +120,7 @@ When `executor.enabled` is true, **`onward work`**, **`onward review-plan`**, an
 | Doc | Use |
 | --- | --- |
 | [LIFECYCLE.md](LIFECYCLE.md) | Status rules, `work` vs `complete`, chunk behavior |
+| [RECOVERY.md](RECOVERY.md) | Failed runs, logs, retry, circuit breaker |
 | [CAPABILITIES.md](CAPABILITIES.md) | Executor vs local commands |
 | [WORK_HANDOFF.md](WORK_HANDOFF.md) | Stdin payload, runs, hooks |
 | [INSTALLATION.md](../INSTALLATION.md) | Install, agent paste blocks, sync troubleshooting |

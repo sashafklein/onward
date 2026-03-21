@@ -37,6 +37,15 @@ def test_preflight_skips_shell_stub_commands(cmd: str) -> None:
     assert preflight_executor_command(config) is None
 
 
+def test_preflight_skips_builtin_executor_command() -> None:
+    assert preflight_executor_command({"executor": {"enabled": True, "command": "builtin", "args": []}}) is None
+    assert preflight_executor_command({"executor": {"enabled": True, "command": "Builtin", "args": []}}) is None
+
+
+def test_preflight_skips_when_executor_command_omitted_builtin_path() -> None:
+    assert preflight_executor_command({"executor": {"enabled": True, "args": []}}) is None
+
+
 def test_preflight_reports_missing_path(tmp_path: Path) -> None:
     missing = tmp_path / "definitely-not-an-executor"
     config = {"executor": {"enabled": True, "command": str(missing), "args": []}}

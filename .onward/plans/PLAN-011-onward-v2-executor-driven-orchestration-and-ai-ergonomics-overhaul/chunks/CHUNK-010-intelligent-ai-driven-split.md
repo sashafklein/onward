@@ -4,7 +4,7 @@ type: "chunk"
 plan: "PLAN-011"
 project: ""
 title: "Intelligent AI-driven split"
-status: "open"
+status: "completed"
 description: "Wire onward split to the executor for real AI decomposition. Port nb repo chunking and task-sizing patterns."
 priority: "high"
 model: "sonnet-latest"
@@ -12,7 +12,7 @@ estimated_files: 15
 depends_on:
   - "CHUNK-008"
 created_at: "2026-03-20T15:52:26Z"
-updated_at: "2026-03-20T15:52:26Z"
+updated_at: "2026-03-20T18:17:36Z"
 ---
 
 # Summary
@@ -48,9 +48,9 @@ Make `onward split` actually intelligent. Wire it to the executor so AI models d
 
 # Completion criteria
 
-- [ ] `onward split PLAN-X` sends plan to AI and creates well-sized chunks
-- [ ] `onward split CHUNK-X` sends chunk to AI and creates self-contained tasks
-- [ ] Split prompts include file sizing rules, self-containment requirements, model labels
-- [ ] Validation catches oversized chunks (>35 files) and tasks (>9 files)
-- [ ] `--heuristic` flag preserves old behavior for offline use
-- [ ] Dry-run shows validation warnings
+- [x] `onward split PLAN-X` sends plan to AI and creates well-sized chunks
+- [x] `onward split CHUNK-X` sends chunk to AI and creates self-contained tasks
+- [x] Split prompts include file sizing rules, self-containment requirements, model labels
+- [x] Validation catches oversized chunks (>35 files) and tasks (>9 files)
+- [x] `--heuristic` flag preserves old behavior for offline use
+- [x] Dry-run shows validation warnings

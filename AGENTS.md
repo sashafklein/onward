@@ -21,7 +21,6 @@ This is your operating rhythm. Follow it relentlessly:
 ```
 onward report                 ← See the full picture
 onward next                   ← Pick the next thing
-onward start <ID>             ← Optional: mark in_progress (claim / visibility)
 onward work <TASK-ID|CHUNK-ID|PLAN-ID>  ← Run executor (task / chunk / whole plan); on success tasks complete
 onward report                 ← Hand off to the next session or agent
 ```
@@ -43,10 +42,9 @@ When the user describes a new initiative, feature, or project:
 ### During Execution
 
 - Prefer **`onward work <TASK-ID>`** for executor-backed runs; it updates status and writes run records.
-- Run **`onward start <ID>`** when you want the artifact **`in_progress`** before other steps (optional if you go straight to `work`).
 - Run **`onward complete <ID>`** only when closing a task **without** `work`, or for artifacts that never use `work`.
 - If you discover follow-up work, blockers, or refactors: IMMEDIATELY create a new task
-  with `onward new task <CHUNK-ID> "<title>"` and set `blocked_by`, `human`, and `project`
+  with `onward new task <CHUNK-ID> "<title>"` and set `depends_on`, `human`, and `project`
   metadata in the frontmatter as appropriate
 - Run `onward report` at the end of every work session to leave a clear picture for the
   next session or the next agent
@@ -65,11 +63,13 @@ When the user describes a new initiative, feature, or project:
 
 ## Codebase Notes
 
-- Source lives in `src/onward/` (`cli.py` + `cli_commands.py` for handlers, plus `artifacts.py`, `execution.py`, `sync.py`, `preflight.py`, `executor_ack.py`, `executor_payload.py`, …)
+- Source lives in `src/onward/` (`cli.py` + `cli_commands.py` for handlers, plus `artifacts.py`, `execution.py`, `sync.py`, `preflight.py`, `executor.py`, `executor_builtin.py`, `executor_ack.py`, `executor_payload.py`, …). Default task execution uses the **built-in** executor (Claude/Cursor CLIs) unless `executor.command` is set to a non-`builtin` command; tiered **`models`** keys are documented in **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)**.
 - Tests are in `tests/` — run with `pytest` or `./scripts/test.sh`
 - The package is `onward-cli`, installed via `pip install -e .`
 - Entry point: `onward` command (maps to `onward.cli:main`)
 - Python 3.11+ required
 - Templates, hooks, and prompts live in `.onward/templates/`, `.onward/hooks/`, `.onward/prompts/`
 - Contributor guide: `docs/CONTRIBUTION.md`
+- Recovery from failed runs: **[docs/RECOVERY.md](docs/RECOVERY.md)**
 - Planning / roadmap: `.onward/plans/` (run `onward report` for current work)
+- Deferred ideas (not tracked as artifacts): **[docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md)** — park follow-ups there instead of chat

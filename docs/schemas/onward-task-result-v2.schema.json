@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "onward-task-result-v2",
+  "title": "Onward task result (stdout/stderr acknowledgment, v2)",
+  "description": "Optional structured fields printed with onward_task_result when schema_version is 2. Scanned bottom-up like v1; see docs/WORK_HANDOFF.md.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["onward_task_result"],
+  "properties": {
+    "onward_task_result": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "schema_version"],
+      "properties": {
+        "schema_version": { "type": "integer", "const": 2 },
+        "status": { "type": "string", "const": "completed" },
+        "run_id": {
+          "type": "string",
+          "description": "Optional; when set, must equal ONWARD_RUN_ID."
+        },
+        "summary": { "type": "string" },
+        "notes": { "type": "string" },
+        "files_changed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "follow_ups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "description"],
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "acceptance_met": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "acceptance_unmet": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

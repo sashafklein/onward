@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from onward.config import load_artifact_template, load_workspace_config, model_setting
 from onward.util import (
     as_str_list,
     colorize,
@@ -143,26 +144,14 @@ def validate_artifact(artifact: Artifact) -> list[str]:
             issues.append(f"{artifact.file_path}: missing required field '{field}'")
 
     status = str(artifact.metadata.get("status", ""))
-    if status and status not in {"open", "in_progress", "completed", "canceled"}:
+    if status and status not in {"open", "in_progress", "completed", "canceled", "failed"}:
         issues.append(f"{artifact.file_path}: invalid status '{status}'")
 
     return issues
 
 
 def _lifecycle_transition_error(current: str, action: str) -> str:
-    """Human-oriented error when start/complete/cancel is invalid; keep in sync with docs/LIFECYCLE.md."""
-    if action == "start":
-        if current == "in_progress":
-            return (
-                "cannot start: artifact is already in_progress "
-                "(onward start only applies to open items; use onward work to execute, "
-                "or onward complete/cancel to close). See docs/LIFECYCLE.md"
-            )
-        if current in {"completed", "canceled"}:
-            return (
-                f"cannot start: artifact is already {current} (terminal state). See docs/LIFECYCLE.md"
-            )
-        return f"cannot start artifact in state {current!r}. See docs/LIFECYCLE.md"
+    """Human-oriented error when start/complete/cancel/retry is invalid; keep in sync with docs/LIFECYCLE.md."""
     if action == "complete":
         if current == "completed":
             return (
@@ -182,14 +171,19 @@ def _lifecycle_transition_error(current: str, action: str) -> str:
                 f"cannot cancel: artifact is already {current} (terminal state). See docs/LIFECYCLE.md"
             )
         return f"cannot cancel artifact in state {current!r}. See docs/LIFECYCLE.md"
+    if action == "retry":
+        return (
+            f"cannot retry: only failed tasks can be reset to open (current status is {current!r}). "
+            "See docs/LIFECYCLE.md"
+        )
     return f"cannot {action} artifact in state {current!r}. See docs/LIFECYCLE.md"
 
 
 def transition_status(current: str, target: str) -> str:
     transitions = {
-        "start": {"open": "in_progress"},
         "complete": {"open": "completed", "in_progress": "completed"},
         "cancel": {"open": "canceled", "in_progress": "canceled"},
+        "retry": {"failed": "open"},
     }
     if target not in transitions:
         raise ValueError(f"unknown transition target: {target}")
@@ -209,6 +203,31 @@ def artifact_project(artifact: Artifact) -> str:
     return str(artifact.metadata.get("project", "")).strip()
 
 
+def resolve_project(artifact: Artifact, by_id: dict[str, Artifact]) -> str:
+    """Effective project: artifact's own field, else inherited from chunk then plan."""
+    direct = artifact_project(artifact)
+    if direct:
+        return direct
+    art_type = str(artifact.metadata.get("type", ""))
+    if art_type == "task":
+        chunk_id = str(artifact.metadata.get("chunk", ""))
+        chunk = by_id.get(chunk_id)
+        if chunk:
+            cp = artifact_project(chunk)
+            if cp:
+                return cp
+        plan_id = str(artifact.metadata.get("plan", ""))
+        plan = by_id.get(plan_id)
+        if plan:
+            return artifact_project(plan)
+    elif art_type == "chunk":
+        plan_id = str(artifact.metadata.get("plan", ""))
+        plan = by_id.get(plan_id)
+        if plan:
+            return artifact_project(plan)
+    return ""
+
+
 def is_human_task(artifact: Artifact) -> bool:
     if str(artifact.metadata.get("type", "")) != "task":
         return False
@@ -218,7 +237,24 @@ def is_human_task(artifact: Artifact) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
+def summarize_effort_remaining(artifacts: list[Artifact]) -> dict[str, int]:
+    """Count open/in_progress tasks by effort bucket (``unestimated`` = no/invalid effort)."""
+    counts = {"xs": 0, "s": 0, "m": 0, "l": 0, "xl": 0, "unestimated": 0}
+    for a in artifacts:
+        if str(a.metadata.get("type", "")) != "task":
+            continue
+        if str(a.metadata.get("status", "")) not in {"open", "in_progress"}:
+            continue
+        e = str(a.metadata.get("effort", "")).strip().lower()
+        if e in {"xs", "s", "m", "l", "xl"}:
+            counts[e] += 1
+        else:
+            counts["unestimated"] += 1
+    return counts
+
+
 def blocking_ids(artifacts: list[Artifact]) -> set[str]:
+    """IDs referenced in ``depends_on`` or legacy ``blocked_by`` (deprecated; same semantics)."""
     blockers: set[str] = set()
     for artifact in artifacts:
         status = str(artifact.metadata.get("status", ""))
@@ -229,8 +265,117 @@ def blocking_ids(artifacts: list[Artifact]) -> set[str]:
     return {item for item in blockers if item}
 
 
+def find_dependents(artifacts: list[Artifact], task_id: str) -> list[Artifact]:
+    """Tasks whose ``depends_on`` / ``blocked_by`` lists include ``task_id``."""
+    tid = task_id.strip()
+    out: list[Artifact] = []
+    for artifact in artifacts:
+        if str(artifact.metadata.get("type", "")) != "task":
+            continue
+        deps = as_str_list(artifact.metadata.get("depends_on")) + as_str_list(
+            artifact.metadata.get("blocked_by")
+        )
+        if tid in deps:
+            out.append(artifact)
+    out.sort(key=lambda a: str(a.metadata.get("id", "")))
+    return out
+
+
+def create_follow_up_tasks(
+    root: Path,
+    parent: Artifact,
+    follow_ups: list[dict[str, Any]],
+) -> tuple[list[str], list[str]]:
+    """Create tasks from executor ``follow_ups`` in the same chunk as ``parent``.
+
+    Skips a follow-up when an **open** task with the same title already exists in the chunk.
+    Returns ``(created_ids, warnings)``.
+    """
+    if str(parent.metadata.get("type", "")) != "task":
+        raise ValueError("parent must be a task artifact")
+    if not follow_ups:
+        return [], []
+
+    parent_id = str(parent.metadata.get("id", ""))
+    plan_id = str(parent.metadata.get("plan", ""))
+    chunk_id = str(parent.metadata.get("chunk", ""))
+    project = str(parent.metadata.get("project", ""))
+    executor = str(parent.metadata.get("executor", "onward-exec"))
+
+    config = load_workspace_config(root)
+    default_model = model_setting(config, "task_default", "sonnet-latest")
+
+    chunk_tasks = [
+        a
+        for a in collect_artifacts(root)
+        if str(a.metadata.get("type", "")) == "task" and str(a.metadata.get("chunk", "")) == chunk_id
+    ]
+    open_titles = {
+        str(a.metadata.get("title", "")).strip()
+        for a in chunk_tasks
+        if str(a.metadata.get("status", "")) == "open"
+    }
+
+    plan_dir = find_plan_dir(root, plan_id)
+    tasks_dir = plan_dir / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+
+    created: list[str] = []
+    warnings: list[str] = []
+    body_template = load_artifact_template(root, "task")
+
+    for fu in follow_ups:
+        if not isinstance(fu, dict):
+            continue
+        title = str(fu.get("title", "")).strip()
+        desc = str(fu.get("description", "")).strip()
+        if not title or not desc:
+            continue
+        pri = str(fu.get("priority", "medium")).strip().lower()
+        if pri not in {"low", "medium", "high"}:
+            pri = "medium"
+
+        if title in open_titles:
+            warnings.append(f"Follow-up skipped (duplicate open task title in chunk): {title!r}")
+            continue
+
+        task_id = next_id(root, "TASK")
+        now = now_iso()
+        slug = slugify(title)
+        metadata: dict[str, Any] = {
+            "id": task_id,
+            "type": "task",
+            "plan": plan_id,
+            "chunk": chunk_id,
+            "project": project,
+            "title": title,
+            "status": "open",
+            "description": desc,
+            "human": False,
+            "model": default_model,
+            "executor": executor,
+            "depends_on": [parent_id],
+            "priority": pri,
+            "files": [],
+            "acceptance": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+        target = tasks_dir / f"{task_id}-{slug}.md"
+        target.write_text(format_artifact(metadata, body_template), encoding="utf-8")
+        created.append(task_id)
+        open_titles.add(title)
+
+    if created:
+        regenerate_indexes(root)
+    return created, warnings
+
+
 def task_is_next_actionable(artifact: Artifact, status_by_id: dict[str, str]) -> bool:
-    """True when ``onward work`` could run this task next (not human-only, deps satisfied)."""
+    """True when ``onward work`` could run this task next (not human-only, deps satisfied).
+
+    Only ``open`` / ``in_progress`` tasks are actionable; ``failed`` and other statuses are excluded.
+    """
     if str(artifact.metadata.get("type", "")) != "task":
         return False
     status = str(artifact.metadata.get("status", ""))
@@ -238,10 +383,10 @@ def task_is_next_actionable(artifact: Artifact, status_by_id: dict[str, str]) ->
         return False
     if is_human_task(artifact):
         return False
-    if as_str_list(artifact.metadata.get("blocked_by")):
-        return False
-    depends_on = as_str_list(artifact.metadata.get("depends_on"))
-    unmet = [dep for dep in depends_on if status_by_id.get(dep) != "completed"]
+    all_deps = as_str_list(artifact.metadata.get("depends_on")) + as_str_list(
+        artifact.metadata.get("blocked_by")
+    )
+    unmet = [dep for dep in all_deps if status_by_id.get(dep) != "completed"]
     if unmet:
         return False
     return True
@@ -262,6 +407,7 @@ def chunk_has_actionable_executor_task(
 
 
 def select_next_artifact(artifacts: list[Artifact], project: str | None = None) -> Artifact | None:
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     status_by_id = {
         str(a.metadata.get("id", "")): str(a.metadata.get("status", ""))
         for a in artifacts
@@ -276,7 +422,7 @@ def select_next_artifact(artifacts: list[Artifact], project: str | None = None) 
         artifact_type = str(artifact.metadata.get("type", ""))
         status = str(artifact.metadata.get("status", ""))
 
-        if project and artifact_project(artifact) != project:
+        if project and resolve_project(artifact, by_id) != project:
             continue
 
         if artifact_type == "task" and task_is_next_actionable(artifact, status_by_id):
@@ -308,6 +454,177 @@ def select_next_artifact(artifacts: list[Artifact], project: str | None = None) 
     return None
 
 
+def _read_index_version(root: Path) -> int:
+    index_path = root / ".onward/plans/index.yaml"
+    if not index_path.exists():
+        return 0
+    try:
+        raw = index_path.read_text(encoding="utf-8")
+        data = parse_simple_yaml(raw)
+        if isinstance(data, dict):
+            v = data.get("index_version")
+            if isinstance(v, int):
+                return v
+    except Exception:  # noqa: BLE001
+        pass
+    return 0
+
+
+def load_index(root: Path) -> dict[str, Any] | None:
+    index_path = root / ".onward/plans/index.yaml"
+    if not index_path.exists():
+        return None
+    try:
+        data = parse_simple_yaml(index_path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def index_is_fresh(root: Path, index: dict[str, Any] | None = None) -> bool:
+    """True when ``index.yaml`` is at least as new as every plan artifact file."""
+    index_path = root / ".onward/plans/index.yaml"
+    if not index_path.exists():
+        return False
+    if index is None:
+        index = load_index(root)
+    if not index:
+        return False
+    idx_mtime = index_path.stat().st_mtime
+    plans_root = root / ".onward/plans"
+    if not plans_root.exists():
+        return True
+    newest = 0.0
+    for path in plans_root.rglob("*.md"):
+        if ".archive" in path.parts:
+            continue
+        try:
+            newest = max(newest, path.stat().st_mtime)
+        except OSError:
+            continue
+    return idx_mtime >= newest
+
+
+def _artifact_from_index_row(kind: str, row: dict[str, Any], root: Path) -> Artifact:
+    path = root / Path(str(row.get("path", "")))
+    meta: dict[str, Any] = {
+        "id": row.get("id"),
+        "type": kind,
+        "title": row.get("title"),
+        "status": row.get("status"),
+    }
+    if kind == "plan":
+        meta["project"] = row.get("project") or ""
+    elif kind == "chunk":
+        meta["plan"] = row.get("plan")
+        meta["project"] = row.get("project") or ""
+        meta["depends_on"] = row.get("depends_on") or []
+        ef = row.get("estimated_files")
+        if isinstance(ef, int):
+            meta["estimated_files"] = ef
+        effort = row.get("effort")
+        if effort:
+            meta["effort"] = effort
+    elif kind == "task":
+        meta["plan"] = row.get("plan")
+        meta["chunk"] = row.get("chunk")
+        meta["project"] = row.get("project") or ""
+        meta["depends_on"] = row.get("depends_on") or []
+        meta["blocked_by"] = row.get("blocked_by") or []
+        meta["human"] = bool(row.get("human", False))
+        effort = row.get("effort")
+        if effort:
+            meta["effort"] = effort
+    return Artifact(file_path=path, body="", metadata=meta)
+
+
+def artifacts_from_index(index: dict[str, Any], root: Path) -> list[Artifact]:
+    out: list[Artifact] = []
+    for row in index.get("plans") or []:
+        if isinstance(row, dict) and row.get("id"):
+            out.append(_artifact_from_index_row("plan", row, root))
+    for row in index.get("chunks") or []:
+        if isinstance(row, dict) and row.get("id"):
+            out.append(_artifact_from_index_row("chunk", row, root))
+    for row in index.get("tasks") or []:
+        if isinstance(row, dict) and row.get("id"):
+            out.append(_artifact_from_index_row("task", row, root))
+    return out
+
+
+def collect_artifacts_fast(root: Path) -> list[Artifact] | None:
+    index = load_index(root)
+    if not index or not index_is_fresh(root, index):
+        return None
+    return artifacts_from_index(index, root)
+
+
+def artifacts_from_index_or_collect(root: Path) -> list[Artifact]:
+    fast = collect_artifacts_fast(root)
+    if fast is not None:
+        return fast
+    return collect_artifacts(root)
+
+
+def list_from_index(
+    root: Path,
+    *,
+    type_filter: str = "all",
+    project_filter: str = "",
+    blocking: bool = False,
+    human_only: bool = False,
+) -> list[dict[str, str]] | None:
+    """Return tabular rows from a fresh index, or None to signal fallback to full scan."""
+    index = load_index(root)
+    if not index or not index_is_fresh(root, index):
+        return None
+    project_filter = project_filter.strip()
+    artifacts_full = artifacts_from_index(index, root)
+    blocker_ids = blocking_ids(artifacts_full) if blocking else set()
+
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts_full if a.metadata.get("id")}
+
+    rows: list[dict[str, str]] = []
+
+    def consider(kind: str, row: dict[str, Any]) -> None:
+        if not isinstance(row, dict) or not row.get("id"):
+            return
+        aid = str(row["id"])
+        pseudo = _artifact_from_index_row(kind, row, root)
+        if type_filter != "all" and kind != type_filter:
+            return
+        if project_filter and resolve_project(pseudo, by_id) != project_filter:
+            return
+        if blocking and aid not in blocker_ids:
+            return
+        if human_only and (kind != "task" or not is_human_task(pseudo)):
+            return
+        rows.append(
+            {
+                "id": aid,
+                "type": kind,
+                "status": str(row.get("status", "")),
+                "project": resolve_project(pseudo, by_id),
+                "human": "true" if kind == "task" and is_human_task(pseudo) else "false",
+                "title": str(row.get("title", "")),
+                "path": str(row.get("path", "")),
+            }
+        )
+
+    if type_filter in ("all", "plan"):
+        for row in index.get("plans") or []:
+            consider("plan", row)
+    if type_filter in ("all", "chunk"):
+        for row in index.get("chunks") or []:
+            consider("chunk", row)
+    if type_filter in ("all", "task"):
+        for row in index.get("tasks") or []:
+            consider("task", row)
+
+    rows.sort(key=lambda r: (r["type"], r["id"]))
+    return rows
+
+
 def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = None) -> None:
     index_path = root / ".onward/plans/index.yaml"
     recent_path = root / ".onward/plans/recent.yaml"
@@ -318,7 +635,7 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
 
     for artifact in collect_artifacts(root):
         m = artifact.metadata
-        row = {
+        row: dict[str, Any] = {
             "id": m.get("id"),
             "title": m.get("title"),
             "status": m.get("status"),
@@ -327,13 +644,31 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
 
         artifact_type = m.get("type")
         if artifact_type == "plan":
+            row["project"] = m.get("project") or ""
             plans.append(row)
         elif artifact_type == "chunk":
             row["plan"] = m.get("plan")
+            row["project"] = m.get("project") or ""
+            row["depends_on"] = as_str_list(m.get("depends_on"))
+            ef = m.get("estimated_files")
+            if isinstance(ef, int):
+                row["estimated_files"] = ef
+            effort = m.get("effort")
+            if effort:
+                row["effort"] = str(effort).strip()
             chunks.append(row)
         elif artifact_type == "task":
             row["plan"] = m.get("plan")
             row["chunk"] = m.get("chunk")
+            row["project"] = m.get("project") or ""
+            row["depends_on"] = as_str_list(m.get("depends_on"))
+            bb = as_str_list(m.get("blocked_by"))
+            if bb:
+                row["blocked_by"] = bb
+            row["human"] = is_human_task(artifact)
+            effort = m.get("effort")
+            if effort:
+                row["effort"] = str(effort).strip()
             tasks.append(row)
 
     key_fn = lambda row: (str(row.get("id", "")), str(row.get("title", "")))
@@ -367,6 +702,7 @@ def regenerate_indexes(root: Path, run_records: list[dict[str, Any]] | None = No
 
     index_payload = {
         "generated_at": now_iso(),
+        "index_version": _read_index_version(root) + 1,
         "plans": plans,
         "chunks": chunks,
         "tasks": tasks,
@@ -431,11 +767,12 @@ def append_note(root: Path, artifact: Artifact, message: str) -> Path:
 
 
 def report_rows(artifacts: list[Artifact], root: Path, status: str | None = None, project: str | None = None) -> list[str]:
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
     rows: list[str] = []
     for artifact in artifacts:
         if status and str(artifact.metadata.get("status", "")) != status:
             continue
-        if project and artifact_project(artifact) != project:
+        if project and resolve_project(artifact, by_id) != project:
             continue
         rows.append(
             "\t".join(
@@ -451,41 +788,84 @@ def report_rows(artifacts: list[Artifact], root: Path, status: str | None = None
     return sorted(rows)
 
 
+def _plan_visible_for_project_filter(
+    plan: Artifact,
+    artifacts: list[Artifact],
+    project: str,
+    by_id: dict[str, Artifact],
+) -> bool:
+    if resolve_project(plan, by_id) == project:
+        return True
+    pid = str(plan.metadata.get("id", ""))
+    for c in artifacts:
+        if str(c.metadata.get("type", "")) != "chunk" or str(c.metadata.get("plan", "")) != pid:
+            continue
+        if resolve_project(c, by_id) == project:
+            return True
+        cid = str(c.metadata.get("id", ""))
+        for t in artifacts:
+            if str(t.metadata.get("type", "")) != "task" or str(t.metadata.get("chunk", "")) != cid:
+                continue
+            if resolve_project(t, by_id) == project:
+                return True
+    return False
+
+
 def render_active_work_tree_lines(
     artifacts: list[Artifact],
     root: Path,
     project: str | None = None,
     color_enabled: bool = False,
 ) -> list[str]:
-    """Lines for ``onward tree`` / report: **open** plans, **open/in_progress** chunks and tasks only.
+    """Lines for ``onward tree`` / report: non-terminal plans with active descendants.
 
-    Terminal chunks/tasks (``completed`` / ``canceled``) are omitted so the view matches *active* work.
+    Includes ``open`` and ``in_progress`` plans, but only if they have at least one
+    active chunk or task beneath them.  Terminal chunks/tasks (``completed`` / ``canceled``)
+    are omitted so the view matches *active* work.
     """
-    plans = [
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
+    active_plan_status = frozenset({"open", "in_progress"})
+    candidate_plans = [
         a
         for a in artifacts
         if str(a.metadata.get("type", "")) == "plan"
-        and str(a.metadata.get("status", "")) == "open"
-        and (not project or artifact_project(a) == project)
+        and str(a.metadata.get("status", "")) in active_plan_status
+        and (not project or _plan_visible_for_project_filter(a, artifacts, project, by_id))
     ]
-    plans.sort(key=lambda a: str(a.metadata.get("id", "")))
-    if not plans:
+    candidate_plans.sort(key=lambda a: str(a.metadata.get("id", "")))
+    if not candidate_plans:
         return []
 
     chunks = [a for a in artifacts if str(a.metadata.get("type", "")) == "chunk"]
     tasks = [a for a in artifacts if str(a.metadata.get("type", "")) == "task"]
     active_chunk_status = frozenset({"open", "in_progress"})
-    active_task_status = frozenset({"open", "in_progress"})
+    active_task_status = frozenset({"open", "in_progress", "failed"})
     lines: list[str] = []
-    for plan in plans:
-        lines.append(f"{plan.metadata.get('id')} {plan.metadata.get('title')}")
+    for plan in candidate_plans:
+        plan_id = str(plan.metadata.get("id", ""))
         plan_chunks = [
             c
             for c in chunks
-            if str(c.metadata.get("plan", "")) == str(plan.metadata.get("id", ""))
+            if str(c.metadata.get("plan", "")) == plan_id
             and str(c.metadata.get("status", "")) in active_chunk_status
         ]
         plan_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
+
+        # Also check for orphan tasks directly under the plan
+        plan_direct_tasks = [
+            t
+            for t in tasks
+            if str(t.metadata.get("plan", "")) == plan_id
+            and not str(t.metadata.get("chunk", "")).strip()
+            and str(t.metadata.get("status", "")) in active_task_status
+        ]
+
+        if not plan_chunks and not plan_direct_tasks:
+            continue
+
+        p_status = str(plan.metadata.get("status", ""))
+        p_status_text = colorize(p_status, status_color(p_status), color_enabled)
+        lines.append(f"{plan.metadata.get('id')} [{p_status_text}] {plan.metadata.get('title')}")
         for chunk in plan_chunks:
             status = str(chunk.metadata.get("status", ""))
             status_text = colorize(status, status_color(status), color_enabled)
@@ -501,5 +881,9 @@ def render_active_work_tree_lines(
                 t_status = str(task.metadata.get("status", ""))
                 t_status_text = colorize(t_status, status_color(t_status), color_enabled)
                 marker = "H" if is_human_task(task) else "A"
-                lines.append(f"  |  |- {task.metadata.get('id')} [{t_status_text}] ({marker}) {task.metadata.get('title')}")
+                eff = str(task.metadata.get("effort", "")).strip()
+                eff_s = f" [{eff}]" if eff else ""
+                lines.append(
+                    f"  |  |- {task.metadata.get('id')} [{t_status_text}] ({marker}) {task.metadata.get('title')}{eff_s}"
+                )
     return lines
