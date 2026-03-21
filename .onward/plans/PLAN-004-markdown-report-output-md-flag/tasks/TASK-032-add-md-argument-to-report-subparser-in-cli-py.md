@@ -5,7 +5,7 @@ plan: "PLAN-004"
 chunk: "CHUNK-009"
 project: ""
 title: "Add --md argument to report subparser in cli.py"
-status: "in_progress"
+status: "completed"
 description: "Add --md boolean flag to the report subparser argument definitions"
 human: false
 model: "claude-sonnet-4-5"
@@ -18,9 +18,9 @@ acceptance:
 - "Default is False"
 - "onward report --help shows --md option"
 created_at: "2026-03-21T15:50:08Z"
-updated_at: "2026-03-21T16:10:58Z"
+updated_at: "2026-03-21T16:14:39Z"
 run_count: 1
-last_run_status: "failed"
+last_run_status: "completed"
 ---
 
 # Context

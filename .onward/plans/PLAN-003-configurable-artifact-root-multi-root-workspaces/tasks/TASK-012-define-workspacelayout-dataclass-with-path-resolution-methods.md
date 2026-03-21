@@ -5,7 +5,7 @@ plan: "PLAN-003"
 chunk: "CHUNK-003"
 project: ""
 title: "Define WorkspaceLayout dataclass with path resolution methods"
-status: "open"
+status: "in_progress"
 description: ""
 human: false
 model: "claude-sonnet-4-5"
@@ -15,7 +15,8 @@ depends_on: []
 files: []
 acceptance: []
 created_at: "2026-03-21T15:49:12Z"
-updated_at: "2026-03-21T15:49:12Z"
+updated_at: "2026-03-21T16:17:09Z"
+run_count: 1
 ---
 
 # Context

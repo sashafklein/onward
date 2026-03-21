@@ -5,24 +5,25 @@ plan: "PLAN-004"
 chunk: "CHUNK-009"
 project: ""
 title: "Implement format_report_markdown function"
-status: "open"
+status: "completed"
 description: "Create format_report_markdown function that returns clean markdown with headers, tables, checkboxes"
 human: false
 model: "claude-sonnet-4-5"
 effort: "m"
 depends_on:
-  - "TASK-032"
+- "TASK-032"
 files:
-  - "src/onward/cli_commands.py"
+- "src/onward/cli_commands.py"
 acceptance:
-  - "Function returns valid GitHub-flavored markdown string"
-  - "All 8 report sections present (9 with verbose)"
-  - "No ANSI escape codes in output"
-  - "Empty sections show '*None*' italic"
-  - "Tables have proper header and separator rows"
-  - "Active work tree renders as fenced code block"
+- "Function returns valid GitHub-flavored markdown string"
+- "All 8 report sections present (9 with verbose)"
+- "No ANSI escape codes in output"
+- "Empty sections show '*None*' italic"
+- "Tables have proper header and separator rows"
+- "Active work tree renders as fenced code block"
 created_at: "2026-03-21T15:50:09Z"
-updated_at: "2026-03-21T15:50:09Z"
+updated_at: "2026-03-21T16:17:01Z"
+run_count: 1
 ---
 
 # Context
@@ -51,4 +52,17 @@ updated_at: "2026-03-21T15:50:09Z"
 
 # Handoff notes
 
-<!-- What the parent/next worker should know. Include follow-up ideas if discovered. -->
+The `format_report_markdown()` function has been fully implemented in `cli_commands.py` (lines 1363-1578) and integrated into `cmd_report()` (lines 1594-1606).
+
+**Verified functionality:**
+- ✅ All 8 report sections present (9 with `--verbose`)
+- ✅ No ANSI escape codes in output (verified with grep)
+- ✅ Empty sections display as `*None*` (italic)
+- ✅ Tables have proper header and separator rows (`|---|`)
+- ✅ Active work tree renders as fenced code block
+- ✅ Works with `--verbose` flag (shows Run Stats table)
+- ✅ Works with `--project` flag (filters correctly)
+- ✅ Already wired into `cmd_report` with early return on `args.md`
+
+**Next task (TASK-034):**
+The function is already wired into `cmd_report`, so TASK-034 should focus on adding comprehensive tests to verify all edge cases and markdown structure.

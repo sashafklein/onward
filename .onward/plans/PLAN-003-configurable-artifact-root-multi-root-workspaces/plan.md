@@ -3,12 +3,12 @@ id: "PLAN-003"
 type: "plan"
 project: ""
 title: "Configurable artifact root (multi-root workspaces)"
-status: "open"
+status: "in_progress"
 description: ""
 priority: "medium"
 model: "claude-opus-4-5"
 created_at: "2026-03-21T15:44:36Z"
-updated_at: "2026-03-21T15:44:36Z"
+updated_at: "2026-03-21T16:17:07Z"
 ---
 
 # Summary

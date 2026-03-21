@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T16:10:58Z"
+generated_at: "2026-03-21T16:17:09Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -138,3 +138,26 @@ completed:
   project: "onward"
   depends_on: []
   human: false
+- id: "TASK-032"
+  title: "Add --md argument to report subparser in cli.py"
+  status: "completed"
+  updated_at: "2026-03-21T16:14:39Z"
+  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-032-add-md-argument-to-report-subparser-in-cli-py.md"
+  plan: "PLAN-004"
+  chunk: "CHUNK-009"
+  project: ""
+  depends_on: []
+  human: false
+  effort: "xs"
+- id: "TASK-033"
+  title: "Implement format_report_markdown function"
+  status: "completed"
+  updated_at: "2026-03-21T16:17:01Z"
+  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-033-implement-format-report-markdown-function.md"
+  plan: "PLAN-004"
+  chunk: "CHUNK-009"
+  project: ""
+  depends_on:
+  - "TASK-032"
+  human: false
+  effort: "m"
