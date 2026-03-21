@@ -23,6 +23,7 @@ from onward.cli_commands import (
     cmd_report,
     cmd_retry,
     cmd_review_plan,
+    cmd_roadmap,
     cmd_show,
     cmd_split,
     cmd_sync_pull,
@@ -292,6 +293,15 @@ def build_parser() -> argparse.ArgumentParser:
     tree_parser.add_argument("--project", default="", help="Filter by project key")
     tree_parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
     tree_parser.set_defaults(func=cmd_tree)
+
+    roadmap_parser = subparsers.add_parser(
+        "roadmap",
+        help="Show incomplete plans with summaries and chunks",
+    )
+    roadmap_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    roadmap_parser.add_argument("--project", default="", help="Filter by project key")
+    roadmap_parser.add_argument("--md", action="store_true", help="Output clean markdown (default, flag has no effect)")
+    roadmap_parser.set_defaults(func=cmd_roadmap)
 
     report_parser = subparsers.add_parser(
         "report",

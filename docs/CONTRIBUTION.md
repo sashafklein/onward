@@ -13,6 +13,7 @@ Right now this repo supports:
 - adversarial plan review (`onward review-plan` with configurable single/double reviewer)
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)
 - active work tree (`onward tree` with `--project`; omits completed/canceled chunks and tasks; task lines show `(A)` agent vs `(H)` human — see `onward tree --help`)
+- roadmap view (`onward roadmap` — incomplete plans with summaries and chunks)
 - consolidated status (`onward report`; same task markers plus `[Blocking Human Tasks]` — see `onward report --help`)
 - artifact inspection (`onward show <ID>` — tasks include latest run info)
 - per-artifact notes (`onward note <ID> ["message"]`)

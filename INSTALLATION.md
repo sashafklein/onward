@@ -116,6 +116,7 @@ When the user describes a new initiative, feature, or project:
   blockers, recent completions
 - `onward list --blocking --human` — what human actions are blocking agent work
 - `onward tree --project <key>` — hierarchical view of all plans/chunks/tasks
+- `onward roadmap --project <key>` — incomplete plans with summaries and chunks
 - `onward next --project <key>` — the single best thing to work on next
 - `onward ready --project <key>` — every task you could start now (grouped by plan/chunk)
 - `onward show <ID>` — full detail on any artifact (includes latest run info for tasks)
@@ -230,8 +231,8 @@ MANDATORY BEHAVIORS:
 - NEVER maintain planning state in chat, scratch files, or memory alone
 
 KEY COMMANDS: onward report, onward next, onward new, onward complete, onward retry,
-onward list, onward tree, onward show, onward split, onward review-plan, onward note,
-onward sync (status|push|pull) when using branch/repo sync mode
+onward list, onward tree, onward roadmap, onward show, onward split, onward review-plan,
+onward note, onward sync (status|push|pull) when using branch/repo sync mode
 ```
 
 ---
@@ -249,6 +250,7 @@ ONWARD QUICK-REF:
   work     → executor + status        complete → close without work / manual done
   cancel   → abandon work
   list     → filter artifacts         tree     → hierarchy view
+  roadmap  → incomplete plans with summaries
   show     → inspect one artifact     progress → what's in flight
   recent   → what just finished       onward archive → retire a plan
   sync     → mirror plans to branch or second repo (optional)

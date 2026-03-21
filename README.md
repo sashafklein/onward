@@ -106,6 +106,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward report --project key` | Full status dashboard             |
 | `onward list --project key`   | List all artifacts                |
 | `onward tree --project key`   | Open plans with **active** chunks/tasks (`open` / `in_progress` / `failed` for tasks) |
+| `onward roadmap --project key`| Incomplete plans with summaries and chunks |
 | `onward next --project key`   | What should be worked on next     |
 | `onward ready --project key`  | All actionable tasks (grouped by plan/chunk) |
 | `onward progress`             | What's currently in flight        |

@@ -1819,6 +1819,153 @@ def cmd_tree(args: argparse.Namespace) -> int:
     return 0
 
 
+def _extract_plan_summary(body: str) -> str:
+    """Extract summary from plan body.
+    
+    Looks for a # Summary or ## Summary section first.
+    If not found, returns the first non-empty paragraph after frontmatter.
+    """
+    lines = body.strip().split("\n")
+    
+    # Look for Summary heading
+    in_summary = False
+    summary_lines: list[str] = []
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Check if we hit a Summary heading
+        if stripped.startswith("#"):
+            heading_text = stripped.lstrip("#").strip().lower()
+            if heading_text == "summary":
+                in_summary = True
+                continue
+            elif in_summary:
+                # Hit another heading, stop collecting
+                break
+        
+        # Collect summary lines
+        if in_summary:
+            if stripped:
+                summary_lines.append(line)
+            elif summary_lines:
+                # Empty line after content means end of paragraph
+                break
+    
+    # If we found a Summary section, use it
+    if summary_lines:
+        return "\n".join(summary_lines).strip()
+    
+    # Otherwise, extract first paragraph
+    paragraph_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if paragraph_lines:
+                # End of first paragraph
+                break
+            continue
+        if stripped.startswith("#"):
+            # Skip headings when looking for first paragraph
+            continue
+        paragraph_lines.append(line)
+    
+    return "\n".join(paragraph_lines).strip() if paragraph_lines else ""
+
+
+def cmd_roadmap(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    
+    # Collect all artifacts
+    artifacts = artifacts_from_index_or_collect(layout, project)
+    by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
+    
+    # Filter for incomplete plans
+    plans = [
+        a for a in artifacts
+        if str(a.metadata.get("type", "")) == "plan"
+        and str(a.metadata.get("status", "")) not in ("completed", "canceled")
+    ]
+    
+    if not plans:
+        print("No incomplete plans")
+        return 0
+    
+    # Priority order: high > medium > low
+    priority_order = {"high": 0, "medium": 1, "low": 2}
+    
+    def plan_sort_key(plan: Artifact) -> tuple[int, str]:
+        priority = str(plan.metadata.get("priority", "medium")).lower()
+        priority_rank = priority_order.get(priority, 1)
+        plan_id = str(plan.metadata.get("id", ""))
+        return (priority_rank, plan_id)
+    
+    plans.sort(key=plan_sort_key)
+    
+    # Get all chunks
+    chunks = [
+        a for a in artifacts
+        if str(a.metadata.get("type", "")) == "chunk"
+    ]
+    
+    # Group chunks by plan
+    chunks_by_plan: dict[str, list[Artifact]] = defaultdict(list)
+    for chunk in chunks:
+        plan_id = str(chunk.metadata.get("plan", ""))
+        if plan_id:
+            chunks_by_plan[plan_id].append(chunk)
+    
+    # Sort chunks within each plan by ID
+    for plan_id in chunks_by_plan:
+        chunks_by_plan[plan_id].sort(key=lambda c: str(c.metadata.get("id", "")))
+    
+    # Generate output
+    output_lines: list[str] = []
+    
+    for plan in plans:
+        plan_id = str(plan.metadata.get("id", ""))
+        plan_title = str(plan.metadata.get("title", ""))
+        
+        # Add plan heading
+        output_lines.append(f"# {plan_title}")
+        output_lines.append("")
+        
+        # Extract and add summary
+        summary = _extract_plan_summary(plan.body)
+        if summary:
+            output_lines.append(summary)
+            output_lines.append("")
+        
+        # List chunks
+        plan_chunks = chunks_by_plan.get(plan_id, [])
+        if plan_chunks:
+            for chunk in plan_chunks:
+                chunk_title = str(chunk.metadata.get("title", ""))
+                chunk_status = str(chunk.metadata.get("status", ""))
+                
+                # Skip completed chunks
+                if chunk_status == "completed":
+                    continue
+                
+                # Mark in-progress chunks
+                prefix = "- "
+                if chunk_status == "in_progress":
+                    prefix = "- [in progress] "
+                
+                output_lines.append(f"{prefix}{chunk_title}")
+            
+            output_lines.append("")
+    
+    # Print output
+    for line in output_lines:
+        print(line)
+    
+    return 0
+
+
 def format_report_markdown(
     layout: WorkspaceLayout,
     project: str | None,
