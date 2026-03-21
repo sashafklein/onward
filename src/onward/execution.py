@@ -19,6 +19,7 @@ from onward.artifacts import (
     read_notes,
     regenerate_indexes,
     update_artifact_status,
+    validate_artifact,
     write_artifact,
 )
 from onward.config import (
@@ -1025,6 +1026,11 @@ def _execute_task_run(layout: WorkspaceLayout, task: Artifact, project: str | No
     return ok, prepared.run_id
 
 
+def validate_task_preflight(task: Artifact) -> list[str]:
+    """Run metadata validation on a task artifact. Returns a list of issue strings (empty = clean)."""
+    return validate_artifact(task)
+
+
 def work_task(layout: WorkspaceLayout, task: Artifact, project: str | None = None, reporter: WorkReporter | None = None) -> tuple[bool, str]:
     if str(task.metadata.get("type", "")) != "task":
         raise ValueError(f"{task.metadata.get('id')} is not a task")
@@ -1065,6 +1071,11 @@ def work_task(layout: WorkspaceLayout, task: Artifact, project: str | None = Non
             f"use 'onward retry {tid}' to reset run_count, or set work.max_retries: 0 for unlimited. "
             "See docs/LIFECYCLE.md"
         )
+
+    preflight_issues = validate_task_preflight(fresh)
+    if preflight_issues:
+        issue_list = "\n  - ".join(preflight_issues)
+        raise ValueError(f"task metadata validation failed:\n  - {issue_list}")
 
     title = str(fresh.metadata.get("title", ""))
     update_artifact_status(layout, fresh, "in_progress", project)
