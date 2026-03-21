@@ -5,7 +5,7 @@ plan: "PLAN-007"
 chunk: "CHUNK-015"
 project: ""
 title: "Surface artifact metadata validation issues in cmd_doctor()"
-status: "open"
+status: "in_progress"
 description: "In `src/onward/cli_commands.py`, update `cmd_doctor()` to validate artifact metadata across the workspace.\n\nAfter the existing per-project-root structure checks (directories, required files, ongoing.json), add a block that:\n1. Calls `collect_artifacts(layout, project_key)` (or `collect_artifacts(layout)` for single-root) to get all artifact objects under that project root\n2. For each artifact, calls `validate_artifact(artifact)` and collects returned issues\n3. Appends all issues to the existing `issues` list so they are printed and counted alongside structural issues\n\nMake sure `validate_artifact` is already imported (it is in the existing imports from `onward.artifacts`).\n\nThe doctor output format must list each metadata issue on its own line (the existing issues printing logic already handles this — just append to the list)."
 human: false
 model: "sonnet"
@@ -20,8 +20,9 @@ acceptance:
 - "The doctor exit code remains 0 and prints 'Doctor check passed' for a clean workspace with well-formed artifacts"
 - "All existing doctor tests continue to pass"
 created_at: "2026-03-21T20:20:59Z"
-updated_at: "2026-03-21T20:20:59Z"
+updated_at: "2026-03-21T20:37:25Z"
 effort: "s"
+run_count: 1
 ---
 
 # Context

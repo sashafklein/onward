@@ -40,6 +40,7 @@ KNOWN_FIELDS: dict[str, list[str]] = {
         "blocked_by",
         "description",
         "run_count",
+        "last_run_status",
         "files",
         "acceptance",
     ],
@@ -47,7 +48,7 @@ KNOWN_FIELDS: dict[str, list[str]] = {
 
 _VALID_STATUSES = frozenset({"open", "in_progress", "completed", "canceled", "failed"})
 _VALID_PRIORITIES = frozenset({"high", "medium", "low"})
-_VALID_EFFORT_VALUES = frozenset({"xs", "s", "m", "l", "xl"})
+_VALID_EFFORT_VALUES = frozenset({"xs", "s", "m", "l", "xl", "low", "medium", "high"})
 _KNOWN_MODEL_PREFIXES = ("claude-", "codex-")
 
 

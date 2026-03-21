@@ -1,5 +1,5 @@
-generated_at: "2026-03-21T20:36:28Z"
-index_version: 272
+generated_at: "2026-03-21T20:37:26Z"
+index_version: 275
 plans:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -741,8 +741,8 @@ tasks:
   effort: "m"
 - id: "TASK-049"
   title: "Add validate_task_preflight() and wire into work_task() in execution.py"
-  status: "in_progress"
-  updated_at: "2026-03-21T20:36:28Z"
+  status: "completed"
+  updated_at: "2026-03-21T20:37:24Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-049-add-validate-task-preflight-and-wire-into-work-task-in-execution-py.md"
   plan: "PLAN-007"
   chunk: "CHUNK-015"
@@ -753,8 +753,8 @@ tasks:
   effort: "s"
 - id: "TASK-050"
   title: "Surface artifact metadata validation issues in cmd_doctor()"
-  status: "open"
-  updated_at: "2026-03-21T20:20:59Z"
+  status: "in_progress"
+  updated_at: "2026-03-21T20:37:25Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-050-surface-artifact-metadata-validation-issues-in-cmd-doctor.md"
   plan: "PLAN-007"
   chunk: "CHUNK-015"

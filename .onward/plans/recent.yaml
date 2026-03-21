@@ -1,4 +1,4 @@
-generated_at: "2026-03-21T20:36:28Z"
+generated_at: "2026-03-21T20:37:26Z"
 completed:
 - id: "PLAN-001"
   title: "Documentation clarity and accuracy overhaul"
@@ -698,3 +698,15 @@ completed:
   depends_on: []
   human: false
   effort: "m"
+- id: "TASK-049"
+  title: "Add validate_task_preflight() and wire into work_task() in execution.py"
+  status: "completed"
+  updated_at: "2026-03-21T20:37:24Z"
+  path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/tasks/TASK-049-add-validate-task-preflight-and-wire-into-work-task-in-execution-py.md"
+  plan: "PLAN-007"
+  chunk: "CHUNK-015"
+  project: ""
+  depends_on:
+  - "TASK-048"
+  human: false
+  effort: "s"

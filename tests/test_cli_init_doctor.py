@@ -420,3 +420,41 @@ nb/ongoing.json
 
     assert exit_code == 0
     assert "Doctor check passed" in out
+
+
+def test_doctor_fails_on_bad_complexity_value(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "T"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    # Insert complexity: banana into the frontmatter block (before the closing ---)
+    modified = raw.replace("\n---\n", "\ncomplexity: banana\n---\n", 1)
+    task_path.write_text(modified, encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "TASK-001" in out
+    assert "banana" in out
+
+
+def test_doctor_fails_on_bad_model_value(tmp_path: Path, capsys):
+    assert cli.main(["init", "--root", str(tmp_path)]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "plan", "Alpha"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "chunk", "PLAN-001", "Build"]) == 0
+    assert cli.main(["new", "--root", str(tmp_path), "task", "CHUNK-001", "T"]) == 0
+    task_path = next(tmp_path.glob(".onward/plans/**/tasks/TASK-001-*.md"))
+    raw = task_path.read_text(encoding="utf-8")
+    # The frontmatter uses quoted strings: model: "sonnet"
+    task_path.write_text(raw.replace('model: "sonnet"', 'model: "nonexistent-model"'), encoding="utf-8")
+    capsys.readouterr()
+
+    exit_code = cli.main(["doctor", "--root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "nonexistent-model" in out
