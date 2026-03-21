@@ -41,8 +41,6 @@ KNOWN_FIELDS: dict[str, list[str]] = {
         "description",
         "run_count",
         "last_run_status",
-        "files",
-        "acceptance",
     ],
 }
 
@@ -507,8 +505,6 @@ def create_follow_up_tasks(
             "executor": executor,
             "depends_on": [parent_id],
             "priority": pri,
-            "files": [],
-            "acceptance": [],
             "created_at": now,
             "updated_at": now,
         }

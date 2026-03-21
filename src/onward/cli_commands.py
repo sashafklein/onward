@@ -103,7 +103,6 @@ from onward.util import (
     clean_string,
     colorize,
     dump_simple_yaml,
-    normalize_acceptance,
     normalize_bool,
     normalize_complexity,
     now_iso,
@@ -786,17 +785,6 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
         seen_d: set[str] = set()
         dep_ids = [d for d in dep_ids if d not in seen_d and not seen_d.add(d)]
 
-        files = entry.get("files") or []
-        if not isinstance(files, list):
-            raise ValueError(f"batch entry {i}: files must be a list")
-        file_list = [str(x).strip() for x in files if str(x).strip()]
-
-        acc = entry.get("acceptance") or []
-        if isinstance(acc, list):
-            acceptance = [str(x).strip() for x in acc if str(x).strip()]
-        else:
-            acceptance = normalize_acceptance(acc)
-
         tid = task_ids[i]
         now = now_iso()
         metadata: dict[str, Any] = {
@@ -812,8 +800,6 @@ def cmd_new_task_batch(args: argparse.Namespace) -> int:
             "model": model,
             "executor": "onward-exec",
             "depends_on": dep_ids,
-            "files": file_list,
-            "acceptance": acceptance,
             "created_at": now,
             "updated_at": now,
         }
@@ -888,8 +874,6 @@ def cmd_new_task(args: argparse.Namespace) -> int:
         "model": args.model,
         "executor": "onward-exec",
         "depends_on": [],
-        "files": [],
-        "acceptance": [],
         "created_at": now,
         "updated_at": now,
     }

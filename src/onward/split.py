@@ -520,8 +520,6 @@ def prepare_task_writes(
             "model": candidate["model"],
             "executor": "onward-exec",
             "depends_on": dep_ids,
-            "files": t_files,
-            "acceptance": candidate["acceptance"],
             "created_at": now,
             "updated_at": now,
         }

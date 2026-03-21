@@ -4,14 +4,14 @@ type: "chunk"
 plan: "PLAN-007"
 project: ""
 title: "Remove dead frontmatter fields (files, acceptance)"
-status: "open"
+status: "in_progress"
 description: "Stop emitting files and acceptance keys in task frontmatter. In split.py, remove those keys from the metadata dict built for each task (they are already rendered into the markdown body). In cli_commands.py cmd_batch(), same removal. Do not include files or acceptance in KNOWN_FIELDS for tasks in artifacts.py (so doctor warns on existing tasks that still carry them). Update tests that assert on frontmatter content to not expect these keys."
 priority: "medium"
 model: "sonnet"
 depends_on:
 - "CHUNK-016"
 created_at: "2026-03-21T20:18:55Z"
-updated_at: "2026-03-21T20:18:55Z"
+updated_at: "2026-03-21T21:01:11Z"
 ---
 
 # Summary

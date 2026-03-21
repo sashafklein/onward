@@ -64,10 +64,7 @@ def test_split_chunk_creates_task_with_acceptance(monkeypatch, tmp_path: Path, c
 
     task_path = tmp_path / ".onward/plans/PLAN-001-alpha/tasks/TASK-001-add-endpoint.md"
     raw = task_path.read_text(encoding="utf-8")
-    assert (
-        'acceptance:\n  - "returns 200"' in raw
-        or 'acceptance:\n- "returns 200"' in raw
-    )
+    assert "- returns 200" in raw
     assert 'model: "gpt-5-mini"' in raw
 
 

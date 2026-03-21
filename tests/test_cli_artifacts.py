@@ -62,7 +62,6 @@ def test_new_plan_chunk_task_list_and_show(tmp_path: Path, capsys):
     assert show_code == 0
     assert "# TASK-001 Persist Run State" in show_out
     assert 'depends_on: []' in show_out
-    assert 'acceptance: []' in show_out
 
 
 def test_new_ids_increment(tmp_path: Path, capsys):
