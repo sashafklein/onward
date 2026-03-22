@@ -177,6 +177,10 @@ class WorkspaceLayout:
         """Resolve the notes directory for a project."""
         return self.artifact_root(project) / "notes"
 
+    def one_offs_dir(self, project: str | None = None) -> Path:
+        """Resolve the one-offs directory for a project."""
+        return self.artifact_root(project) / "one-offs"
+
     def sync_dir(self, project: str | None = None) -> Path:
         """Resolve the sync directory for a project."""
         return self.artifact_root(project) / "sync"

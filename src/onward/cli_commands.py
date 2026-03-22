@@ -418,6 +418,7 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     # List of subdirectories and files to migrate
     items_to_migrate = [
         ("plans", True),  # (path, is_directory)
+        ("one-offs", True),
         ("runs", True),
         ("reviews", True),
         ("templates", True),
@@ -460,7 +461,7 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     # Ensure target directory structure exists
     if not dry_run:
         target_root.mkdir(parents=True, exist_ok=True)
-        for subdir in ["plans", "plans/.archive", "templates", "prompts", "hooks", "sync", "runs", "reviews", "notes"]:
+        for subdir in ["plans", "plans/.archive", "one-offs", "templates", "prompts", "hooks", "sync", "runs", "reviews", "notes"]:
             (target_root / subdir).mkdir(parents=True, exist_ok=True)
 
     # Perform migration
@@ -887,6 +888,54 @@ def cmd_new_task(args: argparse.Namespace) -> int:
 
     body = load_artifact_template(root, "task", layout, proj)
     target = plan_dir / "tasks" / f"{task_id}-{slug}.md"
+    target.write_text(format_artifact(metadata, body), encoding="utf-8")
+
+    regenerate_indexes(layout)
+    print(f"Created {task_id} at {target.relative_to(root)}")
+    return 0
+
+
+def cmd_one_off(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+
+    layout_project = require_project_or_default(args, layout)
+    proj = (getattr(args, "project", None) or "").strip() or (layout_project or "")
+
+    task_id = next_id(layout, "TASK", proj or None)
+    now = now_iso()
+    slug = slugify(args.title)
+
+    one_offs = layout.one_offs_dir(proj or None)
+    one_offs.mkdir(parents=True, exist_ok=True)
+
+    metadata: dict[str, Any] = {
+        "id": task_id,
+        "type": "task",
+        "plan": None,
+        "chunk": None,
+        "project": proj,
+        "title": args.title,
+        "status": "open",
+        "description": args.description or "",
+        "human": bool(getattr(args, "human", False)),
+        "model": args.model,
+        "executor": "onward-exec",
+        "depends_on": [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    raw_cpx = getattr(args, "complexity", None)
+    if raw_cpx is not None and str(raw_cpx).strip():
+        cpx = normalize_complexity(raw_cpx)
+        if cpx:
+            metadata["complexity"] = cpx
+        else:
+            print("Warning: invalid --complexity value (expected low|medium|high); leaving unset")
+
+    body = load_artifact_template(root, "task", layout, proj or None)
+    target = one_offs / f"{task_id}-{slug}.md"
     target.write_text(format_artifact(metadata, body), encoding="utf-8")
 
     regenerate_indexes(layout)

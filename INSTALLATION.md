@@ -163,6 +163,7 @@ onward list --blocking --human
 onward new plan "<title>" --project <key>
 onward new chunk PLAN-XXX "<title>"
 onward new task CHUNK-XXX "<title>"
+onward one-off "<title>"              # standalone task (no plan/chunk)
 onward split PLAN-XXX
 onward split CHUNK-XXX
 onward review-plan PLAN-XXX

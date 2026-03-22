@@ -128,10 +128,21 @@ def write_artifact(artifact: Artifact) -> None:
     artifact.file_path.write_text(format_artifact(artifact.metadata, artifact.body), encoding="utf-8")
 
 
+def _glob_md_dir(base: Path, results: list[Path]) -> None:
+    """Glob *.md files from a directory, excluding .archive, appending to results."""
+    if not base.exists():
+        return
+    for path in sorted(base.glob("**/*.md")):
+        if ".archive" in path.relative_to(base).parts:
+            continue
+        results.append(path)
+
+
 def artifact_glob(layout: WorkspaceLayout, project: str | None = None) -> list[Path]:
     """Glob all artifact files, optionally filtered by project.
 
     In multi-root mode with project=None, scans all project roots.
+    Includes one-offs/ directory alongside plans/.
     """
     if layout.is_multi_root and project is None:
         # Scan all project roots
@@ -139,24 +150,14 @@ def artifact_glob(layout: WorkspaceLayout, project: str | None = None) -> list[P
         for proj_key in layout.all_project_keys():
             if proj_key is None:
                 continue
-            base = layout.plans_dir(proj_key)
-            if not base.exists():
-                continue
-            for path in sorted(base.glob("**/*.md")):
-                if ".archive" in path.relative_to(base).parts:
-                    continue
-                results.append(path)
+            _glob_md_dir(layout.plans_dir(proj_key), results)
+            _glob_md_dir(layout.one_offs_dir(proj_key), results)
         return results
     else:
         # Single root or specific project
-        base = layout.plans_dir(project)
-        if not base.exists():
-            return []
-        results = []
-        for path in sorted(base.glob("**/*.md")):
-            if ".archive" in path.relative_to(base).parts:
-                continue
-            results.append(path)
+        results: list[Path] = []
+        _glob_md_dir(layout.plans_dir(project), results)
+        _glob_md_dir(layout.one_offs_dir(project), results)
         return results
 
 
@@ -268,6 +269,11 @@ def find_plan_dir(layout: WorkspaceLayout, plan_id: str, project: str | None = N
         return matches[0]
 
 
+def _is_one_off_task(artifact: Artifact) -> bool:
+    """True if this task lives in a one-offs/ directory (plan and chunk may be null)."""
+    return "one-offs" in artifact.file_path.parts
+
+
 def validate_artifact(artifact: Artifact) -> list[str]:
     issues: list[str] = []
     artifact_type = str(artifact.metadata.get("type", ""))
@@ -276,7 +282,11 @@ def validate_artifact(artifact: Artifact) -> list[str]:
         issues.append(f"{artifact.file_path}: unknown type '{artifact_type}'")
         return issues
 
+    # For one-off tasks, plan and chunk are allowed to be null
+    one_off = artifact_type == "task" and _is_one_off_task(artifact)
     for field in required:
+        if one_off and field in ("plan", "chunk"):
+            continue
         if artifact.metadata.get(field) in (None, ""):
             issues.append(f"{artifact.file_path}: missing required field '{field}'")
 

@@ -8,7 +8,7 @@ Right now this repo supports:
 
 - workspace bootstrap (`onward init`)
 - structural validation (`onward doctor`, including `sync:` config checks)
-- artifact creation (`onward new plan`, `onward new chunk`, `onward new task`)
+- artifact creation (`onward new plan`, `onward new chunk`, `onward new task`, `onward one-off`)
 - decomposition via `onward split` (executor-backed by default; **`--heuristic`** for markdown-only; `TRAIN_SPLIT_RESPONSE` env for tests — see [CAPABILITIES.md](CAPABILITIES.md))
 - adversarial plan review (`onward review-plan` with configurable single/double reviewer)
 - artifact discovery (`onward list` with `--project`, `--blocking`, `--human`)

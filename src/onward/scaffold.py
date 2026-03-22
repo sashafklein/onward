@@ -12,6 +12,7 @@ def default_directories(artifact_root: str) -> list[str]:
         f"{artifact_root}/prompts",
         f"{artifact_root}/hooks",
         f"{artifact_root}/sync",
+        f"{artifact_root}/one-offs",
         f"{artifact_root}/runs",
         f"{artifact_root}/reviews",
         f"{artifact_root}/notes",

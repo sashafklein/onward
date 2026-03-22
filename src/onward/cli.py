@@ -17,6 +17,7 @@ from onward.cli_commands import (
     cmd_new_task,
     cmd_next,
     cmd_note,
+    cmd_one_off,
     cmd_progress,
     cmd_ready,
     cmd_recent,
@@ -156,6 +157,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     task_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
     task_parser.set_defaults(func=cmd_new_task)
+
+    one_off_parser = subparsers.add_parser("one-off", help="Create a standalone one-off task (no plan/chunk)")
+    one_off_parser.add_argument("title", help="Task title")
+    one_off_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")
+    one_off_parser.add_argument("--description", default="", help="Task description")
+    one_off_parser.add_argument("--model", default="sonnet", help="Model (default: sonnet)")
+    one_off_parser.add_argument("--project", default=None, help="Project key (required in multi-root mode)")
+    one_off_parser.add_argument(
+        "--complexity",
+        default=None,
+        help="Complexity: low|medium|high (invalid values ignored)",
+    )
+    one_off_parser.add_argument("--human", action="store_true", help="Mark task as human-required")
+    one_off_parser.set_defaults(func=cmd_one_off)
 
     list_parser = subparsers.add_parser("list", help="List artifacts")
     list_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")

@@ -76,6 +76,7 @@ def test_collect_leaf_commands_matches_known_set(leaf_commands: list[str]) -> No
         "new task",
         "next",
         "note",
+        "one-off",
         "progress",
         "ready",
         "recent",

@@ -95,6 +95,7 @@ See **[INSTALLATION.md](INSTALLATION.md)** for full setup including **agent conf
 | `onward new plan "Title" --project key` | Create a new plan               |
 | `onward new chunk PLAN-001 "Title"`     | Add a chunk to a plan           |
 | `onward new task CHUNK-001 "Title"`     | Add a task to a chunk           |
+| `onward one-off "Title"`                | Create a standalone task (no plan/chunk) |
 | `onward split PLAN-001`                 | Plan→chunks via executor + prompts (use `--heuristic` for offline markdown split; [capabilities](docs/CAPABILITIES.md)) |
 | `onward split CHUNK-001`                | Chunk→tasks (same) |
 | `onward review-plan PLAN-001`           | Run adversarial review(s); optional per-slot providers/fallbacks via `review.reviewers` ([CAPABILITIES.md](docs/CAPABILITIES.md)) |
