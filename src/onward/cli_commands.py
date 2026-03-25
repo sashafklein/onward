@@ -2556,3 +2556,159 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     return 0
 
+
+# ---------------------------------------------------------------------------
+# onward linear push
+# ---------------------------------------------------------------------------
+
+
+def cmd_linear_push(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    dry_run = bool(getattr(args, "dry_run", False))
+
+    from onward.linear import (
+        LinearError,
+        create_issue,
+        fetch_team_states,
+        get_api_key,
+        get_issue,
+        get_team_id,
+        map_status_to_state,
+        update_issue_state,
+    )
+
+    api_key = get_api_key()
+    if not api_key:
+        print("Error: LINEAR_API_KEY environment variable is not set")
+        print("Create a personal API key at https://linear.app/settings/api")
+        return 1
+
+    team_id = get_team_id(config)
+    if not team_id:
+        print("Error: linear.team_id is not set in .onward.config.yaml")
+        print("Add:\n  linear:\n    team_id: \"<your-team-id>\"")
+        return 1
+
+    artifacts = artifacts_from_index_or_collect(layout, project)
+    plans = [
+        a for a in artifacts
+        if str(a.metadata.get("type", "")) == "plan"
+    ]
+
+    if not plans:
+        print("No plans found")
+        return 0
+
+    if dry_run:
+        print("Dry run — no API calls will be made\n")
+
+    try:
+        if not dry_run:
+            states = fetch_team_states(api_key, team_id)
+        else:
+            states = []
+    except LinearError as exc:
+        print(f"Error fetching Linear workflow states: {exc}")
+        return 1
+
+    created = 0
+    updated = 0
+    skipped = 0
+    errors = 0
+
+    for plan in sorted(plans, key=lambda a: str(a.metadata.get("id", ""))):
+        plan_id = str(plan.metadata.get("id", ""))
+        title = str(plan.metadata.get("title", plan_id))
+        status = str(plan.metadata.get("status", "open"))
+        linear_id = str(plan.metadata.get("linear_id", "")).strip()
+        linear_ident = str(plan.metadata.get("linear_identifier", "")).strip()
+
+        if linear_id:
+            # Already linked — update status
+            if dry_run:
+                print(f"  update  {plan_id} ({linear_ident or linear_id}) — status: {status}")
+                updated += 1
+                continue
+
+            state = map_status_to_state(status, states)
+            if not state:
+                print(f"  skip    {plan_id} — no matching Linear state for '{status}'")
+                skipped += 1
+                continue
+
+            existing = get_issue(api_key, linear_id)
+            if not existing:
+                print(f"  error   {plan_id} — Linear issue {linear_ident or linear_id} not found (stale linear_id?)")
+                errors += 1
+                continue
+
+            current_state_cat = existing.get("state", {}).get("type", "")
+            if current_state_cat == state.category:
+                print(f"  skip    {plan_id} ({linear_ident or linear_id}) — already {state.name}")
+                skipped += 1
+                continue
+
+            try:
+                update_issue_state(api_key, linear_id, state.id)
+                print(f"  update  {plan_id} ({linear_ident or linear_id}) → {state.name}")
+                updated += 1
+            except LinearError as exc:
+                print(f"  error   {plan_id} — {exc}")
+                errors += 1
+        else:
+            description = str(plan.metadata.get("description", "")).strip()
+            body_summary = _extract_plan_summary(plan.body)
+            full_desc = "\n\n".join(filter(None, [description, body_summary]))
+
+            if dry_run:
+                print(f"  create  {plan_id} — \"{title}\"")
+                created += 1
+                continue
+
+            state = map_status_to_state(status, states)
+            try:
+                issue = create_issue(
+                    api_key, team_id, title,
+                    description=full_desc or None,
+                    state_id=state.id if state else None,
+                )
+                plan.metadata["linear_id"] = issue.id
+                plan.metadata["linear_identifier"] = issue.identifier
+                plan.metadata["updated_at"] = now_iso()
+                write_artifact(plan)
+                print(f"  create  {plan_id} → {issue.identifier} ({issue.url})")
+                created += 1
+            except LinearError as exc:
+                print(f"  error   {plan_id} — {exc}")
+                errors += 1
+
+    print()
+    print(f"Done: {created} created, {updated} updated, {skipped} skipped, {errors} errors")
+
+    if created > 0 and not dry_run:
+        regenerate_indexes(layout, project)
+
+    return 1 if errors > 0 else 0
+
+
+def _extract_plan_summary(body: str) -> str:
+    """Pull the text under the first '# Summary' heading from a plan body."""
+    lines = body.split("\n")
+    capturing = False
+    result: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower().startswith("# summary"):
+            capturing = True
+            continue
+        if capturing:
+            if stripped.startswith("# ") and not stripped.lower().startswith("# summary"):
+                break
+            if stripped.startswith("<!--") or stripped.startswith("-->"):
+                continue
+            result.append(line)
+    text = "\n".join(result).strip()
+    return text

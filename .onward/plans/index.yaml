@@ -1,41 +1,11 @@
-generated_at: "2026-03-21T21:06:31Z"
-index_version: 321
+generated_at: "2026-03-25T03:21:22Z"
+index_version: 330
 plans:
-- id: "PLAN-001"
-  title: "Documentation clarity and accuracy overhaul"
-  status: "completed"
-  updated_at: "2026-03-21T04:16:04Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/plan.md"
-  project: "onward"
-- id: "PLAN-002"
-  title: "Fix design concerns from doc audit"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:32Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/plan.md"
-  project: "onward"
 - id: "PLAN-003"
   title: "Configurable artifact root (multi-root workspaces)"
   status: "in_progress"
   updated_at: "2026-03-21T16:47:27Z"
   path: ".onward/plans/PLAN-003-configurable-artifact-root-multi-root-workspaces/plan.md"
-  project: ""
-- id: "PLAN-004"
-  title: "Markdown report output (--md flag)"
-  status: "completed"
-  updated_at: "2026-03-21T16:20:49Z"
-  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/plan.md"
-  project: ""
-- id: "PLAN-005"
-  title: "Structured progress output for onward work"
-  status: "completed"
-  updated_at: "2026-03-21T19:43:09Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/plan.md"
-  project: ""
-- id: "PLAN-006"
-  title: "Simple model aliases (opus, sonnet, haiku, codex)"
-  status: "completed"
-  updated_at: "2026-03-21T18:54:50Z"
-  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/plan.md"
   project: ""
 - id: "PLAN-007"
   title: "Metadata validation and frontmatter cleanup"
@@ -43,23 +13,13 @@ plans:
   updated_at: "2026-03-21T20:30:49Z"
   path: ".onward/plans/PLAN-007-metadata-validation-and-frontmatter-cleanup/plan.md"
   project: ""
+- id: "PLAN-008"
+  title: "Explicit artifact ranking for backlog ordering"
+  status: "open"
+  updated_at: "2026-03-25T02:39:16Z"
+  path: ".onward/plans/PLAN-008-explicit-artifact-ranking-for-backlog-ordering/plan.md"
+  project: ""
 chunks:
-- id: "CHUNK-001"
-  title: "Fix doc errors and stale references"
-  status: "completed"
-  updated_at: "2026-03-21T04:15:54Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/chunks/CHUNK-001-fix-doc-errors-and-stale-references.md"
-  plan: "PLAN-001"
-  project: "onward"
-  depends_on: []
-- id: "CHUNK-002"
-  title: "Address all six design concerns"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:28Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/chunks/CHUNK-002-address-all-six-design-concerns.md"
-  plan: "PLAN-002"
-  project: "onward"
-  depends_on: []
 - id: "CHUNK-003"
   title: "Core path resolution layer (WorkspaceLayout)"
   status: "completed"
@@ -68,7 +28,6 @@ chunks:
   plan: "PLAN-003"
   project: ""
   depends_on: []
-  effort: "l"
 - id: "CHUNK-004"
   title: "Scaffold and init for configurable roots"
   status: "completed"
@@ -78,7 +37,6 @@ chunks:
   project: ""
   depends_on:
   - "CHUNK-003"
-  effort: "m"
 - id: "CHUNK-005"
   title: "Migrate all artifact path references"
   status: "completed"
@@ -89,7 +47,6 @@ chunks:
   depends_on:
   - "CHUNK-003"
   - "CHUNK-004"
-  effort: "xl"
 - id: "CHUNK-006"
   title: "Project enforcement and multi-root commands"
   status: "completed"
@@ -99,7 +56,6 @@ chunks:
   project: ""
   depends_on:
   - "CHUNK-005"
-  effort: "l"
 - id: "CHUNK-007"
   title: "Sync integration for configurable roots"
   status: "completed"
@@ -109,7 +65,6 @@ chunks:
   project: ""
   depends_on:
   - "CHUNK-005"
-  effort: "m"
 - id: "CHUNK-008"
   title: "Tests, docs, and migration guide"
   status: "completed"
@@ -122,16 +77,6 @@ chunks:
   - "CHUNK-006"
   - "CHUNK-007"
   - "CHUNK-010"
-  effort: "l"
-- id: "CHUNK-009"
-  title: "Add --md flag and markdown report formatter"
-  status: "completed"
-  updated_at: "2026-03-21T16:20:49Z"
-  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/chunks/CHUNK-009-add-md-flag-and-markdown-report-formatter.md"
-  plan: "PLAN-004"
-  project: ""
-  depends_on: []
-  effort: "m"
 - id: "CHUNK-010"
   title: "Migrate command to move artifacts to new root"
   status: "completed"
@@ -141,39 +86,6 @@ chunks:
   project: ""
   depends_on:
   - "CHUNK-004"
-  effort: "m"
-- id: "CHUNK-011"
-  title: "Implement WorkReporter class"
-  status: "completed"
-  updated_at: "2026-03-21T19:03:49Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-011-implement-workreporter-class.md"
-  plan: "PLAN-005"
-  project: ""
-  depends_on: []
-- id: "CHUNK-012"
-  title: "Wire reporter into work command path"
-  status: "completed"
-  updated_at: "2026-03-21T19:25:24Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-012-wire-reporter-into-work-command-path.md"
-  plan: "PLAN-005"
-  project: ""
-  depends_on: []
-- id: "CHUNK-013"
-  title: "Tests and polish"
-  status: "completed"
-  updated_at: "2026-03-21T19:43:09Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/chunks/CHUNK-013-tests-and-polish.md"
-  plan: "PLAN-005"
-  project: ""
-  depends_on: []
-- id: "CHUNK-014"
-  title: "Implement model alias resolution"
-  status: "completed"
-  updated_at: "2026-03-21T19:05:57Z"
-  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/chunks/CHUNK-014-implement-model-alias-resolution.md"
-  plan: "PLAN-006"
-  project: ""
-  depends_on: []
 - id: "CHUNK-015"
   title: "Metadata validation infrastructure"
   status: "completed"
@@ -201,116 +113,6 @@ chunks:
   depends_on:
   - "CHUNK-016"
 tasks:
-- id: "TASK-001"
-  title: "Fix AI_OPERATOR.md anti-pattern #3 factual error"
-  status: "completed"
-  updated_at: "2026-03-21T04:15:53Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/tasks/TASK-001-fix-ai-operator-md-anti-pattern-3-factual-error.md"
-  plan: "PLAN-001"
-  chunk: "CHUNK-001"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-002"
-  title: "Update INSTALLATION.md config reference to tiered model keys"
-  status: "completed"
-  updated_at: "2026-03-21T04:15:53Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/tasks/TASK-002-update-installation-md-config-reference-to-tiered-model-keys.md"
-  plan: "PLAN-001"
-  chunk: "CHUNK-001"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-003"
-  title: "Remove stale start command references"
-  status: "completed"
-  updated_at: "2026-03-21T04:15:53Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/tasks/TASK-003-remove-stale-start-command-references.md"
-  plan: "PLAN-001"
-  chunk: "CHUNK-001"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-004"
-  title: "Update README artifact anatomy and executor clarity"
-  status: "completed"
-  updated_at: "2026-03-21T04:15:54Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/tasks/TASK-004-update-readme-artifact-anatomy-and-executor-clarity.md"
-  plan: "PLAN-001"
-  chunk: "CHUNK-001"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-005"
-  title: "Run tests to verify consistency"
-  status: "completed"
-  updated_at: "2026-03-21T04:15:54Z"
-  path: ".onward/plans/PLAN-001-documentation-clarity-and-accuracy-overhaul/tasks/TASK-005-run-tests-to-verify-consistency.md"
-  plan: "PLAN-001"
-  chunk: "CHUNK-001"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-006"
-  title: "Change scaffold default executor to builtin"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:26Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/tasks/TASK-006-change-scaffold-default-executor-to-builtin.md"
-  plan: "PLAN-002"
-  chunk: "CHUNK-002"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-007"
-  title: "Add runtime layout clarification to WORK_HANDOFF"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:27Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/tasks/TASK-007-add-runtime-layout-clarification-to-work-handoff.md"
-  plan: "PLAN-002"
-  chunk: "CHUNK-002"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-008"
-  title: "Clean up blocked_by deprecation across all docs"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:27Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/tasks/TASK-008-clean-up-blocked-by-deprecation-across-all-docs.md"
-  plan: "PLAN-002"
-  chunk: "CHUNK-002"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-009"
-  title: "Move PROVIDER_REGISTRY to archive"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:27Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/tasks/TASK-009-move-provider-registry-to-archive.md"
-  plan: "PLAN-002"
-  chunk: "CHUNK-002"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-010"
-  title: "Fix CONTRIBUTION.md to lead with installed commands"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:28Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/tasks/TASK-010-fix-contribution-md-to-lead-with-installed-commands.md"
-  plan: "PLAN-002"
-  chunk: "CHUNK-002"
-  project: "onward"
-  depends_on: []
-  human: false
-- id: "TASK-011"
-  title: "Run full test suite and fix any breakage"
-  status: "completed"
-  updated_at: "2026-03-21T04:30:28Z"
-  path: ".onward/plans/PLAN-002-fix-design-concerns-from-doc-audit/tasks/TASK-011-run-full-test-suite-and-fix-any-breakage.md"
-  plan: "PLAN-002"
-  chunk: "CHUNK-002"
-  project: "onward"
-  depends_on: []
-  human: false
 - id: "TASK-012"
   title: "Define WorkspaceLayout dataclass with path resolution methods"
   status: "completed"
@@ -321,7 +123,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "m"
 - id: "TASK-013"
   title: "Add root/roots/default_project config keys and validation"
   status: "completed"
@@ -333,7 +134,6 @@ tasks:
   depends_on:
   - "TASK-012"
   human: false
-  effort: "s"
 - id: "TASK-014"
   title: "Unit tests for WorkspaceLayout"
   status: "completed"
@@ -346,7 +146,6 @@ tasks:
   - "TASK-012"
   - "TASK-013"
   human: false
-  effort: "m"
 - id: "TASK-015"
   title: "Parameterize scaffold.py path lists and functions"
   status: "completed"
@@ -358,7 +157,6 @@ tasks:
   depends_on:
   - "TASK-012"
   human: false
-  effort: "m"
 - id: "TASK-016"
   title: "Update cmd_init to scaffold configurable roots"
   status: "completed"
@@ -370,7 +168,6 @@ tasks:
   depends_on:
   - "TASK-015"
   human: false
-  effort: "s"
 - id: "TASK-017"
   title: "Update cmd_doctor for root/roots validation"
   status: "completed"
@@ -382,7 +179,6 @@ tasks:
   depends_on:
   - "TASK-013"
   human: false
-  effort: "s"
 - id: "TASK-018"
   title: "Migrate artifacts.py to use WorkspaceLayout"
   status: "completed"
@@ -394,7 +190,6 @@ tasks:
   depends_on:
   - "TASK-012"
   human: false
-  effort: "l"
 - id: "TASK-019"
   title: "Migrate execution.py to use WorkspaceLayout"
   status: "completed"
@@ -406,7 +201,6 @@ tasks:
   depends_on:
   - "TASK-012"
   human: false
-  effort: "l"
 - id: "TASK-020"
   title: "Migrate config.py template/prompt resolution to use WorkspaceLayout"
   status: "completed"
@@ -418,7 +212,6 @@ tasks:
   depends_on:
   - "TASK-012"
   human: false
-  effort: "s"
 - id: "TASK-021"
   title: "Migrate split.py and cli_commands.py path references"
   status: "completed"
@@ -432,7 +225,6 @@ tasks:
   - "TASK-019"
   - "TASK-020"
   human: false
-  effort: "m"
 - id: "TASK-022"
   title: "Implement per-project template/prompt/hook fallback"
   status: "completed"
@@ -444,7 +236,6 @@ tasks:
   depends_on:
   - "TASK-020"
   human: false
-  effort: "m"
 - id: "TASK-023"
   title: "Add require_project_or_default helper and wire into all commands"
   status: "completed"
@@ -456,7 +247,6 @@ tasks:
   depends_on:
   - "TASK-021"
   human: false
-  effort: "l"
 - id: "TASK-024"
   title: "Implement combined multi-project report"
   status: "completed"
@@ -468,7 +258,6 @@ tasks:
   depends_on:
   - "TASK-023"
   human: false
-  effort: "m"
 - id: "TASK-025"
   title: "Cross-root ID uniqueness for artifact creation"
   status: "completed"
@@ -480,7 +269,6 @@ tasks:
   depends_on:
   - "TASK-018"
   human: false
-  effort: "s"
 - id: "TASK-026"
   title: "Migrate sync.py hardcoded paths to WorkspaceLayout"
   status: "completed"
@@ -492,7 +280,6 @@ tasks:
   depends_on:
   - "TASK-012"
   human: false
-  effort: "m"
 - id: "TASK-027"
   title: "Add --project to sync subcommands"
   status: "completed"
@@ -504,7 +291,6 @@ tasks:
   depends_on:
   - "TASK-026"
   human: false
-  effort: "s"
 - id: "TASK-028"
   title: "Update existing tests to use layout-aware path construction"
   status: "completed"
@@ -515,7 +301,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "l"
 - id: "TASK-029"
   title: "Add new tests for single custom root and multi-root scenarios"
   status: "completed"
@@ -527,7 +312,6 @@ tasks:
   depends_on:
   - "TASK-028"
   human: false
-  effort: "m"
 - id: "TASK-030"
   title: "Update docs (README, INSTALLATION, AI_OPERATOR, AGENTS) for configurable roots"
   status: "completed"
@@ -538,7 +322,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "m"
 - id: "TASK-031"
   title: "Update scaffold default config template with root option"
   status: "completed"
@@ -549,42 +332,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "xs"
-- id: "TASK-032"
-  title: "Add --md argument to report subparser in cli.py"
-  status: "completed"
-  updated_at: "2026-03-21T16:14:39Z"
-  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-032-add-md-argument-to-report-subparser-in-cli-py.md"
-  plan: "PLAN-004"
-  chunk: "CHUNK-009"
-  project: ""
-  depends_on: []
-  human: false
-  effort: "xs"
-- id: "TASK-033"
-  title: "Implement format_report_markdown function"
-  status: "completed"
-  updated_at: "2026-03-21T16:17:25Z"
-  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-033-implement-format-report-markdown-function.md"
-  plan: "PLAN-004"
-  chunk: "CHUNK-009"
-  project: ""
-  depends_on:
-  - "TASK-032"
-  human: false
-  effort: "m"
-- id: "TASK-034"
-  title: "Wire --md into cmd_report and add tests"
-  status: "completed"
-  updated_at: "2026-03-21T16:20:49Z"
-  path: ".onward/plans/PLAN-004-markdown-report-output-md-flag/tasks/TASK-034-wire-md-into-cmd-report-and-add-tests.md"
-  plan: "PLAN-004"
-  chunk: "CHUNK-009"
-  project: ""
-  depends_on:
-  - "TASK-033"
-  human: false
-  effort: "s"
 - id: "TASK-035"
   title: "Implement onward migrate command with dry-run support"
   status: "completed"
@@ -596,7 +343,6 @@ tasks:
   depends_on:
   - "TASK-015"
   human: false
-  effort: "m"
 - id: "TASK-036"
   title: "Add migrate tests and gitignore update logic"
   status: "completed"
@@ -607,76 +353,6 @@ tasks:
   project: ""
   depends_on:
   - "TASK-035"
-  human: false
-  effort: "s"
-- id: "TASK-037"
-  title: "Create WorkReporter class with output methods and indentation context manager"
-  status: "completed"
-  updated_at: "2026-03-21T19:03:49Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-037-create-workreporter-class-with-output-methods-and-indentation-context-manager.md"
-  plan: "PLAN-005"
-  chunk: "CHUNK-011"
-  project: ""
-  depends_on: []
-  human: false
-- id: "TASK-038"
-  title: "Wire WorkReporter into cmd_work and _work_plan in cli_commands.py"
-  status: "completed"
-  updated_at: "2026-03-21T19:06:18Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-038-wire-workreporter-into-cmd-work-and-work-plan-in-cli-commands-py.md"
-  plan: "PLAN-005"
-  chunk: "CHUNK-012"
-  project: ""
-  depends_on:
-  - "TASK-037"
-  human: false
-- id: "TASK-039"
-  title: "Wire WorkReporter into work_chunk and _work_chunk_loop in execution.py"
-  status: "completed"
-  updated_at: "2026-03-21T19:21:13Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-039-wire-workreporter-into-work-chunk-and-work-chunk-loop-in-execution-py.md"
-  plan: "PLAN-005"
-  chunk: "CHUNK-012"
-  project: ""
-  depends_on:
-  - "TASK-037"
-  - "TASK-038"
-  human: false
-- id: "TASK-040"
-  title: "Wire WorkReporter into work_task and _finalize_task_run in execution.py"
-  status: "completed"
-  updated_at: "2026-03-21T19:25:23Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-040-wire-workreporter-into-work-task-and-finalize-task-run-in-execution-py.md"
-  plan: "PLAN-005"
-  chunk: "CHUNK-012"
-  project: ""
-  depends_on:
-  - "TASK-037"
-  - "TASK-039"
-  human: false
-- id: "TASK-041"
-  title: "Add unit tests for WorkReporter formatting"
-  status: "completed"
-  updated_at: "2026-03-21T19:26:41Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-041-add-unit-tests-for-workreporter-formatting.md"
-  plan: "PLAN-005"
-  chunk: "CHUNK-013"
-  project: ""
-  depends_on:
-  - "TASK-037"
-  human: false
-- id: "TASK-042"
-  title: "Fix regressions in existing tests from print-to-reporter migration"
-  status: "completed"
-  updated_at: "2026-03-21T19:43:08Z"
-  path: ".onward/plans/PLAN-005-structured-progress-output-for-onward-work/tasks/TASK-042-fix-regressions-in-existing-tests-from-print-to-reporter-migration.md"
-  plan: "PLAN-005"
-  chunk: "CHUNK-013"
-  project: ""
-  depends_on:
-  - "TASK-038"
-  - "TASK-039"
-  - "TASK-040"
   human: false
 - id: "TASK-043"
   title: "Fix validate_chunk_dag to resolve cross-chunk completed dependencies"
@@ -698,36 +374,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-- id: "TASK-045"
-  title: "Add resolve_model_alias and wire into executor"
-  status: "completed"
-  updated_at: "2026-03-21T19:05:56Z"
-  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-045-add-resolve-model-alias-and-wire-into-executor.md"
-  plan: "PLAN-006"
-  chunk: "CHUNK-014"
-  project: ""
-  depends_on: []
-  human: false
-- id: "TASK-046"
-  title: "Update defaults, scaffold, prompts, and docs to use short aliases"
-  status: "completed"
-  updated_at: "2026-03-21T19:05:56Z"
-  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-046-update-defaults-scaffold-prompts-and-docs-to-use-short-aliases.md"
-  plan: "PLAN-006"
-  chunk: "CHUNK-014"
-  project: ""
-  depends_on: []
-  human: false
-- id: "TASK-047"
-  title: "Update tests for model alias changes"
-  status: "completed"
-  updated_at: "2026-03-21T19:05:57Z"
-  path: ".onward/plans/PLAN-006-simple-model-aliases-opus-sonnet-haiku-codex/tasks/TASK-047-update-tests-for-model-alias-changes.md"
-  plan: "PLAN-006"
-  chunk: "CHUNK-014"
-  project: ""
-  depends_on: []
-  human: false
 - id: "TASK-048"
   title: "Define KNOWN_FIELDS and FIELD_VALIDATORS; expand validate_artifact() in artifacts.py"
   status: "completed"
@@ -738,7 +384,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "m"
 - id: "TASK-049"
   title: "Add validate_task_preflight() and wire into work_task() in execution.py"
   status: "completed"
@@ -750,7 +395,6 @@ tasks:
   depends_on:
   - "TASK-048"
   human: false
-  effort: "s"
 - id: "TASK-050"
   title: "Surface artifact metadata validation issues in cmd_doctor()"
   status: "completed"
@@ -762,7 +406,6 @@ tasks:
   depends_on:
   - "TASK-048"
   human: false
-  effort: "s"
 - id: "TASK-051"
   title: "Unit tests for validate_artifact() field validators and unknown-field detection"
   status: "completed"
@@ -774,7 +417,6 @@ tasks:
   depends_on:
   - "TASK-048"
   human: false
-  effort: "m"
 - id: "TASK-052"
   title: "Integration tests: preflight gate in work_task and metadata issues in doctor output"
   status: "completed"
@@ -787,7 +429,6 @@ tasks:
   - "TASK-049"
   - "TASK-050"
   human: false
-  effort: "m"
 - id: "TASK-053"
   title: "util.py: rename normalize_effort → normalize_complexity, accept low|medium|high"
   status: "completed"
@@ -798,7 +439,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "xs"
 - id: "TASK-054"
   title: "config.py: update resolve_model_for_task to read complexity with effort fallback"
   status: "completed"
@@ -810,7 +450,6 @@ tasks:
   depends_on:
   - "TASK-053"
   human: false
-  effort: "xs"
 - id: "TASK-055"
   title: "artifacts.py: rename summarize_effort_remaining → summarize_complexity_remaining, update metadata reads"
   status: "completed"
@@ -822,7 +461,6 @@ tasks:
   depends_on:
   - "TASK-053"
   human: false
-  effort: "s"
 - id: "TASK-056"
   title: "cli.py: rename --effort → --complexity on new task and new chunk subcommands"
   status: "completed"
@@ -833,7 +471,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "xs"
 - id: "TASK-057"
   title: "cli_commands.py: update all effort→complexity call sites"
   status: "completed"
@@ -847,7 +484,6 @@ tasks:
   - "TASK-055"
   - "TASK-056"
   human: false
-  effort: "s"
 - id: "TASK-058"
   title: "split.py: update normalize_effort → normalize_complexity and metadata key"
   status: "completed"
@@ -859,7 +495,6 @@ tasks:
   depends_on:
   - "TASK-053"
   human: false
-  effort: "s"
 - id: "TASK-059"
   title: "scaffold.py: update templates and split-chunk prompt for complexity"
   status: "completed"
@@ -870,7 +505,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "s"
 - id: "TASK-060"
   title: "Tests: update all affected tests for the effort→complexity rename"
   status: "completed"
@@ -888,7 +522,6 @@ tasks:
   - "TASK-058"
   - "TASK-059"
   human: false
-  effort: "m"
 - id: "TASK-061"
   title: "Docs: update effort→complexity references in documentation"
   status: "completed"
@@ -899,7 +532,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "s"
 - id: "TASK-062"
   title: "Remove files and acceptance from task frontmatter in split.py and cli_commands.py"
   status: "completed"
@@ -910,7 +542,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "s"
 - id: "TASK-063"
   title: "Add KNOWN_FIELDS for tasks to artifacts.py and warn on unknown fields in validate_artifact"
   status: "completed"
@@ -921,7 +552,6 @@ tasks:
   project: ""
   depends_on: []
   human: false
-  effort: "s"
 - id: "TASK-064"
   title: "Update tests to match new task frontmatter (no files/acceptance keys, plus doctor warnings)"
   status: "in_progress"
@@ -934,7 +564,6 @@ tasks:
   - "TASK-062"
   - "TASK-063"
   human: false
-  effort: "m"
 runs:
 - id: "RUN-2026-03-20T17-50-34Z-TASK-034"
   target: "TASK-034"

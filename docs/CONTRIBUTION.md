@@ -24,6 +24,7 @@ Right now this repo supports:
 - plan archival (`onward archive PLAN-###`)
 - artifact root migration (`onward migrate` — moves artifacts when `root` config changes)
 - optional plan sync (`onward sync status`, `onward sync push`, `onward sync pull` when `sync.mode` is `branch` or `repo`)
+- optional Linear integration (`onward linear push` to sync plans to Linear issues for shared roadmap visibility)
 
 Onward stores tracked planning state in `.onward/plans/` and runtime state in `.onward/`.
 

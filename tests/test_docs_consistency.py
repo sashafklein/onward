@@ -69,6 +69,7 @@ def test_collect_leaf_commands_matches_known_set(leaf_commands: list[str]) -> No
         "complete",
         "doctor",
         "init",
+        "linear push",
         "list",
         "migrate",
         "new chunk",

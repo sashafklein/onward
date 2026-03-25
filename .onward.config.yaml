@@ -18,6 +18,12 @@ version: 1
 #     frontend: .onward-frontend
 #   default_project: backend    # which project key to use when --project is omitted
 
+# ── Linear ─────────────────────────────────────────────────────────────
+# Sync plans to Linear for shared roadmap visibility and prioritization.
+# API key comes from the LINEAR_API_KEY environment variable (never stored here).
+# linear:
+#   team_id: "<your-linear-team-id>"  # required for `onward linear push`
+
 # ── Sync ─────────────────────────────────────────────────────────────
 # Controls how plan files are shared across branches / repos.
 sync:

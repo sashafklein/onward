@@ -146,6 +146,28 @@ What gets synchronized:
 | `onward sync push`       | Mirror local → target, commit, `git push`                     |
 | `onward sync pull`       | Fast-forward target, mirror → workspace, reindex            |
 
+### Linear Integration
+
+Push local plans to [Linear](https://linear.app/) for shared roadmap visibility and prioritization with collaborators. Plans are synced as Linear issues; chunks and tasks stay local.
+
+```bash
+export LINEAR_API_KEY="lin_api_..."  # personal API key from https://linear.app/settings/api
+```
+
+Configure `linear.team_id` in `.onward.config.yaml`:
+
+```yaml
+linear:
+  team_id: "<your-team-id>"
+```
+
+| Command                     | What it does                                                       |
+| --------------------------- | ------------------------------------------------------------------ |
+| `onward linear push`        | Create/update Linear issues for all local plans                    |
+| `onward linear push --dry-run` | Preview what would be pushed without making API calls           |
+
+Plans without a `linear_id` in frontmatter are created as new issues; plans that already have one get their status synced.
+
 ### Moving Work Forward
 
 Status rules: **[docs/LIFECYCLE.md](docs/LIFECYCLE.md)** — `onward work` advances task/chunk status around the executor; use `complete` when closing work **without** `work`.

@@ -206,7 +206,7 @@ class WorkspaceLayout:
 # ``ralph`` is accepted for backward compatibility; prefer ``executor``.
 CONFIG_TOP_LEVEL_KEYS = frozenset({
     "version", "sync", "executor", "ralph", "models", "review", "work", "hooks",
-    "root", "roots", "default_project"
+    "root", "roots", "default_project", "linear"
 })
 
 _EXECUTOR_SECTION_KEYS = frozenset({"command", "args", "enabled"})
@@ -237,6 +237,7 @@ CONFIG_SECTION_KEYS: dict[str, frozenset[str]] = {
         "post_task_markdown",
         "post_chunk_markdown",
     }),
+    "linear": frozenset({"team_id"}),
 }
 
 _REMOVED_WORK_KEYS = frozenset({"create_worktree", "worktree_root", "base_branch"})

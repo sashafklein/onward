@@ -1,14 +1,14 @@
 ---
-id: "PLAN-002"
+id: "PLAN-008"
 type: "plan"
-project: "onward"
-title: "Fix design concerns from doc audit"
-status: "completed"
+project: ""
+title: "Explicit artifact ranking for backlog ordering"
+status: "open"
 description: ""
 priority: "medium"
-model: "claude-opus-4-5"
-created_at: "2026-03-21T04:19:50Z"
-updated_at: "2026-03-21T04:30:32Z"
+model: "opus"
+created_at: "2026-03-25T02:39:16Z"
+updated_at: "2026-03-25T02:39:16Z"
 ---
 
 # Summary

@@ -188,6 +188,10 @@ onward recent                 # recently completed artifacts + run records
 onward sync status
 onward sync push
 onward sync pull
+
+# Optional: push plans to Linear (set LINEAR_API_KEY env var + linear.team_id in config)
+onward linear push
+onward linear push --dry-run
 ```
 
 ## The Operating Loop
