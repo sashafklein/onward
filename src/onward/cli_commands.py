@@ -1955,15 +1955,8 @@ def cmd_roadmap(args: argparse.Namespace) -> int:
         print("No incomplete plans")
         return 0
     
-    # Priority order: high > medium > low
-    priority_order = {"high": 0, "medium": 1, "low": 2}
-    
-    def plan_sort_key(plan: Artifact) -> tuple[int, str]:
-        priority = str(plan.metadata.get("priority", "medium")).lower()
-        priority_rank = priority_order.get(priority, 1)
-        plan_id = str(plan.metadata.get("id", ""))
-        return (priority_rank, plan_id)
-    
+    from onward.artifacts import plan_sort_key
+
     plans.sort(key=plan_sort_key)
     
     # Get all chunks
@@ -2589,7 +2582,7 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
         get_issue,
         get_team_id,
         map_status_to_state,
-        update_issue_state,
+        update_issue,
     )
 
     api_key = get_api_key()
@@ -2639,16 +2632,10 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
         linear_ident = str(plan.metadata.get("linear_identifier", "")).strip()
 
         if linear_id:
-            # Already linked — update status
+            # Already linked — update state, title, body
             if dry_run:
-                print(f"  update  {plan_id} ({linear_ident or linear_id}) — status: {status}")
+                print(f"  update  {plan_id} ({linear_ident or linear_id}) — will sync state/title/body")
                 updated += 1
-                continue
-
-            state = map_status_to_state(status, states)
-            if not state:
-                print(f"  skip    {plan_id} — no matching Linear state for '{status}'")
-                skipped += 1
                 continue
 
             existing = get_issue(api_key, linear_id)
@@ -2657,23 +2644,45 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
                 errors += 1
                 continue
 
+            state = map_status_to_state(status, states)
             current_state_cat = existing.get("state", {}).get("type", "")
-            if current_state_cat == state.category:
-                print(f"  skip    {plan_id} ({linear_ident or linear_id}) — already {state.name}")
+            local_body = plan.body.strip()
+
+            state_changed = state and current_state_cat != state.category
+            title_changed = existing.get("title", "") != title
+            desc_changed = (existing.get("description") or "").strip() != local_body
+
+            if not state_changed and not title_changed and not desc_changed:
+                print(f"  skip    {plan_id} ({linear_ident or linear_id}) — no changes")
                 skipped += 1
                 continue
 
             try:
-                update_issue_state(api_key, linear_id, state.id)
-                print(f"  update  {plan_id} ({linear_ident or linear_id}) → {state.name}")
+                update_issue(
+                    api_key,
+                    linear_id,
+                    state_id=state.id if state_changed and state else None,
+                    title=title if title_changed else None,
+                    description=local_body if desc_changed else None,
+                )
+                changes = []
+                if state_changed and state:
+                    changes.append(f"status → {state.name}")
+                if title_changed:
+                    changes.append("title")
+                if desc_changed:
+                    changes.append("body")
+                now = now_iso()
+                plan.metadata["linear_synced_at"] = now
+                plan.metadata["updated_at"] = now
+                write_artifact(plan)
+                print(f"  update  {plan_id} ({linear_ident or linear_id}) — {', '.join(changes)}")
                 updated += 1
             except LinearError as exc:
                 print(f"  error   {plan_id} — {exc}")
                 errors += 1
         else:
-            description = str(plan.metadata.get("description", "")).strip()
-            body_summary = _extract_plan_summary(plan.body)
-            full_desc = "\n\n".join(filter(None, [description, body_summary]))
+            full_desc = plan.body.strip() or str(plan.metadata.get("description", "")).strip()
 
             if dry_run:
                 print(f"  create  {plan_id} — \"{title}\"")
@@ -2792,38 +2801,68 @@ def _do_linear_pull(
         old_priority = str(plan.metadata.get("priority", "medium")).lower()
         new_status = linear_category_to_status(remote.state_category)
         old_status = str(plan.metadata.get("status", "open"))
+        new_sort_order = remote.sort_order
+        try:
+            old_sort_order = float(plan.metadata.get("linear_sort_order", ""))
+        except (TypeError, ValueError):
+            old_sort_order = None
+        new_title = remote.title.strip()
+        old_title = str(plan.metadata.get("title", "")).strip()
+        new_body = remote.description.strip()
+        old_body = plan.body.strip()
 
         priority_changed = new_priority != old_priority
         status_changed = new_status != old_status
+        sort_order_changed = old_sort_order is None or new_sort_order != old_sort_order
+        title_changed = bool(new_title) and new_title != old_title
+        body_changed = bool(new_body) and new_body != old_body
 
-        if not priority_changed and not status_changed:
+        has_content_changes = priority_changed or status_changed or title_changed or body_changed
+        if not has_content_changes and not sort_order_changed:
             skipped += 1
             continue
 
         # Conflict detection: did local change since last sync?
+        # sort_order is Linear-owned so it never conflicts
         local_edited_since_sync = _local_edited_since_sync(plan)
 
-        if local_edited_since_sync:
+        if local_edited_since_sync and has_content_changes:
             conflict_path = _write_conflict_file(plan, remote)
             conflicts += 1
             rel = conflict_path.relative_to(root) if conflict_path.is_relative_to(root) else conflict_path
             if not quiet:
-                changes = []
+                change_details = []
                 if priority_changed:
-                    changes.append(f"priority: local={old_priority} linear={new_priority}")
+                    change_details.append(f"priority: local={old_priority} linear={new_priority}")
                 if status_changed:
-                    changes.append(f"status: local={old_status} linear={new_status}")
-                lines.append(f"  CONFLICT  {plan_id} ({ident}) — {', '.join(changes)}")
+                    change_details.append(f"status: local={old_status} linear={new_status}")
+                if title_changed:
+                    change_details.append("title")
+                if body_changed:
+                    change_details.append("body")
+                lines.append(f"  CONFLICT  {plan_id} ({ident}) — {', '.join(change_details)}")
                 lines.append(f"            wrote {rel}")
+            # Still update sort_order even during conflict — it's Linear-owned
+            if sort_order_changed:
+                plan.metadata["linear_sort_order"] = new_sort_order
+                write_artifact(plan)
             continue
 
         changes: list[str] = []
+        if title_changed:
+            plan.metadata["title"] = new_title
+            changes.append(f"title: \"{old_title}\" → \"{new_title}\"")
+        if body_changed:
+            plan.body = new_body + "\n"
+            changes.append("body updated")
         if priority_changed:
             plan.metadata["priority"] = new_priority
             changes.append(f"priority: {old_priority} → {new_priority}")
         if status_changed:
             plan.metadata["status"] = new_status
             changes.append(f"status: {old_status} → {new_status}")
+        if sort_order_changed:
+            plan.metadata["linear_sort_order"] = new_sort_order
 
         now = now_iso()
         plan.metadata["linear_synced_at"] = now
@@ -2863,6 +2902,7 @@ def _do_linear_pull(
             "model": "opus",
             "linear_id": issue.id,
             "linear_identifier": issue.identifier,
+            "linear_sort_order": issue.sort_order,
             "linear_synced_at": now,
             "created_at": now,
             "updated_at": now,
@@ -2944,6 +2984,7 @@ def _write_conflict_file(plan: Artifact, remote: Any) -> Path:
         "",
         "## Local values",
         "",
+        f"- **Title:** {plan.metadata.get('title', '')}",
         f"- **Priority:** {plan.metadata.get('priority', 'medium')}",
         f"- **Status:** {plan.metadata.get('status', 'open')}",
         f"- **Updated at:** {plan.metadata.get('updated_at', '')}",
@@ -2951,7 +2992,11 @@ def _write_conflict_file(plan: Artifact, remote: Any) -> Path:
     ]
 
     if remote.description:
-        header.extend(["", "## Linear description", "", remote.description.strip()])
+        header.extend(["", "## Linear body", "", remote.description.strip()])
+
+    local_body = plan.body.strip()
+    if local_body:
+        header.extend(["", "## Local body", "", local_body])
 
     conflict_path.write_text("\n".join(header) + "\n", encoding="utf-8")
     return conflict_path

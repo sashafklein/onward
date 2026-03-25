@@ -26,7 +26,7 @@ REQUIRED_FIELDS = {
 
 # Optional fields recognized per artifact type — used to detect unknown frontmatter keys.
 KNOWN_FIELDS: dict[str, list[str]] = {
-    "plan": ["project", "priority", "model", "description", "linear_id", "linear_identifier", "linear_synced_at"],
+    "plan": ["project", "priority", "model", "description", "linear_id", "linear_identifier", "linear_synced_at", "linear_sort_order"],
     "chunk": ["project", "priority", "model", "effort", "complexity", "estimated_files", "description"],
     "task": [
         "project",
@@ -563,6 +563,21 @@ def chunk_has_actionable_executor_task(
     return False
 
 
+_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+_NO_SORT_ORDER = float("inf")
+
+
+def plan_sort_key(plan: Artifact) -> tuple[int, float, str]:
+    """Sort key for a plan: (priority_rank, linear_sort_order, plan_id)."""
+    priority = str(plan.metadata.get("priority", "medium")).lower()
+    rank = _PRIORITY_RANK.get(priority, 1)
+    try:
+        sort_order = float(plan.metadata.get("linear_sort_order", _NO_SORT_ORDER))
+    except (TypeError, ValueError):
+        sort_order = _NO_SORT_ORDER
+    return (rank, sort_order, str(plan.metadata.get("id", "")))
+
+
 def select_next_artifact(
     artifacts: list[Artifact],
     project: str | None = None,
@@ -576,7 +591,13 @@ def select_next_artifact(
         if a.metadata.get("id")
     }
 
-    ready_tasks: list[tuple[tuple[int, int, str], Artifact]] = []
+    plans_by_id: dict[str, Artifact] = {
+        str(a.metadata.get("id", "")): a
+        for a in artifacts
+        if str(a.metadata.get("type", "")) == "plan"
+    }
+
+    ready_tasks: list[tuple[tuple[int, int, int, float, str, str], Artifact]] = []
     open_chunks: list[Artifact] = []
     open_plans: list[Artifact] = []
 
@@ -593,9 +614,18 @@ def select_next_artifact(
                 continue
             chunk_status = status_by_id.get(str(artifact.metadata.get("chunk", "")), "")
             plan_status = status_by_id.get(str(artifact.metadata.get("plan", "")), "")
+            plan_id = str(artifact.metadata.get("plan", ""))
+            plan = plans_by_id.get(plan_id)
+            if plan:
+                p_rank, p_sort, _ = plan_sort_key(plan)
+            else:
+                p_rank, p_sort = 1, _NO_SORT_ORDER
             rank = (
                 0 if chunk_status == "in_progress" else 1,
                 0 if plan_status == "in_progress" else 1,
+                p_rank,
+                p_sort,
+                plan_id,
                 aid,
             )
             ready_tasks.append((rank, artifact))
@@ -611,10 +641,12 @@ def select_next_artifact(
         ready_tasks.sort(key=lambda item: item[0])
         return ready_tasks[0][1]
     if open_chunks:
-        open_chunks.sort(key=lambda a: str(a.metadata.get("id", "")))
+        open_chunks.sort(key=lambda a: plan_sort_key(
+            plans_by_id.get(str(a.metadata.get("plan", "")), a)
+        ))
         return open_chunks[0]
     if open_plans:
-        open_plans.sort(key=lambda a: str(a.metadata.get("id", "")))
+        open_plans.sort(key=plan_sort_key)
         return open_plans[0]
     return None
 
@@ -717,6 +749,12 @@ def _artifact_from_index_row(kind: str, row: dict[str, Any], layout: WorkspaceLa
     }
     if kind == "plan":
         meta["project"] = row.get("project") or ""
+        pri = row.get("priority")
+        if pri:
+            meta["priority"] = str(pri).strip()
+        lso = row.get("linear_sort_order")
+        if lso is not None:
+            meta["linear_sort_order"] = lso
     elif kind == "chunk":
         meta["plan"] = row.get("plan")
         meta["project"] = row.get("project") or ""
@@ -864,6 +902,12 @@ def regenerate_indexes(layout: WorkspaceLayout, run_records: list[dict[str, Any]
         artifact_type = m.get("type")
         if artifact_type == "plan":
             row["project"] = m.get("project") or ""
+            pri = m.get("priority")
+            if pri:
+                row["priority"] = str(pri).strip()
+            lso = m.get("linear_sort_order")
+            if lso is not None:
+                row["linear_sort_order"] = lso
             plans.append(row)
         elif artifact_type == "chunk":
             row["plan"] = m.get("plan")

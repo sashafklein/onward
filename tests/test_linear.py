@@ -643,6 +643,78 @@ class TestLinearPullCLI:
         assert not (plan_dir / "plan-linear.md").exists()
 
     @patch("onward.linear._graphql")
+    def test_pull_syncs_title_and_description(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """Pull should update title and description when Linear values changed."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        _create_plan(root, "PLAN-001", "Old Title", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "New Title From Linear",
+                "url": "https://linear.app/ENG-1",
+                "priority": 3,
+                "sortOrder": 1.0,
+                "description": "Updated description from CEO",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "1 updated" in out
+        assert "title:" in out
+        assert "body updated" in out
+
+        plan_dir = list((root / ".onward" / "plans").glob("PLAN-001-*"))[0]
+        plan_text = (plan_dir / "plan.md").read_text()
+        assert "New Title From Linear" in plan_text
+
+        from onward.artifacts import parse_artifact
+        art = parse_artifact(plan_dir / "plan.md")
+        assert art.metadata["title"] == "New Title From Linear"
+        assert "Updated description from CEO" in art.body
+
+    @patch("onward.linear._graphql")
+    def test_pull_body_not_overwritten_when_linear_empty(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """If Linear description is empty, local body should not be wiped out."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        _create_plan(root, "PLAN-001", "My Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "My Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 3,
+                "sortOrder": 1.0,
+                "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+
+        from onward.artifacts import parse_artifact
+        plan_dir = list((root / ".onward" / "plans").glob("PLAN-001-*"))[0]
+        art = parse_artifact(plan_dir / "plan.md")
+        assert "Test plan summary" in art.body
+
+    @patch("onward.linear._graphql")
     def test_conflict_when_no_synced_at(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
         """Plans that predate Linear integration (no linear_synced_at) conflict if Linear differs."""
         root = _init_workspace(tmp_path)
@@ -721,3 +793,196 @@ class TestRoadmapAutoPull:
         assert rc == 0
         out = capsys.readouterr().out
         assert "synced from Linear" not in out
+
+
+# ---------------------------------------------------------------------------
+# linear_sort_order syncing
+# ---------------------------------------------------------------------------
+
+
+class TestLinearSortOrderPull:
+    @patch("onward.linear._graphql")
+    def test_created_plan_includes_sort_order(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """New plans imported from Linear should store linear_sort_order."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-new",
+                "identifier": "ENG-50",
+                "title": "Sorted Plan",
+                "url": "https://linear.app/ENG-50",
+                "priority": 2,
+                "sortOrder": 42.5,
+                "description": "Has sort order.",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+
+        from onward.artifacts import parse_artifact
+        plan_files = list((root / ".onward" / "plans").rglob("plan.md"))
+        assert len(plan_files) == 1
+        art = parse_artifact(plan_files[0])
+        assert art.metadata["linear_sort_order"] == 42.5
+
+    @patch("onward.linear._graphql")
+    def test_updated_plan_syncs_sort_order(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """Existing plans should get sort_order updated on pull."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        _create_plan(root, "PLAN-001", "My Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "My Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 3,
+                "sortOrder": 7.25,
+                "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+
+        from onward.artifacts import parse_artifact
+        plan_files = list((root / ".onward" / "plans").rglob("plan.md"))
+        art = parse_artifact(plan_files[0])
+        assert art.metadata["linear_sort_order"] == 7.25
+
+    @patch("onward.linear._graphql")
+    def test_sort_order_only_change_triggers_update(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """When only sort_order changes (priority/status same), plan should still update."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        _create_plan(root, "PLAN-001", "My Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "My Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 3,  # medium → same as default
+                "sortOrder": 99.0,
+                "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},  # open → same
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "1 updated" in out
+
+        from onward.artifacts import parse_artifact
+        plan_files = list((root / ".onward" / "plans").rglob("plan.md"))
+        art = parse_artifact(plan_files[0])
+        assert art.metadata["linear_sort_order"] == 99.0
+
+
+# ---------------------------------------------------------------------------
+# Priority-aware ordering: select_next_artifact and plan_sort_key
+# ---------------------------------------------------------------------------
+
+
+class TestPlanSortKey:
+    def test_high_before_medium(self):
+        from onward.artifacts import plan_sort_key, Artifact
+        high = Artifact(file_path=Path("a"), body="", metadata={"id": "PLAN-002", "priority": "high"})
+        medium = Artifact(file_path=Path("b"), body="", metadata={"id": "PLAN-001", "priority": "medium"})
+        assert plan_sort_key(high) < plan_sort_key(medium)
+
+    def test_sort_order_breaks_priority_tie(self):
+        from onward.artifacts import plan_sort_key, Artifact
+        first = Artifact(file_path=Path("a"), body="", metadata={"id": "PLAN-002", "priority": "high", "linear_sort_order": 1.0})
+        second = Artifact(file_path=Path("b"), body="", metadata={"id": "PLAN-001", "priority": "high", "linear_sort_order": 5.0})
+        assert plan_sort_key(first) < plan_sort_key(second)
+
+    def test_no_sort_order_sorts_last_within_tier(self):
+        from onward.artifacts import plan_sort_key, Artifact
+        with_order = Artifact(file_path=Path("a"), body="", metadata={"id": "PLAN-002", "priority": "medium", "linear_sort_order": 100.0})
+        without = Artifact(file_path=Path("b"), body="", metadata={"id": "PLAN-001", "priority": "medium"})
+        assert plan_sort_key(with_order) < plan_sort_key(without)
+
+    def test_id_breaks_full_tie(self):
+        from onward.artifacts import plan_sort_key, Artifact
+        a = Artifact(file_path=Path("a"), body="", metadata={"id": "PLAN-001", "priority": "medium"})
+        b = Artifact(file_path=Path("b"), body="", metadata={"id": "PLAN-002", "priority": "medium"})
+        assert plan_sort_key(a) < plan_sort_key(b)
+
+
+class TestSelectNextArtifactPriority:
+    def _make_artifact(self, id: str, type: str, status: str, **extra) -> "Artifact":
+        from onward.artifacts import Artifact
+        meta = {"id": id, "type": type, "status": status, "title": id, "created_at": "", "updated_at": ""}
+        meta.update(extra)
+        return Artifact(file_path=Path(f"/fake/{id}.md"), body="", metadata=meta)
+
+    def test_prefers_task_in_high_priority_plan(self):
+        from onward.artifacts import select_next_artifact
+        plan_high = self._make_artifact("PLAN-001", "plan", "in_progress", priority="high", linear_sort_order=1.0)
+        plan_low = self._make_artifact("PLAN-002", "plan", "in_progress", priority="low", linear_sort_order=1.0)
+        chunk_h = self._make_artifact("CHUNK-001", "chunk", "in_progress", plan="PLAN-001")
+        chunk_l = self._make_artifact("CHUNK-002", "chunk", "in_progress", plan="PLAN-002")
+        task_low = self._make_artifact("TASK-001", "task", "open", plan="PLAN-002", chunk="CHUNK-002", human=False)
+        task_high = self._make_artifact("TASK-002", "task", "open", plan="PLAN-001", chunk="CHUNK-001", human=False)
+
+        result = select_next_artifact([plan_high, plan_low, chunk_h, chunk_l, task_low, task_high])
+        assert result is not None
+        assert result.metadata["id"] == "TASK-002"
+
+    def test_prefers_lower_sort_order_within_same_priority(self):
+        from onward.artifacts import select_next_artifact
+        plan_a = self._make_artifact("PLAN-001", "plan", "in_progress", priority="high", linear_sort_order=10.0)
+        plan_b = self._make_artifact("PLAN-002", "plan", "in_progress", priority="high", linear_sort_order=1.0)
+        chunk_a = self._make_artifact("CHUNK-001", "chunk", "in_progress", plan="PLAN-001")
+        chunk_b = self._make_artifact("CHUNK-002", "chunk", "in_progress", plan="PLAN-002")
+        task_a = self._make_artifact("TASK-001", "task", "open", plan="PLAN-001", chunk="CHUNK-001", human=False)
+        task_b = self._make_artifact("TASK-002", "task", "open", plan="PLAN-002", chunk="CHUNK-002", human=False)
+
+        result = select_next_artifact([plan_a, plan_b, chunk_a, chunk_b, task_a, task_b])
+        assert result is not None
+        assert result.metadata["id"] == "TASK-002"
+
+    def test_in_progress_still_beats_priority(self):
+        """Tasks in an in-progress chunk/plan still rank above non-in-progress, even if lower priority."""
+        from onward.artifacts import select_next_artifact
+        plan_high = self._make_artifact("PLAN-001", "plan", "open", priority="high")
+        plan_low = self._make_artifact("PLAN-002", "plan", "in_progress", priority="low")
+        chunk_h = self._make_artifact("CHUNK-001", "chunk", "open", plan="PLAN-001")
+        chunk_l = self._make_artifact("CHUNK-002", "chunk", "in_progress", plan="PLAN-002")
+        task_high = self._make_artifact("TASK-001", "task", "open", plan="PLAN-001", chunk="CHUNK-001", human=False)
+        task_low = self._make_artifact("TASK-002", "task", "open", plan="PLAN-002", chunk="CHUNK-002", human=False)
+
+        result = select_next_artifact([plan_high, plan_low, chunk_h, chunk_l, task_high, task_low])
+        assert result is not None
+        assert result.metadata["id"] == "TASK-002"
+
+    def test_open_plans_sorted_by_priority(self):
+        """When no ready tasks or chunks, open plans are returned in priority order."""
+        from onward.artifacts import select_next_artifact
+        plan_low = self._make_artifact("PLAN-001", "plan", "open", priority="low")
+        plan_high = self._make_artifact("PLAN-002", "plan", "open", priority="high")
+
+        result = select_next_artifact([plan_low, plan_high])
+        assert result is not None
+        assert result.metadata["id"] == "PLAN-002"

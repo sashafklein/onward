@@ -232,17 +232,39 @@ def create_issue(
 
 
 _UPDATE_ISSUE_MUTATION = """
-mutation UpdateIssue($issueId: String!, $stateId: String!) {
-  issueUpdate(id: $issueId, input: {stateId: $stateId}) {
+mutation UpdateIssue($issueId: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $issueId, input: $input) {
     success
   }
 }
 """
 
 
-def update_issue_state(api_key: str, issue_id: str, state_id: str) -> bool:
-    data = _graphql(_UPDATE_ISSUE_MUTATION, {"issueId": issue_id, "stateId": state_id}, api_key)
+def update_issue(
+    api_key: str,
+    issue_id: str,
+    *,
+    state_id: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+) -> bool:
+    """Update one or more fields on a Linear issue."""
+    input_fields: dict[str, Any] = {}
+    if state_id is not None:
+        input_fields["stateId"] = state_id
+    if title is not None:
+        input_fields["title"] = title
+    if description is not None:
+        input_fields["description"] = description
+    if not input_fields:
+        return True
+    data = _graphql(_UPDATE_ISSUE_MUTATION, {"issueId": issue_id, "input": input_fields}, api_key)
     return bool(data.get("issueUpdate", {}).get("success"))
+
+
+def update_issue_state(api_key: str, issue_id: str, state_id: str) -> bool:
+    """Backward-compatible wrapper."""
+    return update_issue(api_key, issue_id, state_id=state_id)
 
 
 _GET_ISSUE_QUERY = """
@@ -251,6 +273,7 @@ query GetIssue($issueId: String!) {
     id
     identifier
     title
+    description
     url
     state {
       id
