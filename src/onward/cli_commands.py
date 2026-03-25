@@ -2687,9 +2687,11 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
                     description=full_desc or None,
                     state_id=state.id if state else None,
                 )
+                now = now_iso()
                 plan.metadata["linear_id"] = issue.id
                 plan.metadata["linear_identifier"] = issue.identifier
-                plan.metadata["updated_at"] = now_iso()
+                plan.metadata["linear_synced_at"] = now
+                plan.metadata["updated_at"] = now
                 write_artifact(plan)
                 print(f"  create  {plan_id} → {issue.identifier} ({issue.url})")
                 created += 1
@@ -2735,6 +2737,7 @@ def _do_linear_pull(
     """Core logic for linear pull, shared by cmd_linear_pull and auto-pull in roadmap."""
     from onward.linear import (
         LinearError,
+        LinearIssueFull,
         fetch_team_issues,
         get_api_key,
         get_team_id,
@@ -2765,7 +2768,6 @@ def _do_linear_pull(
         if str(a.metadata.get("type", "")) == "plan"
     ]
 
-    # Index local plans by linear_id
     local_by_linear_id: dict[str, Artifact] = {}
     for plan in plans:
         lid = str(plan.metadata.get("linear_id", "")).strip()
@@ -2775,8 +2777,8 @@ def _do_linear_pull(
     updated = 0
     created = 0
     skipped = 0
+    conflicts = 0
 
-    # Update existing local plans from Linear data
     for linear_id, plan in local_by_linear_id.items():
         remote = remote_by_id.get(linear_id)
         if not remote:
@@ -2784,32 +2786,52 @@ def _do_linear_pull(
             continue
 
         plan_id = str(plan.metadata.get("id", ""))
-        changed = False
-        changes: list[str] = []
+        ident = str(plan.metadata.get("linear_identifier", linear_id))
 
         new_priority = linear_priority_to_onward(remote.priority)
         old_priority = str(plan.metadata.get("priority", "medium")).lower()
-        if new_priority != old_priority:
-            plan.metadata["priority"] = new_priority
-            changed = True
-            changes.append(f"priority: {old_priority} → {new_priority}")
-
         new_status = linear_category_to_status(remote.state_category)
         old_status = str(plan.metadata.get("status", "open"))
-        if new_status != old_status:
+
+        priority_changed = new_priority != old_priority
+        status_changed = new_status != old_status
+
+        if not priority_changed and not status_changed:
+            skipped += 1
+            continue
+
+        # Conflict detection: did local change since last sync?
+        local_edited_since_sync = _local_edited_since_sync(plan)
+
+        if local_edited_since_sync:
+            conflict_path = _write_conflict_file(plan, remote)
+            conflicts += 1
+            rel = conflict_path.relative_to(root) if conflict_path.is_relative_to(root) else conflict_path
+            if not quiet:
+                changes = []
+                if priority_changed:
+                    changes.append(f"priority: local={old_priority} linear={new_priority}")
+                if status_changed:
+                    changes.append(f"status: local={old_status} linear={new_status}")
+                lines.append(f"  CONFLICT  {plan_id} ({ident}) — {', '.join(changes)}")
+                lines.append(f"            wrote {rel}")
+            continue
+
+        changes: list[str] = []
+        if priority_changed:
+            plan.metadata["priority"] = new_priority
+            changes.append(f"priority: {old_priority} → {new_priority}")
+        if status_changed:
             plan.metadata["status"] = new_status
-            changed = True
             changes.append(f"status: {old_status} → {new_status}")
 
-        if changed:
-            plan.metadata["updated_at"] = now_iso()
-            write_artifact(plan)
-            updated += 1
-            if not quiet:
-                ident = str(plan.metadata.get("linear_identifier", linear_id))
-                lines.append(f"  update  {plan_id} ({ident}) — {', '.join(changes)}")
-        else:
-            skipped += 1
+        now = now_iso()
+        plan.metadata["linear_synced_at"] = now
+        plan.metadata["updated_at"] = now
+        write_artifact(plan)
+        updated += 1
+        if not quiet:
+            lines.append(f"  update  {plan_id} ({ident}) — {', '.join(changes)}")
 
     # Create local plans for Linear issues that don't exist locally
     remote_ids_with_local = set(local_by_linear_id.keys())
@@ -2841,6 +2863,7 @@ def _do_linear_pull(
             "model": "opus",
             "linear_id": issue.id,
             "linear_identifier": issue.identifier,
+            "linear_synced_at": now,
             "created_at": now,
             "updated_at": now,
         }
@@ -2866,9 +2889,72 @@ def _do_linear_pull(
 
     if not quiet:
         lines.append("")
-        lines.append(f"Done: {created} created, {updated} updated, {skipped} unchanged")
+        parts = [f"{created} created", f"{updated} updated", f"{skipped} unchanged"]
+        if conflicts:
+            parts.append(f"{conflicts} conflicts")
+        lines.append(f"Done: {', '.join(parts)}")
 
-    return 0, lines
+    return (1 if conflicts > 0 else 0), lines
+
+
+def _local_edited_since_sync(plan: Artifact) -> bool:
+    """True if the plan was locally modified after its last linear sync."""
+    synced_at = str(plan.metadata.get("linear_synced_at", "")).strip()
+    if not synced_at:
+        # No sync timestamp → plan existed before Linear integration; treat as locally edited
+        # to be safe (force conflict if Linear also differs).
+        return True
+    updated_at = str(plan.metadata.get("updated_at", "")).strip()
+    if not updated_at:
+        return False
+    return updated_at > synced_at
+
+
+def _write_conflict_file(plan: Artifact, remote: Any) -> Path:
+    """Write a plan-linear.md file next to plan.md showing the Linear version of the conflict."""
+    from onward.linear import linear_priority_to_onward, linear_category_to_status
+
+    plan_dir = plan.file_path.parent
+    conflict_path = plan_dir / "plan-linear.md"
+
+    plan_id = str(plan.metadata.get("id", ""))
+    ident = str(plan.metadata.get("linear_identifier", ""))
+
+    header = [
+        f"# Linear conflict for {plan_id} ({ident})",
+        "",
+        "This file was generated by `onward linear pull` because both the local",
+        "plan and the Linear issue were modified since the last sync.",
+        "",
+        "Resolve by:",
+        "  1. Editing plan.md to the desired state",
+        "  2. Deleting this file",
+        "  3. Running `onward linear push` to sync the resolution to Linear",
+        "",
+        "---",
+        "",
+        "## Linear values",
+        "",
+        f"- **Title:** {remote.title}",
+        f"- **Identifier:** {remote.identifier}",
+        f"- **Priority:** {remote.priority} → onward: {linear_priority_to_onward(remote.priority)}",
+        f"- **Status:** {remote.state_category} → onward: {linear_category_to_status(remote.state_category)}",
+        f"- **Updated at:** {remote.updated_at}",
+        f"- **URL:** {remote.url}",
+        "",
+        "## Local values",
+        "",
+        f"- **Priority:** {plan.metadata.get('priority', 'medium')}",
+        f"- **Status:** {plan.metadata.get('status', 'open')}",
+        f"- **Updated at:** {plan.metadata.get('updated_at', '')}",
+        f"- **Last synced:** {plan.metadata.get('linear_synced_at', 'never')}",
+    ]
+
+    if remote.description:
+        header.extend(["", "## Linear description", "", remote.description.strip()])
+
+    conflict_path.write_text("\n".join(header) + "\n", encoding="utf-8")
+    return conflict_path
 
 
 def _extract_plan_summary(body: str) -> str:

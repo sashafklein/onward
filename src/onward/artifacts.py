@@ -26,7 +26,7 @@ REQUIRED_FIELDS = {
 
 # Optional fields recognized per artifact type — used to detect unknown frontmatter keys.
 KNOWN_FIELDS: dict[str, list[str]] = {
-    "plan": ["project", "priority", "model", "description", "linear_id", "linear_identifier"],
+    "plan": ["project", "priority", "model", "description", "linear_id", "linear_identifier", "linear_synced_at"],
     "chunk": ["project", "priority", "model", "effort", "complexity", "estimated_files", "description"],
     "task": [
         "project",

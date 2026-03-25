@@ -169,7 +169,9 @@ linear:
 
 Plans without a `linear_id` in frontmatter are created as new issues; plans that already have one get their status synced. `onward linear pull` updates local plan priorities from Linear and creates local plans for new Linear issues.
 
-When `linear.poll_interval` is set in config, `onward roadmap` automatically pulls from Linear if the interval has elapsed since the last pull.
+**Conflict detection:** When both local and Linear have changes since the last sync, `pull` writes a `plan-linear.md` file next to the affected `plan.md` showing both versions. Resolve by editing `plan.md`, deleting the conflict file, and running `onward linear push`.
+
+When `linear.stale_after` is set in config (minutes), `onward roadmap` automatically pulls from Linear if that many minutes have elapsed since the last pull.
 
 ### Moving Work Forward
 

@@ -237,7 +237,7 @@ CONFIG_SECTION_KEYS: dict[str, frozenset[str]] = {
         "post_task_markdown",
         "post_chunk_markdown",
     }),
-    "linear": frozenset({"team_id", "poll_interval"}),
+    "linear": frozenset({"team_id", "stale_after", "poll_interval"}),
 }
 
 _REMOVED_WORK_KEYS = frozenset({"create_worktree", "worktree_root", "base_branch"})

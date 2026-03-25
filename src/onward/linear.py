@@ -46,6 +46,7 @@ class LinearIssueFull:
     sort_order: float
     state_category: str  # backlog, unstarted, started, completed, canceled
     description: str
+    updated_at: str  # ISO timestamp from Linear
 
 
 def get_api_key() -> str | None:
@@ -62,12 +63,14 @@ def get_team_id(config: dict[str, Any]) -> str | None:
     return str(tid).strip() or None
 
 
-def get_poll_interval(config: dict[str, Any]) -> int:
-    """Return linear.poll_interval in minutes (0 = always pull)."""
+def get_stale_after(config: dict[str, Any]) -> int:
+    """Return linear.stale_after in minutes (0 = always pull). Previously poll_interval."""
     linear = config.get("linear")
     if not isinstance(linear, dict):
         return 0
-    raw = linear.get("poll_interval")
+    raw = linear.get("stale_after")
+    if raw is None:
+        raw = linear.get("poll_interval")  # backward compat
     if raw is None:
         return 0
     try:
@@ -98,17 +101,17 @@ def write_last_pull_time(artifact_root: Path) -> None:
 
 
 def should_auto_pull(config: dict[str, Any], artifact_root: Path) -> bool:
-    """True if Linear is configured and the poll interval has elapsed since last pull."""
+    """True if Linear is configured and stale_after minutes have elapsed since last pull."""
     if not is_linear_configured(config):
         return False
-    interval = get_poll_interval(config)
+    stale = get_stale_after(config)
     last = read_last_pull_time(artifact_root)
     if last is None:
         return True
-    if interval == 0:
+    if stale == 0:
         return True
     elapsed = (datetime.now(timezone.utc) - last).total_seconds() / 60
-    return elapsed >= interval
+    return elapsed >= stale
 
 
 def _graphql(query: str, variables: dict[str, Any] | None, api_key: str) -> dict[str, Any]:
@@ -289,6 +292,7 @@ query TeamIssues($teamId: String!, $after: String) {
         priority
         sortOrder
         description
+        updatedAt
         state {
           type
         }
@@ -328,6 +332,7 @@ def fetch_team_issues(api_key: str, team_id: str) -> list[LinearIssueFull]:
                 sort_order=float(n.get("sortOrder", 0)),
                 state_category=n.get("state", {}).get("type", ""),
                 description=n.get("description", "") or "",
+                updated_at=n.get("updatedAt", ""),
             ))
         page_info = issues_data.get("pageInfo", {})
         if not page_info.get("hasNextPage"):

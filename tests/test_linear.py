@@ -17,7 +17,7 @@ from onward.linear import (
     LinearIssueFull,
     WorkflowState,
     get_api_key,
-    get_poll_interval,
+    get_stale_after,
     get_team_id,
     linear_priority_to_onward,
     linear_category_to_status,
@@ -125,7 +125,15 @@ def _write_config_with_linear(root: Path, team_id: str) -> None:
     )
 
 
-def _create_plan(root: Path, plan_id: str, title: str, status: str = "open", linear_id: str = "") -> None:
+def _create_plan(
+    root: Path,
+    plan_id: str,
+    title: str,
+    status: str = "open",
+    linear_id: str = "",
+    linear_synced_at: str = "",
+    updated_at: str = "2026-01-01T00:00:00Z",
+) -> None:
     plan_slug = title.lower().replace(" ", "-")[:30]
     plan_dir = root / ".onward" / "plans" / f"{plan_id}-{plan_slug}"
     plan_dir.mkdir(parents=True, exist_ok=True)
@@ -139,10 +147,12 @@ def _create_plan(root: Path, plan_id: str, title: str, status: str = "open", lin
         'priority: "medium"',
         'model: "opus"',
         'created_at: "2026-01-01T00:00:00Z"',
-        'updated_at: "2026-01-01T00:00:00Z"',
+        f'updated_at: "{updated_at}"',
     ]
     if linear_id:
         meta_lines.append(f'linear_id: "{linear_id}"')
+    if linear_synced_at:
+        meta_lines.append(f'linear_synced_at: "{linear_synced_at}"')
     frontmatter = "\n".join(meta_lines)
     body = "# Summary\n\nTest plan summary.\n"
     (plan_dir / "plan.md").write_text(f"---\n{frontmatter}\n---\n\n{body}", encoding="utf-8")
@@ -358,18 +368,24 @@ class TestLinearCategoryToStatus:
         assert linear_category_to_status("mystery") == "open"
 
 
-class TestPollInterval:
+class TestStaleAfter:
     def test_default_zero(self):
-        assert get_poll_interval({}) == 0
+        assert get_stale_after({}) == 0
 
     def test_from_config(self):
-        assert get_poll_interval({"linear": {"poll_interval": 15}}) == 15
+        assert get_stale_after({"linear": {"stale_after": 15}}) == 15
 
     def test_negative_clamped(self):
-        assert get_poll_interval({"linear": {"poll_interval": -5}}) == 0
+        assert get_stale_after({"linear": {"stale_after": -5}}) == 0
 
     def test_non_numeric(self):
-        assert get_poll_interval({"linear": {"poll_interval": "bad"}}) == 0
+        assert get_stale_after({"linear": {"stale_after": "bad"}}) == 0
+
+    def test_backward_compat_poll_interval(self):
+        assert get_stale_after({"linear": {"poll_interval": 10}}) == 10
+
+    def test_stale_after_wins_over_poll_interval(self):
+        assert get_stale_after({"linear": {"stale_after": 20, "poll_interval": 10}}) == 20
 
 
 class TestLastPullTimestamp:
@@ -395,13 +411,13 @@ class TestShouldAutoPull:
 
     def test_within_interval(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("LINEAR_API_KEY", "key")
-        config = {"linear": {"team_id": "t1", "poll_interval": 60}}
+        config = {"linear": {"team_id": "t1", "stale_after": 60}}
         write_last_pull_time(tmp_path)
         assert should_auto_pull(config, tmp_path) is False
 
-    def test_interval_zero_always_pulls(self, tmp_path: Path, monkeypatch):
+    def test_stale_after_zero_always_pulls(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("LINEAR_API_KEY", "key")
-        config = {"linear": {"team_id": "t1", "poll_interval": 0}}
+        config = {"linear": {"team_id": "t1", "stale_after": 0}}
         write_last_pull_time(tmp_path)
         assert should_auto_pull(config, tmp_path) is True
 
@@ -438,7 +454,9 @@ class TestLinearPullCLI:
     def test_updates_priority_from_linear(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
         root = _init_workspace(tmp_path)
         _write_config_with_linear(root, "team-123")
-        _create_plan(root, "PLAN-001", "My Plan", status="open", linear_id="issue-uuid-1")
+        # synced_at == updated_at → no local edits since sync
+        _create_plan(root, "PLAN-001", "My Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
         monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
 
         mock_graphql.return_value = _make_graphql_team_issues_response([
@@ -447,9 +465,10 @@ class TestLinearPullCLI:
                 "identifier": "ENG-1",
                 "title": "My Plan",
                 "url": "https://linear.app/ENG-1",
-                "priority": 1,  # urgent → high
+                "priority": 1,
                 "sortOrder": 1.0,
                 "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
                 "state": {"type": "unstarted"},
             }
         ])
@@ -465,6 +484,7 @@ class TestLinearPullCLI:
         plan_files = list((root / ".onward" / "plans").rglob("plan.md"))
         art = parse_artifact(plan_files[0])
         assert art.metadata["priority"] == "high"
+        assert art.metadata.get("linear_synced_at", "") != ""
 
     @patch("onward.linear._graphql")
     def test_creates_plan_from_new_linear_issue(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
@@ -478,9 +498,10 @@ class TestLinearPullCLI:
                 "identifier": "ENG-99",
                 "title": "Plan From Linear",
                 "url": "https://linear.app/ENG-99",
-                "priority": 2,  # high
+                "priority": 2,
                 "sortOrder": 1.0,
                 "description": "Created by the CEO in Linear.",
+                "updatedAt": "2026-01-02T00:00:00Z",
                 "state": {"type": "started"},
             }
         ])
@@ -500,6 +521,7 @@ class TestLinearPullCLI:
         assert art.metadata["linear_identifier"] == "ENG-99"
         assert art.metadata["priority"] == "high"
         assert art.metadata["status"] == "in_progress"
+        assert art.metadata.get("linear_synced_at", "") != ""
 
     @patch("onward.linear._graphql")
     def test_skips_unprioritized_backlog(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
@@ -513,9 +535,10 @@ class TestLinearPullCLI:
                 "identifier": "ENG-100",
                 "title": "Vague Idea",
                 "url": "https://linear.app/ENG-100",
-                "priority": 0,  # no priority
+                "priority": 0,
                 "sortOrder": 99.0,
                 "description": "",
+                "updatedAt": "2026-01-01T00:00:00Z",
                 "state": {"type": "backlog"},
             }
         ])
@@ -539,6 +562,115 @@ class TestLinearPullCLI:
         ts = read_last_pull_time(root / ".onward")
         assert ts is not None
 
+    @patch("onward.linear._graphql")
+    def test_conflict_when_both_sides_changed(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """When local was edited after last sync AND Linear differs, write conflict file."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        # synced at T1, but locally updated at T2 (after sync) → local edits exist
+        _create_plan(root, "PLAN-001", "Conflicting Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-02T00:00:00Z")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "Conflicting Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 1,  # high — differs from local medium
+                "sortOrder": 1.0,
+                "description": "Linear description.",
+                "updatedAt": "2026-01-03T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 1  # conflicts return non-zero
+        out = capsys.readouterr().out
+        assert "CONFLICT" in out
+        assert "1 conflicts" in out
+
+        # Verify plan-linear.md was written
+        plan_dir = list((root / ".onward" / "plans").glob("PLAN-001-*"))[0]
+        conflict_file = plan_dir / "plan-linear.md"
+        assert conflict_file.exists()
+        content = conflict_file.read_text()
+        assert "Linear conflict" in content
+        assert "ENG-1" in content
+        assert "Linear description." in content
+
+        # Verify plan.md was NOT modified
+        from onward.artifacts import parse_artifact
+        art = parse_artifact(plan_dir / "plan.md")
+        assert art.metadata["priority"] == "medium"  # unchanged
+
+    @patch("onward.linear._graphql")
+    def test_no_conflict_when_only_linear_changed(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """When local was NOT edited since sync, Linear wins without conflict."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        # synced_at == updated_at → no local edits
+        _create_plan(root, "PLAN-001", "Clean Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "Clean Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 1,
+                "sortOrder": 1.0,
+                "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "CONFLICT" not in out
+        assert "1 updated" in out
+
+        # No conflict file
+        plan_dir = list((root / ".onward" / "plans").glob("PLAN-001-*"))[0]
+        assert not (plan_dir / "plan-linear.md").exists()
+
+    @patch("onward.linear._graphql")
+    def test_conflict_when_no_synced_at(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        """Plans that predate Linear integration (no linear_synced_at) conflict if Linear differs."""
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        # Has linear_id but no linear_synced_at (pre-integration)
+        _create_plan(root, "PLAN-001", "Legacy Plan", status="open", linear_id="issue-uuid-1")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "Legacy Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 1,
+                "sortOrder": 1.0,
+                "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert "CONFLICT" in out
+
 
 # ---------------------------------------------------------------------------
 # Auto-pull in roadmap
@@ -551,10 +683,11 @@ class TestRoadmapAutoPull:
         root = _init_workspace(tmp_path)
         config_path = root / ".onward.config.yaml"
         config_path.write_text(
-            'version: 1\nlinear:\n  team_id: "team-123"\n  poll_interval: 0\n',
+            'version: 1\nlinear:\n  team_id: "team-123"\n  stale_after: 0\n',
             encoding="utf-8",
         )
-        _create_plan(root, "PLAN-001", "Existing Plan", status="open", linear_id="issue-uuid-1")
+        _create_plan(root, "PLAN-001", "Existing Plan", status="open", linear_id="issue-uuid-1",
+                      linear_synced_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z")
         monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
 
         mock_graphql.return_value = _make_graphql_team_issues_response([
@@ -566,6 +699,7 @@ class TestRoadmapAutoPull:
                 "priority": 1,
                 "sortOrder": 1.0,
                 "description": "",
+                "updatedAt": "2026-01-02T00:00:00Z",
                 "state": {"type": "unstarted"},
             }
         ])

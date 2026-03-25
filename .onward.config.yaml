@@ -23,7 +23,7 @@ version: 1
 # API key comes from the LINEAR_API_KEY environment variable (never stored here).
 # linear:
 #   team_id: "<your-linear-team-id>"  # required for `onward linear push` / `pull`
-#   poll_interval: 15                 # minutes between auto-pulls in `onward roadmap` (0 = always)
+#   stale_after: 15                   # minutes before `onward roadmap` auto-pulls from Linear (0 = always)
 
 # ── Sync ─────────────────────────────────────────────────────────────
 # Controls how plan files are shared across branches / repos.
