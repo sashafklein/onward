@@ -2646,11 +2646,20 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
 
             state = map_status_to_state(status, states)
             current_state_cat = existing.get("state", {}).get("type", "")
+            
+            # Use plan body as description, fall back to frontmatter description field
             local_body = plan.body.strip()
-
+            if not local_body:
+                local_body = str(plan.metadata.get("description", "")).strip()
+            
+            # Safety: don't overwrite Linear description with empty content
+            if not local_body:
+                print(f"  warning {plan_id} — skipping description update: body is empty")
+            
             state_changed = state and current_state_cat != state.category
             title_changed = existing.get("title", "") != title
-            desc_changed = (existing.get("description") or "").strip() != local_body
+            # Only consider description changed if we have non-empty content to send
+            desc_changed = local_body and (existing.get("description") or "").strip() != local_body
 
             if not state_changed and not title_changed and not desc_changed:
                 print(f"  skip    {plan_id} ({linear_ident or linear_id}) — no changes")
@@ -2674,6 +2683,7 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
                     changes.append("body")
                 now = now_iso()
                 plan.metadata["linear_synced_at"] = now
+                plan.metadata["last_synced_at"] = now
                 plan.metadata["updated_at"] = now
                 write_artifact(plan)
                 print(f"  update  {plan_id} ({linear_ident or linear_id}) — {', '.join(changes)}")
@@ -2682,7 +2692,14 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
                 print(f"  error   {plan_id} — {exc}")
                 errors += 1
         else:
-            full_desc = plan.body.strip() or str(plan.metadata.get("description", "")).strip()
+            # Use plan body as description, fall back to frontmatter description field
+            full_desc = plan.body.strip()
+            if not full_desc:
+                full_desc = str(plan.metadata.get("description", "")).strip()
+            
+            # Safety: don't send empty description to Linear
+            if not full_desc:
+                print(f"  warning {plan_id} — creating issue without description: body is empty")
 
             if dry_run:
                 print(f"  create  {plan_id} — \"{title}\"")
@@ -2700,6 +2717,7 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
                 plan.metadata["linear_id"] = issue.id
                 plan.metadata["linear_identifier"] = issue.identifier
                 plan.metadata["linear_synced_at"] = now
+                plan.metadata["last_synced_at"] = now
                 plan.metadata["updated_at"] = now
                 write_artifact(plan)
                 print(f"  create  {plan_id} → {issue.identifier} ({issue.url})")
@@ -2771,7 +2789,7 @@ def _do_linear_pull(
 
     remote_by_id = {issue.id: issue for issue in remote_issues}
 
-    artifacts = artifacts_from_index_or_collect(layout, project)
+    artifacts = collect_artifacts(layout, project)  # Use collect_artifacts to get full plan bodies
     plans = [
         a for a in artifacts
         if str(a.metadata.get("type", "")) == "plan"
@@ -2866,6 +2884,7 @@ def _do_linear_pull(
 
         now = now_iso()
         plan.metadata["linear_synced_at"] = now
+        plan.metadata["last_synced_at"] = now
         plan.metadata["updated_at"] = now
         write_artifact(plan)
         updated += 1
@@ -2904,6 +2923,7 @@ def _do_linear_pull(
             "linear_identifier": issue.identifier,
             "linear_sort_order": issue.sort_order,
             "linear_synced_at": now,
+            "last_synced_at": now,
             "created_at": now,
             "updated_at": now,
         }
