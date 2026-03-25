@@ -161,12 +161,15 @@ linear:
   team_id: "<your-team-id>"
 ```
 
-| Command                     | What it does                                                       |
-| --------------------------- | ------------------------------------------------------------------ |
-| `onward linear push`        | Create/update Linear issues for all local plans                    |
-| `onward linear push --dry-run` | Preview what would be pushed without making API calls           |
+| Command                        | What it does                                                       |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `onward linear push`           | Create/update Linear issues for all local plans                    |
+| `onward linear push --dry-run` | Preview what would be pushed without making API calls              |
+| `onward linear pull`           | Pull priorities and new issues from Linear into local plans        |
 
-Plans without a `linear_id` in frontmatter are created as new issues; plans that already have one get their status synced.
+Plans without a `linear_id` in frontmatter are created as new issues; plans that already have one get their status synced. `onward linear pull` updates local plan priorities from Linear and creates local plans for new Linear issues.
+
+When `linear.poll_interval` is set in config, `onward roadmap` automatically pulls from Linear if the interval has elapsed since the last pull.
 
 ### Moving Work Forward
 

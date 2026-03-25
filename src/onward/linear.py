@@ -6,10 +6,14 @@ import json
 import os
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
+
+LAST_PULL_FILENAME = "linear_last_pull"
 
 
 class LinearError(Exception):
@@ -31,6 +35,19 @@ class LinearIssue:
     url: str
 
 
+@dataclass(frozen=True)
+class LinearIssueFull:
+    """Rich issue data returned by fetch_team_issues."""
+    id: str
+    identifier: str
+    title: str
+    url: str
+    priority: int  # 0=none, 1=urgent, 2=high, 3=medium, 4=low
+    sort_order: float
+    state_category: str  # backlog, unstarted, started, completed, canceled
+    description: str
+
+
 def get_api_key() -> str | None:
     return os.environ.get("LINEAR_API_KEY", "").strip() or None
 
@@ -43,6 +60,55 @@ def get_team_id(config: dict[str, Any]) -> str | None:
     if tid is None:
         return None
     return str(tid).strip() or None
+
+
+def get_poll_interval(config: dict[str, Any]) -> int:
+    """Return linear.poll_interval in minutes (0 = always pull)."""
+    linear = config.get("linear")
+    if not isinstance(linear, dict):
+        return 0
+    raw = linear.get("poll_interval")
+    if raw is None:
+        return 0
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def is_linear_configured(config: dict[str, Any]) -> bool:
+    return get_team_id(config) is not None and get_api_key() is not None
+
+
+def read_last_pull_time(artifact_root: Path) -> datetime | None:
+    path = artifact_root / LAST_PULL_FILENAME
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        return datetime.fromisoformat(text)
+    except (ValueError, OSError):
+        return None
+
+
+def write_last_pull_time(artifact_root: Path) -> None:
+    path = artifact_root / LAST_PULL_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+
+
+def should_auto_pull(config: dict[str, Any], artifact_root: Path) -> bool:
+    """True if Linear is configured and the poll interval has elapsed since last pull."""
+    if not is_linear_configured(config):
+        return False
+    interval = get_poll_interval(config)
+    last = read_last_pull_time(artifact_root)
+    if last is None:
+        return True
+    if interval == 0:
+        return True
+    elapsed = (datetime.now(timezone.utc) - last).total_seconds() / 60
+    return elapsed >= interval
 
 
 def _graphql(query: str, variables: dict[str, Any] | None, api_key: str) -> dict[str, Any]:
@@ -200,3 +266,100 @@ def get_issue(api_key: str, issue_id: str) -> dict[str, Any] | None:
     except LinearError:
         return None
     return data.get("issue")
+
+
+# ---------------------------------------------------------------------------
+# Fetch team issues (for linear pull)
+# ---------------------------------------------------------------------------
+
+_TEAM_ISSUES_QUERY = """
+query TeamIssues($teamId: String!, $after: String) {
+  team(id: $teamId) {
+    issues(
+      first: 100
+      after: $after
+      filter: { state: { type: { nin: ["completed", "canceled"] } } }
+      orderBy: sortOrder
+    ) {
+      nodes {
+        id
+        identifier
+        title
+        url
+        priority
+        sortOrder
+        description
+        state {
+          type
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
+
+
+def fetch_team_issues(api_key: str, team_id: str) -> list[LinearIssueFull]:
+    """Fetch all non-archived/non-completed issues for a team, paginated."""
+    issues: list[LinearIssueFull] = []
+    cursor: str | None = None
+    while True:
+        variables: dict[str, Any] = {"teamId": team_id}
+        if cursor:
+            variables["after"] = cursor
+        data = _graphql(_TEAM_ISSUES_QUERY, variables, api_key)
+        team = data.get("team")
+        if not team:
+            raise LinearError(f"Team {team_id!r} not found")
+        issues_data = team.get("issues", {})
+        for n in issues_data.get("nodes", []):
+            if not isinstance(n, dict) or "id" not in n:
+                continue
+            issues.append(LinearIssueFull(
+                id=n["id"],
+                identifier=n.get("identifier", ""),
+                title=n.get("title", ""),
+                url=n.get("url", ""),
+                priority=int(n.get("priority", 0)),
+                sort_order=float(n.get("sortOrder", 0)),
+                state_category=n.get("state", {}).get("type", ""),
+                description=n.get("description", "") or "",
+            ))
+        page_info = issues_data.get("pageInfo", {})
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("endCursor")
+    return issues
+
+
+# Linear priority int → Onward priority string
+# 0=none, 1=urgent, 2=high, 3=medium, 4=low
+_LINEAR_PRIORITY_TO_ONWARD: dict[int, str] = {
+    0: "medium",  # unprioritized → default medium
+    1: "high",    # urgent → high
+    2: "high",    # high → high
+    3: "medium",  # medium → medium
+    4: "low",     # low → low
+}
+
+# Onward status from Linear state category
+_CATEGORY_TO_STATUS: dict[str, str] = {
+    "backlog": "open",
+    "triage": "open",
+    "unstarted": "open",
+    "started": "in_progress",
+    "completed": "completed",
+    "canceled": "canceled",
+}
+
+
+def linear_priority_to_onward(priority: int) -> str:
+    return _LINEAR_PRIORITY_TO_ONWARD.get(priority, "medium")
+
+
+def linear_category_to_status(category: str) -> str:
+    return _CATEGORY_TO_STATUS.get(category, "open")

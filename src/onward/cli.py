@@ -10,6 +10,7 @@ from onward.cli_commands import (
     cmd_complete,
     cmd_doctor,
     cmd_init,
+    cmd_linear_pull,
     cmd_linear_push,
     cmd_list,
     cmd_migrate,
@@ -97,6 +98,11 @@ def build_parser() -> argparse.ArgumentParser:
     linear_push_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
     linear_push_parser.add_argument("--dry-run", action="store_true", help="Show what would be pushed without making API calls")
     linear_push_parser.set_defaults(func=cmd_linear_push)
+
+    linear_pull_parser = linear_sub.add_parser("pull", help="Pull priorities and new issues from Linear into local plans")
+    linear_pull_parser.add_argument("--project", default="", help="Project key (required in multi-root mode)")
+    linear_pull_parser.add_argument("--quiet", action="store_true", help="Suppress output (for use in scripts)")
+    linear_pull_parser.set_defaults(func=cmd_linear_pull)
 
     new_parser = subparsers.add_parser("new", help="Create new artifacts")
     new_parser.add_argument("--root", default=".", help="Workspace root (default: current directory)")

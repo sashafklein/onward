@@ -1,8 +1,9 @@
-"""Tests for Linear integration (onward linear push)."""
+"""Tests for Linear integration (onward linear push / pull)."""
 from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -13,10 +14,17 @@ from onward import cli
 from onward.linear import (
     LinearError,
     LinearIssue,
+    LinearIssueFull,
     WorkflowState,
     get_api_key,
+    get_poll_interval,
     get_team_id,
+    linear_priority_to_onward,
+    linear_category_to_status,
     map_status_to_state,
+    read_last_pull_time,
+    should_auto_pull,
+    write_last_pull_time,
 )
 from onward.cli_commands import _extract_plan_summary
 
@@ -303,3 +311,279 @@ class TestExtractPlanSummary:
 
     def test_no_summary_heading(self):
         assert _extract_plan_summary("# Goals\n\n- foo\n") == ""
+
+
+# ---------------------------------------------------------------------------
+# Pull-specific unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestLinearPriorityMapping:
+    def test_urgent_maps_to_high(self):
+        assert linear_priority_to_onward(1) == "high"
+
+    def test_high_maps_to_high(self):
+        assert linear_priority_to_onward(2) == "high"
+
+    def test_medium_maps_to_medium(self):
+        assert linear_priority_to_onward(3) == "medium"
+
+    def test_low_maps_to_low(self):
+        assert linear_priority_to_onward(4) == "low"
+
+    def test_none_maps_to_medium(self):
+        assert linear_priority_to_onward(0) == "medium"
+
+    def test_unknown_maps_to_medium(self):
+        assert linear_priority_to_onward(99) == "medium"
+
+
+class TestLinearCategoryToStatus:
+    def test_unstarted(self):
+        assert linear_category_to_status("unstarted") == "open"
+
+    def test_started(self):
+        assert linear_category_to_status("started") == "in_progress"
+
+    def test_completed(self):
+        assert linear_category_to_status("completed") == "completed"
+
+    def test_canceled(self):
+        assert linear_category_to_status("canceled") == "canceled"
+
+    def test_backlog(self):
+        assert linear_category_to_status("backlog") == "open"
+
+    def test_unknown(self):
+        assert linear_category_to_status("mystery") == "open"
+
+
+class TestPollInterval:
+    def test_default_zero(self):
+        assert get_poll_interval({}) == 0
+
+    def test_from_config(self):
+        assert get_poll_interval({"linear": {"poll_interval": 15}}) == 15
+
+    def test_negative_clamped(self):
+        assert get_poll_interval({"linear": {"poll_interval": -5}}) == 0
+
+    def test_non_numeric(self):
+        assert get_poll_interval({"linear": {"poll_interval": "bad"}}) == 0
+
+
+class TestLastPullTimestamp:
+    def test_write_and_read(self, tmp_path: Path):
+        write_last_pull_time(tmp_path)
+        ts = read_last_pull_time(tmp_path)
+        assert ts is not None
+        assert (datetime.now(timezone.utc) - ts).total_seconds() < 5
+
+    def test_read_missing(self, tmp_path: Path):
+        assert read_last_pull_time(tmp_path) is None
+
+
+class TestShouldAutoPull:
+    def test_not_configured(self, monkeypatch):
+        monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+        assert should_auto_pull({}, Path("/tmp/fake")) is False
+
+    def test_no_last_pull(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("LINEAR_API_KEY", "key")
+        config = {"linear": {"team_id": "t1", "poll_interval": 15}}
+        assert should_auto_pull(config, tmp_path) is True
+
+    def test_within_interval(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("LINEAR_API_KEY", "key")
+        config = {"linear": {"team_id": "t1", "poll_interval": 60}}
+        write_last_pull_time(tmp_path)
+        assert should_auto_pull(config, tmp_path) is False
+
+    def test_interval_zero_always_pulls(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("LINEAR_API_KEY", "key")
+        config = {"linear": {"team_id": "t1", "poll_interval": 0}}
+        write_last_pull_time(tmp_path)
+        assert should_auto_pull(config, tmp_path) is True
+
+
+# ---------------------------------------------------------------------------
+# onward linear pull CLI tests
+# ---------------------------------------------------------------------------
+
+
+def _make_graphql_team_issues_response(issues: list[dict]) -> dict:
+    return {
+        "team": {
+            "issues": {
+                "nodes": issues,
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+            }
+        }
+    }
+
+
+class TestLinearPullCLI:
+    def test_missing_api_key(self, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+        capsys.readouterr()
+
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert "LINEAR_API_KEY" in out
+
+    @patch("onward.linear._graphql")
+    def test_updates_priority_from_linear(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        _create_plan(root, "PLAN-001", "My Plan", status="open", linear_id="issue-uuid-1")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "My Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 1,  # urgent → high
+                "sortOrder": 1.0,
+                "description": "",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "priority: medium → high" in out
+        assert "1 updated" in out
+
+        from onward.artifacts import parse_artifact
+        plan_files = list((root / ".onward" / "plans").rglob("plan.md"))
+        art = parse_artifact(plan_files[0])
+        assert art.metadata["priority"] == "high"
+
+    @patch("onward.linear._graphql")
+    def test_creates_plan_from_new_linear_issue(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-new",
+                "identifier": "ENG-99",
+                "title": "Plan From Linear",
+                "url": "https://linear.app/ENG-99",
+                "priority": 2,  # high
+                "sortOrder": 1.0,
+                "description": "Created by the CEO in Linear.",
+                "state": {"type": "started"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "ENG-99" in out
+        assert "1 created" in out
+
+        from onward.artifacts import parse_artifact
+        plan_files = list((root / ".onward" / "plans").rglob("plan.md"))
+        assert len(plan_files) == 1
+        art = parse_artifact(plan_files[0])
+        assert art.metadata["linear_id"] == "issue-uuid-new"
+        assert art.metadata["linear_identifier"] == "ENG-99"
+        assert art.metadata["priority"] == "high"
+        assert art.metadata["status"] == "in_progress"
+
+    @patch("onward.linear._graphql")
+    def test_skips_unprioritized_backlog(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-backlog",
+                "identifier": "ENG-100",
+                "title": "Vague Idea",
+                "url": "https://linear.app/ENG-100",
+                "priority": 0,  # no priority
+                "sortOrder": 99.0,
+                "description": "",
+                "state": {"type": "backlog"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["linear", "--root", str(root), "pull"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "0 created" in out
+
+    @patch("onward.linear._graphql")
+    def test_writes_last_pull_timestamp(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        _write_config_with_linear(root, "team-123")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([])
+
+        capsys.readouterr()
+        cli.main(["linear", "--root", str(root), "pull"])
+        ts = read_last_pull_time(root / ".onward")
+        assert ts is not None
+
+
+# ---------------------------------------------------------------------------
+# Auto-pull in roadmap
+# ---------------------------------------------------------------------------
+
+
+class TestRoadmapAutoPull:
+    @patch("onward.linear._graphql")
+    def test_roadmap_auto_pulls_when_configured(self, mock_graphql, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        config_path = root / ".onward.config.yaml"
+        config_path.write_text(
+            'version: 1\nlinear:\n  team_id: "team-123"\n  poll_interval: 0\n',
+            encoding="utf-8",
+        )
+        _create_plan(root, "PLAN-001", "Existing Plan", status="open", linear_id="issue-uuid-1")
+        monkeypatch.setenv("LINEAR_API_KEY", "lin_test_key")
+
+        mock_graphql.return_value = _make_graphql_team_issues_response([
+            {
+                "id": "issue-uuid-1",
+                "identifier": "ENG-1",
+                "title": "Existing Plan",
+                "url": "https://linear.app/ENG-1",
+                "priority": 1,
+                "sortOrder": 1.0,
+                "description": "",
+                "state": {"type": "unstarted"},
+            }
+        ])
+
+        capsys.readouterr()
+        rc = cli.main(["roadmap", "--root", str(root)])
+        assert rc == 0
+        out = capsys.readouterr().out
+        # The auto-pull should have updated priority and shown a sync note
+        assert "synced from Linear" in out or "Existing Plan" in out
+
+    def test_roadmap_skips_pull_without_config(self, tmp_path: Path, capsys, monkeypatch):
+        root = _init_workspace(tmp_path)
+        _create_plan(root, "PLAN-001", "My Plan")
+        monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+        capsys.readouterr()
+
+        rc = cli.main(["roadmap", "--root", str(root)])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "synced from Linear" not in out

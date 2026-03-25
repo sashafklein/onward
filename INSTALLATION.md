@@ -189,9 +189,10 @@ onward sync status
 onward sync push
 onward sync pull
 
-# Optional: push plans to Linear (set LINEAR_API_KEY env var + linear.team_id in config)
-onward linear push
-onward linear push --dry-run
+# Optional: sync plans with Linear (set LINEAR_API_KEY env var + linear.team_id in config)
+onward linear push             # push local plans to Linear as issues
+onward linear push --dry-run   # preview what would be pushed
+onward linear pull             # pull priorities and new issues from Linear
 ```
 
 ## The Operating Loop

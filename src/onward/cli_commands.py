@@ -1927,7 +1927,19 @@ def cmd_roadmap(args: argparse.Namespace) -> int:
     config = load_workspace_config(root)
     layout = WorkspaceLayout.from_config(root, config)
     project = require_project_or_default(args, layout, enforce=False)
-    
+
+    # Auto-pull from Linear if configured and stale
+    from onward.linear import should_auto_pull
+    if should_auto_pull(config, layout.artifact_root(project)):
+        rc, pull_lines = _do_linear_pull(root, config, layout, project, quiet=True)
+        if rc == 0 and pull_lines:
+            # Show a brief note, not the full pull output
+            created = sum(1 for l in pull_lines if l.strip().startswith("create"))
+            updated = sum(1 for l in pull_lines if l.strip().startswith("update"))
+            if created or updated:
+                print(f"(synced from Linear: {created} new, {updated} updated)")
+                print()
+
     # Collect all artifacts
     artifacts = artifacts_from_index_or_collect(layout, project)
     by_id = {str(a.metadata.get("id", "")): a for a in artifacts if a.metadata.get("id")}
@@ -2692,6 +2704,171 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
         regenerate_indexes(layout, project)
 
     return 1 if errors > 0 else 0
+
+
+# ---------------------------------------------------------------------------
+# onward linear pull
+# ---------------------------------------------------------------------------
+
+
+def cmd_linear_pull(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    config = load_workspace_config(root)
+    layout = WorkspaceLayout.from_config(root, config)
+    project = require_project_or_default(args, layout, enforce=False)
+    quiet = bool(getattr(args, "quiet", False))
+
+    rc, lines = _do_linear_pull(root, config, layout, project, quiet=quiet)
+    for line in lines:
+        print(line)
+    return rc
+
+
+def _do_linear_pull(
+    root: Path,
+    config: dict[str, Any],
+    layout: WorkspaceLayout,
+    project: str | None,
+    *,
+    quiet: bool = False,
+) -> tuple[int, list[str]]:
+    """Core logic for linear pull, shared by cmd_linear_pull and auto-pull in roadmap."""
+    from onward.linear import (
+        LinearError,
+        fetch_team_issues,
+        get_api_key,
+        get_team_id,
+        linear_category_to_status,
+        linear_priority_to_onward,
+        write_last_pull_time,
+    )
+
+    lines: list[str] = []
+    api_key = get_api_key()
+    if not api_key:
+        return 1, ["Error: LINEAR_API_KEY environment variable is not set"]
+
+    team_id = get_team_id(config)
+    if not team_id:
+        return 1, ["Error: linear.team_id is not set in .onward.config.yaml"]
+
+    try:
+        remote_issues = fetch_team_issues(api_key, team_id)
+    except LinearError as exc:
+        return 1, [f"Error fetching Linear issues: {exc}"]
+
+    remote_by_id = {issue.id: issue for issue in remote_issues}
+
+    artifacts = artifacts_from_index_or_collect(layout, project)
+    plans = [
+        a for a in artifacts
+        if str(a.metadata.get("type", "")) == "plan"
+    ]
+
+    # Index local plans by linear_id
+    local_by_linear_id: dict[str, Artifact] = {}
+    for plan in plans:
+        lid = str(plan.metadata.get("linear_id", "")).strip()
+        if lid:
+            local_by_linear_id[lid] = plan
+
+    updated = 0
+    created = 0
+    skipped = 0
+
+    # Update existing local plans from Linear data
+    for linear_id, plan in local_by_linear_id.items():
+        remote = remote_by_id.get(linear_id)
+        if not remote:
+            skipped += 1
+            continue
+
+        plan_id = str(plan.metadata.get("id", ""))
+        changed = False
+        changes: list[str] = []
+
+        new_priority = linear_priority_to_onward(remote.priority)
+        old_priority = str(plan.metadata.get("priority", "medium")).lower()
+        if new_priority != old_priority:
+            plan.metadata["priority"] = new_priority
+            changed = True
+            changes.append(f"priority: {old_priority} → {new_priority}")
+
+        new_status = linear_category_to_status(remote.state_category)
+        old_status = str(plan.metadata.get("status", "open"))
+        if new_status != old_status:
+            plan.metadata["status"] = new_status
+            changed = True
+            changes.append(f"status: {old_status} → {new_status}")
+
+        if changed:
+            plan.metadata["updated_at"] = now_iso()
+            write_artifact(plan)
+            updated += 1
+            if not quiet:
+                ident = str(plan.metadata.get("linear_identifier", linear_id))
+                lines.append(f"  update  {plan_id} ({ident}) — {', '.join(changes)}")
+        else:
+            skipped += 1
+
+    # Create local plans for Linear issues that don't exist locally
+    remote_ids_with_local = set(local_by_linear_id.keys())
+    new_issues = [i for i in remote_issues if i.id not in remote_ids_with_local]
+
+    for issue in new_issues:
+        if issue.state_category in ("backlog", "triage") and issue.priority == 0:
+            skipped += 1
+            continue
+
+        plan_id = next_id(layout, "PLAN", project)
+        now = now_iso()
+        slug = slugify(issue.title)
+
+        plan_dir = layout.plans_dir(project) / f"{plan_id}-{slug}"
+        plan_dir.mkdir(parents=True, exist_ok=False)
+        (plan_dir / "chunks").mkdir(parents=True, exist_ok=True)
+        (plan_dir / "tasks").mkdir(parents=True, exist_ok=True)
+
+        metadata_project = project or ""
+        metadata = {
+            "id": plan_id,
+            "type": "plan",
+            "project": metadata_project,
+            "title": issue.title,
+            "status": linear_category_to_status(issue.state_category),
+            "description": "",
+            "priority": linear_priority_to_onward(issue.priority),
+            "model": "opus",
+            "linear_id": issue.id,
+            "linear_identifier": issue.identifier,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        body_parts = ["# Summary\n"]
+        if issue.description:
+            body_parts.append(issue.description.strip())
+        else:
+            body_parts.append(f"Imported from Linear: [{issue.identifier}]({issue.url})")
+        body = "\n".join(body_parts) + "\n"
+
+        target = plan_dir / "plan.md"
+        target.write_text(format_artifact(metadata, body), encoding="utf-8")
+        created += 1
+        if not quiet:
+            lines.append(f"  create  {plan_id} ← {issue.identifier} (\"{issue.title}\")")
+
+    artifact_root = layout.artifact_root(project)
+    write_last_pull_time(artifact_root)
+
+    if updated > 0 or created > 0:
+        regenerate_indexes(layout, project)
+
+    if not quiet:
+        lines.append("")
+        lines.append(f"Done: {created} created, {updated} updated, {skipped} unchanged")
+
+    return 0, lines
 
 
 def _extract_plan_summary(body: str) -> str:
