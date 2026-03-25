@@ -305,7 +305,6 @@ query TeamIssues($teamId: String!, $after: String) {
       first: 100
       after: $after
       filter: { state: { type: { nin: ["completed", "canceled"] } } }
-      orderBy: sortOrder
     ) {
       nodes {
         id
@@ -361,6 +360,8 @@ def fetch_team_issues(api_key: str, team_id: str) -> list[LinearIssueFull]:
         if not page_info.get("hasNextPage"):
             break
         cursor = page_info.get("endCursor")
+    # Sort by sort_order (board position) — canonical prioritisation.
+    issues.sort(key=lambda i: i.sort_order)
     return issues
 
 
