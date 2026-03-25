@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Reference executor for Onward: reads JSON stdin (executor payload), routes to an AI CLI."""
+"""Reference executor for Onward: reads JSON stdin (executor payload), routes to an AI CLI.
+
+Model routing:
+  1. Reads ~/.openclaw/workspace/model-routing.json for tier→model mapping
+  2. Reads ~/.openclaw/workspace/model-fallback-state.json for current mode (flagship/fallback)
+  3. Maps task complexity (low/medium/high) to the correct model
+  4. Routes to the correct CLI: claude (Anthropic/OpenAI) or opencode (Venice/other)
+"""
 
 from __future__ import annotations
 
@@ -9,19 +16,81 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
+
+# --- Routing config paths ---
+ROUTING_FILE = Path.home() / ".openclaw" / "workspace" / "model-routing.json"
+STATE_FILE = Path.home() / ".openclaw" / "workspace" / "model-fallback-state.json"
+
+
+def _load_json(path: Path) -> dict[str, Any] | None:
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"warning: could not load {path}: {e}", file=sys.stderr)
+        return None
+
+
+def _get_mode_index() -> int:
+    """Return 0 for flagship, 1 for fallback."""
+    state = _load_json(STATE_FILE)
+    if state and state.get("mode") == "fallback":
+        return 1
+    return 0
+
+
+def _resolve_model_from_routing(complexity: str, agent: str = "alfred") -> str | None:
+    """Look up model from routing config based on complexity tier and current mode."""
+    routing = _load_json(ROUTING_FILE)
+    if not routing:
+        return None
+
+    mode_idx = _get_mode_index()
+    agents = routing.get("agents", {})
+
+    # Try agent-specific routing first, fall back to subagents
+    agent_routing = agents.get(agent) or agents.get("subagents")
+    if not agent_routing:
+        return None
+
+    # Map complexity to tier
+    tier = complexity.lower().strip() if complexity else "medium"
+    if tier not in ("low", "medium", "high"):
+        tier = "medium"
+
+    tier_models = agent_routing.get(tier) or agent_routing.get("default")
+    if not tier_models or not isinstance(tier_models, list) or len(tier_models) < 2:
+        return None
+
+    return str(tier_models[mode_idx])
 
 
 def _route_cli(model: str) -> str:
-    """Return 'cursor' or 'claude' based on model string."""
+    """Return 'opencode', 'cursor', or 'claude' based on model string."""
     m = (model or "").strip().lower()
-    if "claude" in m:
+
+    # Anthropic models → claude CLI
+    if "claude" in m or m.startswith("anthropic/"):
         return "claude"
     if m.startswith("opus") or m.startswith("sonnet") or m.startswith("haiku"):
         return "claude"
-    # Everything else (composer-*, gpt-*, gemini-*, cursor-*, etc.) -> cursor agent
+
+    # OpenAI models → claude CLI (it supports --model for OpenAI)
+    if m.startswith("openai/") or m.startswith("gpt"):
+        return "claude"
+
+    # Venice / other OpenAI-compatible → opencode
+    if m.startswith("venice/"):
+        return "opencode"
+
+    # Check if opencode is available for everything else
+    if shutil.which("opencode"):
+        return "opencode"
+
+    # Final fallback
     return "cursor"
 
 
@@ -122,20 +191,148 @@ def build_split_prompt(payload: dict[str, Any]) -> str:
     return "\n".join(parts).strip() + "\n"
 
 
+_MODEL_ALIASES: dict[str, str] = {
+    "opus": "anthropic/claude-opus-4-6",
+    "sonnet": "anthropic/claude-sonnet-4-5",
+    "haiku": "anthropic/claude-haiku-3-5",
+    "gpt": "openai/gpt-5.4",
+    "codex": "openai/gpt-5.3-codex",
+    "gpt-5.3-codex": "openai/gpt-5.3-codex",
+    "glm-5": "venice/zai-org-glm-5",
+    "glm-4.7": "venice/zai-org-glm-4.7",
+    "glm-4.7-flash": "venice/zai-org-glm-4.7-flash",
+}
+
+
+def _expand_alias(model: str) -> str:
+    """Expand short model aliases to full provider/model IDs."""
+    m = (model or "").strip()
+    return _MODEL_ALIASES.get(m.lower(), m)
+
+
 def resolve_model(payload: dict[str, Any]) -> str:
+    """Resolve model: check routing config first, then fall back to task metadata."""
     ptype = str(payload.get("type", ""))
+
     if ptype == "task":
         task = payload.get("task")
-        if isinstance(task, dict) and task.get("model"):
-            return str(task["model"])
-        return "composer-2"
-    if ptype == "hook":
-        return str(payload.get("model", "") or "composer-2")
-    if ptype == "review":
-        return str(payload.get("model", "") or "composer-2")
-    if ptype == "split":
-        return str(payload.get("model", "") or "composer-2")
-    return "composer-2"
+        task_model = None
+        complexity = None
+
+        if isinstance(task, dict):
+            task_model = task.get("model")
+            complexity = task.get("complexity")
+
+        # If model is a complexity tier (low/medium/high), resolve via routing
+        if task_model and task_model.lower().strip() in ("low", "medium", "high"):
+            complexity = task_model.lower().strip()
+            task_model = None
+
+        # If we have a complexity, resolve from routing config
+        if complexity:
+            routed = _resolve_model_from_routing(complexity, agent="subagents")
+            if routed:
+                return routed
+
+        # If explicit model (not a tier), expand aliases and use it
+        if task_model:
+            return _expand_alias(task_model)
+
+        # Default: resolve medium from routing, or fall back
+        routed = _resolve_model_from_routing("medium", agent="subagents")
+        return routed or "venice/zai-org-glm-5"
+
+    if ptype in ("hook", "review", "split"):
+        model = str(payload.get("model", "") or "")
+        if model and model.lower().strip() in ("low", "medium", "high"):
+            routed = _resolve_model_from_routing(model.lower().strip(), agent="subagents")
+            return routed or "venice/zai-org-glm-5"
+        if model:
+            return _expand_alias(model)
+        return "venice/zai-org-glm-5"
+
+    return "venice/zai-org-glm-5"
+
+
+def _get_provider_env(model: str) -> dict[str, str]:
+    """Return env vars needed for the model's provider (e.g., Venice API key, OpenRouter API key)."""
+    env = dict(os.environ)
+    m = (model or "").lower()
+
+    if m.startswith("venice/"):
+        # Read Venice API key from OpenClaw config
+        config_path = Path.home() / ".openclaw" / "openclaw.json"
+        try:
+            import re
+            raw = config_path.read_text()
+            # Find the venice provider block and extract apiKey
+            # Simple regex since JSON5 parsing isn't available
+            match = re.search(r'"venice"\s*:\s*\{[^}]*"apiKey"\s*:\s*"([^"]+)"', raw, re.DOTALL)
+            if match:
+                env["VENICE_API_KEY"] = match.group(1)
+                env["OPENAI_API_KEY"] = match.group(1)
+                env["OPENAI_BASE_URL"] = "https://api.venice.ai/api/v1"
+        except Exception as e:
+            print(f"warning: could not read Venice API key: {e}", file=sys.stderr)
+
+    elif m.startswith("openrouter/"):
+        # OpenRouter API key — stored in routing config or env
+        or_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not or_key:
+            # Try reading from model-routing.json cost_reference or dedicated field
+            routing = _load_json(ROUTING_FILE)
+            if routing:
+                or_key = str(routing.get("openrouter_api_key", "") or "")
+        if not or_key:
+            # Fallback: check OpenClaw config
+            config_path = Path.home() / ".openclaw" / "openclaw.json"
+            try:
+                import re
+                raw = config_path.read_text()
+                match = re.search(r'"openrouter"\s*:\s*\{[^}]*"apiKey"\s*:\s*"([^"]+)"', raw, re.DOTALL)
+                if match:
+                    or_key = match.group(1)
+            except Exception:
+                pass
+        if or_key:
+            env["OPENROUTER_API_KEY"] = or_key
+            env["OPENAI_API_KEY"] = or_key
+            env["OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"
+        else:
+            print("warning: no OpenRouter API key found", file=sys.stderr)
+
+    return env
+
+
+def run_opencode(model: str, prompt: str, *, dry_run: bool) -> int:
+    """Run opencode CLI with the given model and prompt."""
+    if dry_run:
+        sys.stdout.write(prompt)
+        if not prompt.endswith("\n"):
+            sys.stdout.write("\n")
+        return 0
+    exe = shutil.which("opencode")
+    if not exe:
+        print(
+            "error: 'opencode' CLI not found on PATH (install it or use --dry-run)",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Strip provider prefix — opencode uses bare model names with env-based auth
+    bare_model = model
+    if "/" in bare_model:
+        bare_model = bare_model.split("/", 1)[1]
+
+    env = _get_provider_env(model)
+    # Pass full provider/model format for OpenCode (e.g., venice/zai-org-glm-5)
+    cmd = [exe, "run", "--model", model, "--agent", "build", prompt]
+    proc = subprocess.run(cmd, text=True, capture_output=True, check=False, env=env)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+    return int(proc.returncode)
 
 
 def run_cursor_agent(model: str, prompt: str, *, dry_run: bool) -> int:
@@ -173,7 +370,13 @@ def run_claude(model: str, prompt: str, *, dry_run: bool) -> int:
             file=sys.stderr,
         )
         return 1
-    cmd = [exe, "--model", model, "--dangerously-skip-permissions", "-p", prompt]
+
+    # Strip provider prefix for claude CLI (it uses bare model names)
+    bare_model = model
+    if "/" in bare_model:
+        bare_model = bare_model.split("/", 1)[1]
+
+    cmd = [exe, "--model", bare_model, "--dangerously-skip-permissions", "-p", prompt]
     proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if proc.stdout:
         sys.stdout.write(proc.stdout)
@@ -230,6 +433,11 @@ def main(argv: list[str] | None = None) -> int:
     model = resolve_model(payload)
     cli = _route_cli(model)
 
+    # Log routing decision
+    mode_idx = _get_mode_index()
+    mode_label = "fallback" if mode_idx == 1 else "flagship"
+    print(f"[onward-exec] mode={mode_label} model={model} cli={cli}", file=sys.stderr)
+
     if ptype == "task":
         prompt = build_task_prompt(payload)
     elif ptype == "hook":
@@ -242,7 +450,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: unknown payload type {ptype!r}", file=sys.stderr)
         return 1
 
-    if cli == "cursor":
+    if cli == "opencode":
+        code = run_opencode(model, prompt, dry_run=args.dry_run)
+    elif cli == "cursor":
         code = run_cursor_agent(model, prompt, dry_run=args.dry_run)
     else:
         code = run_claude(model, prompt, dry_run=args.dry_run)

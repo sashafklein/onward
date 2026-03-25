@@ -567,15 +567,21 @@ _PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
 _NO_SORT_ORDER = float("inf")
 
 
-def plan_sort_key(plan: Artifact) -> tuple[int, float, str]:
-    """Sort key for a plan: (priority_rank, linear_sort_order, plan_id)."""
+def plan_sort_key(plan: Artifact) -> tuple[float, int, str]:
+    """Sort key for a plan: (linear_sort_order, priority_rank, plan_id).
+
+    Linear sort_order is the primary ordering — it reflects the visual position
+    on the Linear board, which is the team's canonical prioritisation.  Plans
+    without a Linear sort_order sort after all Linear-ordered plans.  The Onward
+    priority field is kept as a secondary tiebreaker / informational label.
+    """
     priority = str(plan.metadata.get("priority", "medium")).lower()
     rank = _PRIORITY_RANK.get(priority, 1)
     try:
         sort_order = float(plan.metadata.get("linear_sort_order", _NO_SORT_ORDER))
     except (TypeError, ValueError):
         sort_order = _NO_SORT_ORDER
-    return (rank, sort_order, str(plan.metadata.get("id", "")))
+    return (sort_order, rank, str(plan.metadata.get("id", "")))
 
 
 def select_next_artifact(
@@ -617,14 +623,14 @@ def select_next_artifact(
             plan_id = str(artifact.metadata.get("plan", ""))
             plan = plans_by_id.get(plan_id)
             if plan:
-                p_rank, p_sort, _ = plan_sort_key(plan)
+                p_sort, p_rank, _ = plan_sort_key(plan)
             else:
-                p_rank, p_sort = 1, _NO_SORT_ORDER
+                p_sort, p_rank = _NO_SORT_ORDER, 1
             rank = (
                 0 if chunk_status == "in_progress" else 1,
                 0 if plan_status == "in_progress" else 1,
-                p_rank,
                 p_sort,
+                p_rank,
                 plan_id,
                 aid,
             )
