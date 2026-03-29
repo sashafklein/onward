@@ -304,20 +304,20 @@ def _get_provider_env(model: str) -> dict[str, str]:
     return env
 
 
-def run_opencode(model: str, prompt: str, *, dry_run: bool) -> int:
-    """Run opencode CLI with the given model and prompt."""
+def run_opencode(model: str, prompt: str, *, dry_run: bool) -> tuple[int, str, str]:
+    """Run opencode CLI with the given model and prompt. Returns (exit_code, stdout, stderr)."""
     if dry_run:
         sys.stdout.write(prompt)
         if not prompt.endswith("\n"):
             sys.stdout.write("\n")
-        return 0
+        return 0, "", ""
     exe = shutil.which("opencode")
     if not exe:
         print(
             "error: 'opencode' CLI not found on PATH (install it or use --dry-run)",
             file=sys.stderr,
         )
-        return 1
+        return 1, "", ""
 
     # Strip provider prefix — opencode uses bare model names with env-based auth
     bare_model = model
@@ -332,44 +332,44 @@ def run_opencode(model: str, prompt: str, *, dry_run: bool) -> int:
         sys.stdout.write(proc.stdout)
     if proc.stderr:
         sys.stderr.write(proc.stderr)
-    return int(proc.returncode)
+    return int(proc.returncode), proc.stdout or "", proc.stderr or ""
 
 
-def run_cursor_agent(model: str, prompt: str, *, dry_run: bool) -> int:
+def run_cursor_agent(model: str, prompt: str, *, dry_run: bool) -> tuple[int, str, str]:
     if dry_run:
         sys.stdout.write(prompt)
         if not prompt.endswith("\n"):
             sys.stdout.write("\n")
-        return 0
+        return 0, "", ""
     exe = shutil.which("cursor")
     if not exe:
         print(
             "error: 'cursor' CLI not found on PATH (install it or use --dry-run)",
             file=sys.stderr,
         )
-        return 1
+        return 1, "", ""
     cmd = [exe, "agent", "--model", model, "--yolo", "--trust", "-p", prompt]
     proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if proc.stdout:
         sys.stdout.write(proc.stdout)
     if proc.stderr:
         sys.stderr.write(proc.stderr)
-    return int(proc.returncode)
+    return int(proc.returncode), proc.stdout or "", proc.stderr or ""
 
 
-def run_claude(model: str, prompt: str, *, dry_run: bool) -> int:
+def run_claude(model: str, prompt: str, *, dry_run: bool) -> tuple[int, str, str]:
     if dry_run:
         sys.stdout.write(prompt)
         if not prompt.endswith("\n"):
             sys.stdout.write("\n")
-        return 0
+        return 0, "", ""
     exe = shutil.which("claude")
     if not exe:
         print(
             "error: 'claude' CLI not found on PATH (install it or use --dry-run)",
             file=sys.stderr,
         )
-        return 1
+        return 1, "", ""
 
     # Strip provider prefix for claude CLI (it uses bare model names)
     bare_model = model
@@ -382,7 +382,38 @@ def run_claude(model: str, prompt: str, *, dry_run: bool) -> int:
         sys.stdout.write(proc.stdout)
     if proc.stderr:
         sys.stderr.write(proc.stderr)
-    return int(proc.returncode)
+    return int(proc.returncode), proc.stdout or "", proc.stderr or ""
+
+
+# Patterns in CLI output that indicate failure despite exit code 0
+_FAILURE_PATTERNS = [
+    "Key limit exceeded",
+    "rate limit",
+    "Rate limit",
+    "API key",
+    "api key",
+    "quota exceeded",
+    "billing",
+    "insufficient_quota",
+    "exceeded your current quota",
+    "authentication failed",
+    "AuthenticationError",
+    "PermissionError",
+    "model not found",
+    "Model not found",
+    "context_length_exceeded",
+    "server_error",
+    "ServiceUnavailableError",
+]
+
+
+def _check_output_for_errors(stdout: str, stderr: str) -> str | None:
+    """Check CLI output for known error patterns. Returns error description or None."""
+    combined = (stdout or "") + (stderr or "")
+    for pattern in _FAILURE_PATTERNS:
+        if pattern in combined:
+            return f"CLI output contains error indicator: '{pattern}'"
+    return None
 
 
 def emit_success_ack(payload: dict[str, Any]) -> None:
@@ -394,6 +425,21 @@ def emit_success_ack(payload: dict[str, Any]) -> None:
             "schema_version": 1,
             "status": "completed",
             "run_id": run_id,
+        }
+    }
+    print(json.dumps(ack, ensure_ascii=False), flush=True)
+
+
+def emit_failure_ack(payload: dict[str, Any], reason: str) -> None:
+    run_id = os.environ.get("ONWARD_RUN_ID") or str(payload.get("run_id", "") or "")
+    if not run_id.strip():
+        return
+    ack = {
+        "onward_task_result": {
+            "schema_version": 1,
+            "status": "failed",
+            "run_id": run_id,
+            "error": reason,
         }
     }
     print(json.dumps(ack, ensure_ascii=False), flush=True)
@@ -451,19 +497,24 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if cli == "opencode":
-        code = run_opencode(model, prompt, dry_run=args.dry_run)
+        code, stdout, stderr = run_opencode(model, prompt, dry_run=args.dry_run)
     elif cli == "cursor":
-        code = run_cursor_agent(model, prompt, dry_run=args.dry_run)
+        code, stdout, stderr = run_cursor_agent(model, prompt, dry_run=args.dry_run)
     else:
-        code = run_claude(model, prompt, dry_run=args.dry_run)
+        code, stdout, stderr = run_claude(model, prompt, dry_run=args.dry_run)
 
-    if (
-        code == 0
-        and not args.dry_run
-        and os.environ.get("ONWARD_RUN_ID")
-        and ptype == "task"
-    ):
-        emit_success_ack(payload)
+    if not args.dry_run and os.environ.get("ONWARD_RUN_ID") and ptype == "task":
+        if code != 0:
+            emit_failure_ack(payload, f"CLI exited with code {code}")
+        else:
+            # Check for silent failures: CLI exited 0 but output contains error indicators
+            error_reason = _check_output_for_errors(stdout, stderr)
+            if error_reason:
+                print(f"[onward-exec] Detected silent failure: {error_reason}", file=sys.stderr)
+                emit_failure_ack(payload, error_reason)
+                return 1  # Override exit code to signal failure to onward
+            else:
+                emit_success_ack(payload)
     return code
 
 
