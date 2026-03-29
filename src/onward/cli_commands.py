@@ -2597,7 +2597,9 @@ def cmd_linear_push(args: argparse.Namespace) -> int:
         print("Add:\n  linear:\n    team_id: \"<your-team-id>\"")
         return 1
 
-    artifacts = artifacts_from_index_or_collect(layout, project)
+    # Use collect_artifacts to get full frontmatter (including linear_id),
+    # not the index subset which lacks linear_id/linear_identifier.
+    artifacts = collect_artifacts(layout, project)
     plans = [
         a for a in artifacts
         if str(a.metadata.get("type", "")) == "plan"

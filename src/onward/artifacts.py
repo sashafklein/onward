@@ -47,7 +47,12 @@ KNOWN_FIELDS: dict[str, list[str]] = {
 _VALID_STATUSES = frozenset({"open", "in_progress", "completed", "canceled", "failed"})
 _VALID_PRIORITIES = frozenset({"high", "medium", "low"})
 _VALID_EFFORT_VALUES = frozenset({"xs", "s", "m", "l", "xl", "low", "medium", "high"})
-_KNOWN_MODEL_PREFIXES = ("claude-", "codex-")
+_KNOWN_MODEL_PREFIXES = (
+    "claude-", "codex-",
+    "anthropic/", "openai/", "venice/", "openrouter/",
+    "google/", "deepseek/", "minimax/", "meta/",
+    "gpt-", "gemini-", "llama-",
+)
 
 
 def _validate_status(value: Any) -> str | None:
@@ -80,7 +85,10 @@ def _validate_model(value: Any) -> str | None:
         return None
     if any(s_lower.startswith(prefix) for prefix in _KNOWN_MODEL_PREFIXES):
         return None
-    return f"unrecognized model '{s}' (expected a short alias like 'sonnet', or a model ID starting with 'claude-' or 'codex-')"
+    # Accept any provider/model format (e.g., "openrouter/minimax/minimax-m2.5")
+    if "/" in s:
+        return None
+    return f"unrecognized model '{s}' (expected a short alias like 'sonnet', 'opus', 'high', or a provider/model ID like 'anthropic/claude-opus-4-6')"
 
 
 def _validate_human(value: Any) -> str | None:
@@ -914,6 +922,13 @@ def regenerate_indexes(layout: WorkspaceLayout, run_records: list[dict[str, Any]
             lso = m.get("linear_sort_order")
             if lso is not None:
                 row["linear_sort_order"] = lso
+            # Include Linear sync fields for index-based lookups
+            lid = m.get("linear_id")
+            if lid:
+                row["linear_id"] = str(lid).strip()
+            lident = m.get("linear_identifier")
+            if lident:
+                row["linear_identifier"] = str(lident).strip()
             plans.append(row)
         elif artifact_type == "chunk":
             row["plan"] = m.get("plan")

@@ -292,6 +292,11 @@ MODEL_ALIASES: dict[str, str] = {
     "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4",
     "codex": "codex-5-3",
+    # Complexity tiers — resolved by onward-exec via model-routing.json
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "flagship": "flagship",
 }
 
 
